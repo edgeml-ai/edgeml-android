@@ -269,6 +269,27 @@ result.fold(
 )
 ```
 
+## Runtime Device Auth
+
+Use a backend-issued bootstrap token to initialize short-lived device auth credentials.
+
+```kotlin
+import ai.edgeml.sdk.DeviceAuthManager
+
+val auth = DeviceAuthManager(
+    context = applicationContext,
+    baseUrl = "https://api.edgeml.io",
+    orgId = "org_123",
+    deviceIdentifier = "android-device-abc",
+)
+
+// Bootstrap once with backend-issued token
+auth.bootstrap(bootstrapBearerToken = "token_from_backend")
+
+// Fetch valid access token (auto-refreshes near expiry)
+val accessToken = auth.getAccessToken()
+```
+
 ## Observing Client State
 
 ```kotlin
