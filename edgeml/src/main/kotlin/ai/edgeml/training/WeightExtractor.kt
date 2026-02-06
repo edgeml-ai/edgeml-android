@@ -1,0 +1,401 @@
+package ai.edgeml.training
+
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import org.tensorflow.lite.Interpreter
+import timber.log.Timber
+import java.io.File
+import java.nio.ByteBuffer
+import java.nio.ByteOrder
+import java.nio.channels.FileChannel
+
+/**
+ * Utility for extracting and serializing model weights from TensorFlow Lite models.
+ *
+ * TensorFlow Lite provides access to model tensors through the Interpreter API,
+ * allowing us to extract parameters and compute deltas for federated learning.
+ */
+class WeightExtractor {
+
+    companion object {
+        private const val TAG = "WeightExtractor"
+
+        // Magic number for PyTorch-compatible format ("PTTH")
+        private const val MAGIC_NUMBER: Int = 0x50545448
+        private const val FORMAT_VERSION: Int = 1
+
+        // Data type constants
+        private const val DTYPE_FLOAT32: Int = 0
+        private const val DTYPE_FLOAT64: Int = 1
+        private const val DTYPE_INT32: Int = 2
+    }
+
+    // =========================================================================
+    // Weight Extraction
+    // =========================================================================
+
+    /**
+     * Extracts weight deltas from a trained model by comparing with the original.
+     *
+     * @param originalModelPath Path to the original (pre-training) model file
+     * @param updatedModelPath Path to the updated (post-training) model file
+     * @return Serialized weight delta in PyTorch-compatible format
+     * @throws Exception if extraction fails
+     */
+    suspend fun extractWeightDelta(
+        originalModelPath: String,
+        updatedModelPath: String,
+    ): ByteArray = withContext(Dispatchers.IO) {
+        Timber.i("Extracting weight delta from trained model")
+
+        try {
+            // Extract weights from both models
+            val originalWeights = extractWeights(originalModelPath)
+            val updatedWeights = extractWeights(updatedModelPath)
+
+            // Compute delta (updated - original)
+            val delta = computeDelta(originalWeights, updatedWeights)
+
+            // Serialize to PyTorch format
+            val serialized = serializeToPyTorch(delta)
+
+            Timber.i("Weight delta extracted: ${serialized.size} bytes")
+
+            serialized
+        } catch (e: Exception) {
+            Timber.e(e, "Failed to extract weight delta")
+            throw WeightExtractionException("Weight delta extraction failed: ${e.message}", e)
+        }
+    }
+
+    /**
+     * Extracts full weights from a trained model (for full weight uploads).
+     *
+     * @param modelPath Path to the model file
+     * @return Serialized full weights in PyTorch-compatible format
+     * @throws Exception if extraction fails
+     */
+    suspend fun extractFullWeights(
+        modelPath: String,
+    ): ByteArray = withContext(Dispatchers.IO) {
+        Timber.i("Extracting full weights from trained model")
+
+        try {
+            // Extract weights
+            val weights = extractWeights(modelPath)
+
+            // Serialize to PyTorch format
+            val serialized = serializeToPyTorch(weights)
+
+            Timber.i("Full weights extracted: ${serialized.size} bytes")
+
+            serialized
+        } catch (e: Exception) {
+            Timber.e(e, "Failed to extract full weights")
+            throw WeightExtractionException("Full weight extraction failed: ${e.message}", e)
+        }
+    }
+
+    // =========================================================================
+    // Private Methods
+    // =========================================================================
+
+    /**
+     * Extracts weights from a TensorFlow Lite model using the Interpreter API.
+     */
+    private fun extractWeights(modelPath: String): Map<String, TensorData> {
+        val weights = mutableMapOf<String, TensorData>()
+
+        val modelFile = File(modelPath)
+        if (!modelFile.exists()) {
+            throw IllegalArgumentException("Model file not found: $modelPath")
+        }
+
+        // Load model into memory-mapped buffer
+        val modelBuffer = loadModelFile(modelFile)
+
+        // Create interpreter
+        val interpreter = Interpreter(modelBuffer)
+
+        try {
+            // TensorFlow Lite models expose tensors through the interpreter
+            // We can access both input and output tensors, plus internal tensors
+
+            // Get tensor count (this includes all tensors: inputs, outputs, and internal)
+            val tensorCount = interpreter.tensorCount
+
+            Timber.d("Model has $tensorCount tensors")
+
+            // Extract all tensors
+            for (i in 0 until tensorCount) {
+                try {
+                    val tensor = interpreter.getTensor(i)
+                    val tensorName = tensor.name() ?: "tensor_$i"
+                    val shape = tensor.shape()
+                    val dataType = tensor.dataType()
+
+                    // Extract tensor data based on type
+                    val tensorData = when (dataType) {
+                        org.tensorflow.lite.DataType.FLOAT32 -> {
+                            val buffer = ByteBuffer.allocateDirect(tensor.numBytes())
+                            buffer.order(ByteOrder.nativeOrder())
+                            tensor.read(buffer)
+                            buffer.rewind()
+
+                            val floatArray = FloatArray(tensor.numElements())
+                            buffer.asFloatBuffer().get(floatArray)
+
+                            TensorData(
+                                name = tensorName,
+                                shape = shape,
+                                dataType = DTYPE_FLOAT32,
+                                data = floatArray,
+                            )
+                        }
+                        org.tensorflow.lite.DataType.INT32 -> {
+                            // For INT32 tensors (e.g., quantized models)
+                            val buffer = ByteBuffer.allocateDirect(tensor.numBytes())
+                            buffer.order(ByteOrder.nativeOrder())
+                            tensor.read(buffer)
+                            buffer.rewind()
+
+                            val intArray = IntArray(tensor.numElements())
+                            buffer.asIntBuffer().get(intArray)
+
+                            // Convert to float for consistency
+                            val floatArray = intArray.map { it.toFloat() }.toFloatArray()
+
+                            TensorData(
+                                name = tensorName,
+                                shape = shape,
+                                dataType = DTYPE_INT32,
+                                data = floatArray,
+                            )
+                        }
+                        else -> {
+                            Timber.w("Unsupported tensor type: $dataType for tensor $tensorName")
+                            null
+                        }
+                    }
+
+                    if (tensorData != null) {
+                        weights[tensorName] = tensorData
+                        Timber.d("Extracted tensor: $tensorName, shape: ${shape.contentToString()}")
+                    }
+                } catch (e: Exception) {
+                    Timber.w(e, "Failed to extract tensor $i")
+                }
+            }
+
+            Timber.d("Extracted ${weights.size} parameter arrays")
+
+        } finally {
+            interpreter.close()
+        }
+
+        return weights
+    }
+
+    /**
+     * Computes delta between original and updated weights.
+     */
+    private fun computeDelta(
+        original: Map<String, TensorData>,
+        updated: Map<String, TensorData>,
+    ): Map<String, TensorData> {
+        val delta = mutableMapOf<String, TensorData>()
+
+        for ((name, updatedTensor) in updated) {
+            val originalTensor = original[name]
+
+            if (originalTensor == null) {
+                // If parameter doesn't exist in original, use full updated value
+                delta[name] = updatedTensor
+                continue
+            }
+
+            // Verify shapes match
+            if (!originalTensor.shape.contentEquals(updatedTensor.shape)) {
+                Timber.w("Shape mismatch for $name: ${originalTensor.shape.contentToString()} vs ${updatedTensor.shape.contentToString()}")
+                delta[name] = updatedTensor
+                continue
+            }
+
+            // Compute difference element-wise
+            val deltaData = FloatArray(updatedTensor.data.size)
+            for (i in deltaData.indices) {
+                deltaData[i] = updatedTensor.data[i] - originalTensor.data[i]
+            }
+
+            delta[name] = TensorData(
+                name = name,
+                shape = updatedTensor.shape,
+                dataType = updatedTensor.dataType,
+                data = deltaData,
+            )
+        }
+
+        return delta
+    }
+
+    /**
+     * Serializes weight delta to PyTorch-compatible format.
+     *
+     * Format:
+     * - Header: Magic number (4 bytes), version (4 bytes), parameter count (4 bytes)
+     * - For each parameter:
+     *   - Name length (4 bytes), name (UTF-8)
+     *   - Shape count (4 bytes), shape dimensions (4 bytes each)
+     *   - Data type (4 bytes)
+     *   - Data length (4 bytes), data (float32 array)
+     */
+    private fun serializeToPyTorch(delta: Map<String, TensorData>): ByteArray {
+        val buffer = ByteBuffer.allocate(calculateBufferSize(delta))
+        buffer.order(ByteOrder.BIG_ENDIAN)
+
+        // Write magic number
+        buffer.putInt(MAGIC_NUMBER)
+
+        // Write version
+        buffer.putInt(FORMAT_VERSION)
+
+        // Write parameter count
+        buffer.putInt(delta.size)
+
+        // Write each parameter (sorted by name for consistency)
+        for ((_, tensor) in delta.toSortedMap()) {
+            // Write parameter name
+            val nameBytes = tensor.name.toByteArray(Charsets.UTF_8)
+            buffer.putInt(nameBytes.size)
+            buffer.put(nameBytes)
+
+            // Write shape
+            buffer.putInt(tensor.shape.size)
+            for (dim in tensor.shape) {
+                buffer.putInt(dim)
+            }
+
+            // Write data type
+            buffer.putInt(tensor.dataType)
+
+            // Write data
+            val dataBytes = tensor.data.size * 4 // 4 bytes per float32
+            buffer.putInt(dataBytes)
+            for (value in tensor.data) {
+                buffer.putFloat(value)
+            }
+        }
+
+        return buffer.array()
+    }
+
+    /**
+     * Calculates the total buffer size needed for serialization.
+     */
+    private fun calculateBufferSize(delta: Map<String, TensorData>): Int {
+        var size = 12 // Header: magic (4) + version (4) + param count (4)
+
+        for ((_, tensor) in delta) {
+            size += 4 // Name length
+            size += tensor.name.toByteArray(Charsets.UTF_8).size // Name
+            size += 4 // Shape count
+            size += tensor.shape.size * 4 // Shape dimensions
+            size += 4 // Data type
+            size += 4 // Data length
+            size += tensor.data.size * 4 // Data (float32)
+        }
+
+        return size
+    }
+
+    /**
+     * Loads a model file into a memory-mapped buffer.
+     */
+    private fun loadModelFile(file: File): java.nio.MappedByteBuffer {
+        return file.inputStream().channel.use { channel ->
+            channel.map(FileChannel.MapMode.READ_ONLY, 0, channel.size())
+        }
+    }
+
+    // =========================================================================
+    // Data Classes
+    // =========================================================================
+
+    /**
+     * Represents tensor data with shape and type information.
+     */
+    private data class TensorData(
+        val name: String,
+        val shape: IntArray,
+        val dataType: Int,
+        val data: FloatArray,
+    ) {
+        override fun equals(other: Any?): Boolean {
+            if (this === other) return true
+            if (javaClass != other?.javaClass) return false
+
+            other as TensorData
+
+            if (name != other.name) return false
+            if (!shape.contentEquals(other.shape)) return false
+            if (dataType != other.dataType) return false
+            if (!data.contentEquals(other.data)) return false
+
+            return true
+        }
+
+        override fun hashCode(): Int {
+            var result = name.hashCode()
+            result = 31 * result + shape.contentHashCode()
+            result = 31 * result + dataType
+            result = 31 * result + data.contentHashCode()
+            return result
+        }
+    }
+}
+
+/**
+ * Exception thrown when weight extraction fails.
+ */
+class WeightExtractionException(
+    message: String,
+    cause: Throwable? = null,
+) : Exception(message, cause)
+
+/**
+ * Extension function to get tensor count (workaround for TFLite API limitations).
+ */
+private val Interpreter.tensorCount: Int
+    get() {
+        // TFLite doesn't expose total tensor count directly
+        // We need to iterate through internal tensors
+        var count = 0
+        try {
+            // Count input tensors
+            for (i in 0 until inputTensorCount) {
+                getInputTensor(i)
+                count++
+            }
+            // Count output tensors
+            for (i in 0 until outputTensorCount) {
+                getOutputTensor(i)
+                count++
+            }
+
+            // Try to access internal tensors (this may not work on all TFLite versions)
+            // We'll use a heuristic: try to access tensors sequentially until we fail
+            var internalIndex = 0
+            while (internalIndex < 1000) { // Reasonable upper bound
+                try {
+                    getTensor(count + internalIndex)
+                    count++
+                    internalIndex++
+                } catch (e: Exception) {
+                    break
+                }
+            }
+        } catch (e: Exception) {
+            Timber.w(e, "Error counting tensors")
+        }
+        return count
+    }

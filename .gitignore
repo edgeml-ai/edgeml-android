@@ -1,0 +1,28 @@
+# Android SDK Build Artifacts
+/edgeml/build/
+/sample/build/
+/.gradle/
+
+# IDE Files
+/.idea/
+*.iml
+local.properties
+
+# OS Files
+.DS_Store
+Thumbs.db
+
+# Gradle
+.gradle/
+build/
+
+# APK and AAR files
+*.apk
+*.aar
+*.aab
+
+# Log files
+*.log
+
+# Local configuration
+local.properties
