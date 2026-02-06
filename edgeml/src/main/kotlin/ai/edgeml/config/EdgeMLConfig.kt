@@ -9,7 +9,7 @@ import kotlinx.serialization.Serializable
  * ```kotlin
  * val config = EdgeMLConfig.Builder()
  *     .serverUrl("https://api.edgeml.ai")
- *     .apiKey("your-api-key")
+ *     .deviceAccessToken("<short-lived-device-token>")
  *     .modelId("model-123")
  *     .build()
  * ```
@@ -19,8 +19,8 @@ data class EdgeMLConfig(
     /** Base URL of the EdgeML server */
     val serverUrl: String,
 
-    /** API key for authentication */
-    val apiKey: String,
+    /** Short-lived device access token for authentication */
+    val deviceAccessToken: String,
 
     /** Organization ID */
     val orgId: String,
@@ -90,7 +90,7 @@ data class EdgeMLConfig(
 ) {
     init {
         require(serverUrl.isNotBlank()) { "serverUrl must not be blank" }
-        require(apiKey.isNotBlank()) { "apiKey must not be blank" }
+        require(deviceAccessToken.isNotBlank()) { "deviceAccessToken must not be blank" }
         require(orgId.isNotBlank()) { "orgId must not be blank" }
         require(modelId.isNotBlank()) { "modelId must not be blank" }
         require(connectionTimeoutMs > 0) { "connectionTimeoutMs must be positive" }
@@ -110,7 +110,7 @@ data class EdgeMLConfig(
      */
     class Builder {
         private var serverUrl: String = ""
-        private var apiKey: String = ""
+        private var deviceAccessToken: String = ""
         private var orgId: String = ""
         private var modelId: String = ""
         private var deviceId: String? = null
@@ -135,7 +135,7 @@ data class EdgeMLConfig(
         private var privacyConfiguration: PrivacyConfiguration = PrivacyConfiguration.DEFAULT
 
         fun serverUrl(url: String) = apply { this.serverUrl = url.trimEnd('/') }
-        fun apiKey(key: String) = apply { this.apiKey = key }
+        fun deviceAccessToken(token: String) = apply { this.deviceAccessToken = token }
         fun orgId(id: String) = apply { this.orgId = id }
         fun modelId(id: String) = apply { this.modelId = id }
         fun deviceId(id: String?) = apply { this.deviceId = id }
@@ -161,7 +161,7 @@ data class EdgeMLConfig(
 
         fun build(): EdgeMLConfig = EdgeMLConfig(
             serverUrl = serverUrl,
-            apiKey = apiKey,
+            deviceAccessToken = deviceAccessToken,
             orgId = orgId,
             modelId = modelId,
             deviceId = deviceId,

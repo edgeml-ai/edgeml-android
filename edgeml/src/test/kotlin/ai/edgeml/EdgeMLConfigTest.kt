@@ -16,13 +16,13 @@ class EdgeMLConfigTest {
     fun `config builder creates valid config`() {
         val config = EdgeMLConfig.Builder()
             .serverUrl("https://api.edgeml.ai")
-            .apiKey("test-api-key")
+            .deviceAccessToken("test-api-key")
             .orgId("org-123")
             .modelId("model-456")
             .build()
 
         assertEquals("https://api.edgeml.ai", config.serverUrl)
-        assertEquals("test-api-key", config.apiKey)
+        assertEquals("test-api-key", config.deviceAccessToken)
         assertEquals("org-123", config.orgId)
         assertEquals("model-456", config.modelId)
     }
@@ -31,7 +31,7 @@ class EdgeMLConfigTest {
     fun `config builder trims trailing slash from server URL`() {
         val config = EdgeMLConfig.Builder()
             .serverUrl("https://api.edgeml.ai/")
-            .apiKey("test-api-key")
+            .deviceAccessToken("test-api-key")
             .orgId("org-123")
             .modelId("model-456")
             .build()
@@ -43,7 +43,7 @@ class EdgeMLConfigTest {
     fun `config has sensible defaults`() {
         val config = EdgeMLConfig.Builder()
             .serverUrl("https://api.edgeml.ai")
-            .apiKey("test-api-key")
+            .deviceAccessToken("test-api-key")
             .orgId("org-123")
             .modelId("model-456")
             .build()
@@ -69,7 +69,7 @@ class EdgeMLConfigTest {
         assertFailsWith<IllegalArgumentException> {
             EdgeMLConfig.Builder()
                 .serverUrl("")
-                .apiKey("test-api-key")
+                .deviceAccessToken("test-api-key")
                 .orgId("org-123")
                 .modelId("model-456")
                 .build()
@@ -81,7 +81,7 @@ class EdgeMLConfigTest {
         assertFailsWith<IllegalArgumentException> {
             EdgeMLConfig.Builder()
                 .serverUrl("https://api.edgeml.ai")
-                .apiKey("")
+                .deviceAccessToken("")
                 .orgId("org-123")
                 .modelId("model-456")
                 .build()
@@ -93,7 +93,7 @@ class EdgeMLConfigTest {
         assertFailsWith<IllegalArgumentException> {
             EdgeMLConfig.Builder()
                 .serverUrl("https://api.edgeml.ai")
-                .apiKey("test-api-key")
+                .deviceAccessToken("test-api-key")
                 .orgId("")
                 .modelId("model-456")
                 .build()
@@ -105,7 +105,7 @@ class EdgeMLConfigTest {
         assertFailsWith<IllegalArgumentException> {
             EdgeMLConfig.Builder()
                 .serverUrl("https://api.edgeml.ai")
-                .apiKey("test-api-key")
+                .deviceAccessToken("test-api-key")
                 .orgId("org-123")
                 .modelId("")
                 .build()
@@ -117,7 +117,7 @@ class EdgeMLConfigTest {
         assertFailsWith<IllegalArgumentException> {
             EdgeMLConfig.Builder()
                 .serverUrl("https://api.edgeml.ai")
-                .apiKey("test-api-key")
+                .deviceAccessToken("test-api-key")
                 .orgId("org-123")
                 .modelId("model-456")
                 .connectionTimeoutMs(0)
@@ -127,7 +127,7 @@ class EdgeMLConfigTest {
         assertFailsWith<IllegalArgumentException> {
             EdgeMLConfig.Builder()
                 .serverUrl("https://api.edgeml.ai")
-                .apiKey("test-api-key")
+                .deviceAccessToken("test-api-key")
                 .orgId("org-123")
                 .modelId("model-456")
                 .connectionTimeoutMs(-1)
@@ -140,7 +140,7 @@ class EdgeMLConfigTest {
         assertFailsWith<IllegalArgumentException> {
             EdgeMLConfig.Builder()
                 .serverUrl("https://api.edgeml.ai")
-                .apiKey("test-api-key")
+                .deviceAccessToken("test-api-key")
                 .orgId("org-123")
                 .modelId("model-456")
                 .syncIntervalMinutes(14)
@@ -153,7 +153,7 @@ class EdgeMLConfigTest {
         assertFailsWith<IllegalArgumentException> {
             EdgeMLConfig.Builder()
                 .serverUrl("https://api.edgeml.ai")
-                .apiKey("test-api-key")
+                .deviceAccessToken("test-api-key")
                 .orgId("org-123")
                 .modelId("model-456")
                 .minBatteryLevel(-1)
@@ -163,7 +163,7 @@ class EdgeMLConfigTest {
         assertFailsWith<IllegalArgumentException> {
             EdgeMLConfig.Builder()
                 .serverUrl("https://api.edgeml.ai")
-                .apiKey("test-api-key")
+                .deviceAccessToken("test-api-key")
                 .orgId("org-123")
                 .modelId("model-456")
                 .minBatteryLevel(101)
@@ -175,7 +175,7 @@ class EdgeMLConfigTest {
     fun `config builder allows custom settings`() {
         val config = EdgeMLConfig.Builder()
             .serverUrl("https://custom.server.com")
-            .apiKey("custom-key")
+            .deviceAccessToken("custom-key")
             .orgId("custom-org")
             .modelId("custom-model")
             .deviceId("custom-device-id")
@@ -197,7 +197,7 @@ class EdgeMLConfigTest {
             .build()
 
         assertEquals("https://custom.server.com", config.serverUrl)
-        assertEquals("custom-key", config.apiKey)
+        assertEquals("custom-key", config.deviceAccessToken)
         assertEquals("custom-org", config.orgId)
         assertEquals("custom-model", config.modelId)
         assertEquals("custom-device-id", config.deviceId)

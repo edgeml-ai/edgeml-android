@@ -51,7 +51,7 @@ import timber.log.Timber
  * // Initialize the client
  * val config = EdgeMLConfig.Builder()
  *     .serverUrl("https://api.edgeml.ai")
- *     .apiKey("your-api-key")
+ *     .deviceAccessToken("<short-lived-device-token>")
  *     .orgId("your-org-id")
  *     .modelId("your-model-id")
  *     .build()

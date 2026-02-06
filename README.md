@@ -61,7 +61,7 @@ import ai.edgeml.config.EdgeMLConfig
 // Create configuration
 val config = EdgeMLConfig.Builder()
     .serverUrl("https://api.edgeml.ai")
-    .apiKey("your-api-key")
+    .deviceAccessToken("<short-lived-device-token>")
     .orgId("your-org-id")
     .modelId("your-model-id")
     .debugMode(BuildConfig.DEBUG)
@@ -130,7 +130,7 @@ lifecycleScope.launch {
 | Option | Default | Description |
 |--------|---------|-------------|
 | `serverUrl` | Required | EdgeML server URL |
-| `apiKey` | Required | API authentication key |
+| `deviceAccessToken` | Required | Short-lived device access token |
 | `orgId` | Required | Organization identifier |
 | `modelId` | Required | Model identifier |
 | `deviceId` | Auto-generated | Custom device ID |

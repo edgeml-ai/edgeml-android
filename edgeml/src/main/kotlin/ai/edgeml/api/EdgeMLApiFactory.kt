@@ -71,12 +71,12 @@ object EdgeMLApiFactory {
     }
 
     /**
-     * Interceptor to add API key authentication header.
+     * Interceptor to add device access token authentication header.
      */
     private fun createAuthInterceptor(config: EdgeMLConfig): Interceptor {
         return Interceptor { chain ->
             val request = chain.request().newBuilder()
-                .addHeader("Authorization", "Bearer ${config.apiKey}")
+                .addHeader("Authorization", "Bearer ${config.deviceAccessToken}")
                 .addHeader("X-Org-Id", config.orgId)
                 .build()
             chain.proceed(request)
