@@ -105,7 +105,16 @@ class DeviceAuthManager(
         val state = loadState() ?: throw IllegalStateException("No token state stored")
         val thresholdMillis = System.currentTimeMillis() + (refreshIfExpiringWithinSeconds * 1000)
         if (thresholdMillis >= state.expiresAtEpochMillis) {
-            return@withContext refresh().accessToken
+            return@withContext try {
+                refresh().accessToken
+            } catch (error: Exception) {
+                // Offline-safe fallback: keep current token until hard expiry.
+                if (System.currentTimeMillis() < state.expiresAtEpochMillis) {
+                    state.accessToken
+                } else {
+                    throw error
+                }
+            }
         }
         state.accessToken
     }
