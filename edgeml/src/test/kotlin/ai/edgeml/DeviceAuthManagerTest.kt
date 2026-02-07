@@ -104,6 +104,61 @@ class DeviceAuthManagerTest {
             manager.getAccessToken(refreshIfExpiringWithinSeconds = 30)
         }
     }
+
+    @Test
+    fun `getAccessToken returns current token when not near expiry`() = runBlocking {
+        val transport = FakeTransport(
+            responses = ArrayDeque(
+                listOf(
+                    tokenPayload("acc_bootstrap", "ref_bootstrap", expiresIn = 3_600),
+                )
+            )
+        )
+        val store = InMemoryStore()
+        var now = 4_000_000L
+
+        val manager = DeviceAuthManager(
+            baseUrl = "https://api.example.com",
+            orgId = "org-1",
+            deviceIdentifier = "device-1",
+            transport = transport,
+            stateStore = store,
+            nowMillisProvider = { now },
+        )
+
+        manager.bootstrap(bootstrapBearerToken = "bootstrap-token")
+        val token = manager.getAccessToken(refreshIfExpiringWithinSeconds = 30)
+        assertEquals("acc_bootstrap", token)
+        assertEquals(1, transport.calls.size)
+    }
+
+    @Test
+    fun `revoke failure preserves stored state`() = runBlocking {
+        val transport = FakeTransport(
+            responses = ArrayDeque(
+                listOf(
+                    tokenPayload("acc_bootstrap", "ref_bootstrap", expiresIn = 600),
+                )
+            ),
+            throwOnCallIndex = 2,
+        )
+        val store = InMemoryStore()
+
+        val manager = DeviceAuthManager(
+            baseUrl = "https://api.example.com",
+            orgId = "org-1",
+            deviceIdentifier = "device-1",
+            transport = transport,
+            stateStore = store,
+        )
+
+        manager.bootstrap(bootstrapBearerToken = "bootstrap-token")
+
+        assertFailsWith<IllegalStateException> {
+            manager.revoke()
+        }
+        assertNotNull(store.state)
+    }
 }
 
 private fun tokenPayload(
@@ -140,7 +195,15 @@ private class FakeTransport(
     private val responses: ArrayDeque<JSONObject>,
     private val throwOnCallIndex: Int? = null,
 ) : DeviceAuthTransport {
+    data class Call(
+        val path: String,
+        val body: JSONObject,
+        val bearerToken: String?,
+        val expectedStatusCodes: Set<Int>
+    )
+
     private var callCount = 0
+    val calls = mutableListOf<Call>()
 
     override fun postJson(
         path: String,
@@ -149,10 +212,10 @@ private class FakeTransport(
         expectedStatusCodes: Set<Int>
     ): JSONObject {
         callCount += 1
+        calls += Call(path = path, body = body, bearerToken = bearerToken, expectedStatusCodes = expectedStatusCodes)
         if (throwOnCallIndex != null && callCount == throwOnCallIndex) {
             throw IllegalStateException("network unavailable")
         }
         return responses.removeFirstOrNull() ?: JSONObject()
     }
 }
-
