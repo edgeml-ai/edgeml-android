@@ -85,9 +85,7 @@ class TFLiteTrainer(
                 // Try to use GPU delegate if enabled
                 if (config.enableGpuAcceleration && isGpuSupported()) {
                     try {
-                        val delegateOptions = GpuDelegate.Options().apply {
-                            setPrecisionLossAllowed(true)
-                        }
+                        val delegateOptions = GpuDelegate.Options()
                         gpuDelegate = GpuDelegate(delegateOptions)
                         options.addDelegate(gpuDelegate)
                         Timber.d("GPU delegate enabled")
@@ -379,13 +377,6 @@ class TFLiteTrainer(
                     )
                     updateFormat = "weights"
                 }
-            } else {
-                // No original model path, extract full weights
-                weightsData = weightExtractor.extractFullWeights(
-                    modelPath = updatedPath,
-                )
-                updateFormat = "weights"
-            }
 
             // Add update format to metrics
             val metrics = trainingResult.metrics.toMutableMap()

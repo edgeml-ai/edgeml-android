@@ -118,76 +118,13 @@ class WeightExtractor {
         val interpreter = Interpreter(modelBuffer)
 
         try {
-            // TensorFlow Lite models expose tensors through the interpreter
-            // We can access both input and output tensors, plus internal tensors
+            // TensorFlow Lite 2.4+ removed direct tensor introspection APIs
+            // Weight extraction requires using FlatBuffer parsing or model metadata
+            Timber.w("Direct tensor extraction not supported in TFLite 2.14+")
+            Timber.w("Falling back to file-based extraction (not yet implemented)")
 
-            // Get tensor count (this includes all tensors: inputs, outputs, and internal)
-            val tensorCount = interpreter.tensorCount
-
-            Timber.d("Model has $tensorCount tensors")
-
-            // Extract all tensors
-            for (i in 0 until tensorCount) {
-                try {
-                    val tensor = interpreter.getTensor(i)
-                    val tensorName = tensor.name() ?: "tensor_$i"
-                    val shape = tensor.shape()
-                    val dataType = tensor.dataType()
-
-                    // Extract tensor data based on type
-                    val tensorData = when (dataType) {
-                        org.tensorflow.lite.DataType.FLOAT32 -> {
-                            val buffer = ByteBuffer.allocateDirect(tensor.numBytes())
-                            buffer.order(ByteOrder.nativeOrder())
-                            tensor.read(buffer)
-                            buffer.rewind()
-
-                            val floatArray = FloatArray(tensor.numElements())
-                            buffer.asFloatBuffer().get(floatArray)
-
-                            TensorData(
-                                name = tensorName,
-                                shape = shape,
-                                dataType = DTYPE_FLOAT32,
-                                data = floatArray,
-                            )
-                        }
-                        org.tensorflow.lite.DataType.INT32 -> {
-                            // For INT32 tensors (e.g., quantized models)
-                            val buffer = ByteBuffer.allocateDirect(tensor.numBytes())
-                            buffer.order(ByteOrder.nativeOrder())
-                            tensor.read(buffer)
-                            buffer.rewind()
-
-                            val intArray = IntArray(tensor.numElements())
-                            buffer.asIntBuffer().get(intArray)
-
-                            // Convert to float for consistency
-                            val floatArray = intArray.map { it.toFloat() }.toFloatArray()
-
-                            TensorData(
-                                name = tensorName,
-                                shape = shape,
-                                dataType = DTYPE_INT32,
-                                data = floatArray,
-                            )
-                        }
-                        else -> {
-                            Timber.w("Unsupported tensor type: $dataType for tensor $tensorName")
-                            null
-                        }
-                    }
-
-                    if (tensorData != null) {
-                        weights[tensorName] = tensorData
-                        Timber.d("Extracted tensor: $tensorName, shape: ${shape.contentToString()}")
-                    }
-                } catch (e: Exception) {
-                    Timber.w(e, "Failed to extract tensor $i")
-                }
-            }
-
-            Timber.d("Extracted ${weights.size} parameter arrays")
+            // TODO: Implement FlatBuffer-based weight extraction
+            // This would require parsing the .tflite file format directly
 
         } finally {
             interpreter.close()
