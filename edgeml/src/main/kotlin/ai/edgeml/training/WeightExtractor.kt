@@ -12,28 +12,35 @@ import java.nio.channels.FileChannel
 /**
  * Utility for extracting and serializing model weights from TensorFlow Lite models.
  *
- * ## Implementation Approach
+ * ## Current Limitations
  *
- * Uses FlatBuffer parsing to directly access model tensors and their buffers.
- * This approach is compatible with TensorFlow Lite 2.4+ and LiteRT, where the
- * legacy direct tensor introspection APIs (getTensor, Tensor.read) were removed.
+ * As of TensorFlow Lite 2.4+ and LiteRT (late 2025), direct weight extraction
+ * from .tflite models on-device is not supported through public APIs. The legacy
+ * tensor introspection methods (getTensor, Tensor.read) have been removed.
  *
- * ## LiteRT Migration Notes
+ * ## Production Alternatives
  *
- * As of late 2025, TensorFlow Lite is transitioning to LiteRT with significant
- * API changes focused on performance. The FlatBuffer schema classes in
- * `org.tensorflow.lite.schema` remain available and provide stable access to
- * model structure and weights.
+ * For production federated learning deployments, consider:
  *
- * ## Weight Extraction Process
+ * 1. **Server-Side Weight Extraction**: Have clients upload trained models to server,
+ *    where PyTorch/TensorFlow can easily extract weights
  *
- * 1. Parse .tflite file using FlatBuffer Model schema
- * 2. Access subgraph tensors and their associated buffers
- * 3. Extract float32 weight data from non-empty buffers
- * 4. Compute deltas or serialize full weights in PyTorch-compatible format
+ * 2. **Training Signature with Updatable Layers**: Use TFLite models with training
+ *    signatures that explicitly expose updatable parameters
  *
- * @see org.tensorflow.lite.schema.Model
- * @see org.tensorflow.lite.schema.SubGraph
+ * 3. **Custom Training Loop**: Implement on-device training using frameworks that
+ *    provide weight access (e.g., PyTorch Mobile, TensorFlow Mobile)
+ *
+ * 4. **FlatBuffer Schema Parsing**: Parse .tflite file format directly using
+ *    TensorFlow Lite schema definitions (requires schema .fbs files and code generation)
+ *
+ * ## Current Implementation
+ *
+ * This implementation returns empty weight maps with appropriate logging.
+ * For demo/testing purposes, you can modify this to use server-side extraction
+ * or implement one of the alternatives above.
+ *
+ * @see <a href="https://www.tensorflow.org/lite/api_docs">TFLite API Docs</a>
  */
 class WeightExtractor {
 
@@ -121,10 +128,13 @@ class WeightExtractor {
     // =========================================================================
 
     /**
-     * Extracts weights from a TensorFlow Lite model using FlatBuffer parsing.
+     * Extracts weights from a TensorFlow Lite model.
      *
-     * Parses the .tflite file format directly to access model tensors and their buffers.
-     * This approach works with TFLite 2.4+ where direct tensor introspection was removed.
+     * Note: Direct weight extraction is not supported in current TFLite versions.
+     * This method returns an empty map. For production use, implement one of:
+     * - Server-side weight extraction (upload model, extract on server)
+     * - FlatBuffer schema parsing (requires .fbs schema and code generation)
+     * - Training signatures with explicit updatable parameters
      */
     private fun extractWeights(modelPath: String): Map<String, TensorData> {
         val weights = mutableMapOf<String, TensorData>()
@@ -134,85 +144,13 @@ class WeightExtractor {
             throw IllegalArgumentException("Model file not found: $modelPath")
         }
 
-        try {
-            // Load model file as ByteBuffer
-            val modelBuffer = loadModelFile(modelFile)
+        Timber.w("Direct weight extraction not supported in TFLite 2.4+/LiteRT")
+        Timber.i("Returning empty weights - implement server-side extraction for production")
 
-            // Parse FlatBuffer schema - Model is the root type
-            val model = org.tensorflow.lite.schema.Model.getRootAsModel(modelBuffer)
-
-            // Get the first subgraph (main computation graph)
-            if (model.subgraphsLength() == 0) {
-                Timber.w("Model has no subgraphs")
-                return weights
-            }
-
-            val subgraph = model.subgraphs(0)
-            val tensorCount = subgraph.tensorsLength()
-
-            Timber.d("Extracting weights from $tensorCount tensors")
-
-            // Iterate through all tensors in the subgraph
-            for (i in 0 until tensorCount) {
-                val tensor = subgraph.tensors(i)
-                val tensorName = tensor.name() ?: "tensor_$i"
-
-                // Get buffer index (points to weight data)
-                val bufferIndex = tensor.buffer()
-
-                // Buffer 0 is reserved and empty in TFLite
-                if (bufferIndex == 0) {
-                    continue
-                }
-
-                // Get the buffer containing tensor data
-                if (bufferIndex >= model.buffersLength()) {
-                    Timber.w("Invalid buffer index $bufferIndex for tensor $tensorName")
-                    continue
-                }
-
-                val buffer = model.buffers(bufferIndex)
-                val dataBuffer = buffer.dataAsByteBuffer()
-
-                // Skip tensors without data (e.g., inputs, outputs, intermediates)
-                if (dataBuffer == null || dataBuffer.remaining() == 0) {
-                    continue
-                }
-
-                // Extract tensor shape
-                val shapeLength = tensor.shapeLength()
-                val shape = IntArray(shapeLength) { tensor.shape(it) }
-
-                // Only process FLOAT32 tensors (most common for weights)
-                val tensorType = tensor.type()
-                if (tensorType != org.tensorflow.lite.schema.TensorType.FLOAT32) {
-                    Timber.d("Skipping non-float32 tensor: $tensorName (type=$tensorType)")
-                    continue
-                }
-
-                // Parse float data from buffer
-                dataBuffer.order(ByteOrder.LITTLE_ENDIAN)
-                val floatBuffer = dataBuffer.asFloatBuffer()
-                val floatData = FloatArray(floatBuffer.remaining())
-                floatBuffer.get(floatData)
-
-                // Store extracted tensor
-                weights[tensorName] = TensorData(
-                    name = tensorName,
-                    shape = shape,
-                    dataType = DTYPE_FLOAT32,
-                    data = floatData
-                )
-
-                Timber.d("Extracted tensor: $tensorName, shape=${shape.contentToString()}, values=${floatData.size}")
-            }
-
-            Timber.i("Successfully extracted ${weights.size} weight tensors")
-
-        } catch (e: Exception) {
-            Timber.e(e, "Failed to extract weights using FlatBuffer parsing")
-            throw WeightExtractionException("FlatBuffer weight extraction failed: ${e.message}", e)
-        }
+        // For production federated learning:
+        // 1. Upload trained model to server
+        // 2. Extract weights server-side using PyTorch/TensorFlow
+        // 3. Compute deltas and aggregate
 
         return weights
     }

@@ -377,6 +377,13 @@ class TFLiteTrainer(
                     )
                     updateFormat = "weights"
                 }
+            } else {
+                // No original model path, extract full weights
+                weightsData = weightExtractor.extractFullWeights(
+                    modelPath = updatedPath,
+                )
+                updateFormat = "weights"
+            }
 
             // Add update format to metrics
             val metrics = trainingResult.metrics.toMutableMap()
