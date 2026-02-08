@@ -58,6 +58,41 @@ class DeviceAuthManagerTest {
     }
 
     @Test
+    fun `bootstrap sends expected payload and bearer token`() = runBlocking {
+        val transport = FakeTransport(
+            responses = ArrayDeque(
+                listOf(tokenPayload("acc_bootstrap", "ref_bootstrap", expiresIn = 900))
+            )
+        )
+        val store = InMemoryStore()
+        val manager = DeviceAuthManager(
+            baseUrl = "https://api.example.com",
+            orgId = "org-1",
+            deviceIdentifier = "device-1",
+            transport = transport,
+            stateStore = store,
+        )
+
+        manager.bootstrap(
+            bootstrapBearerToken = "bootstrap-token",
+            scopes = listOf("devices:write", "heartbeat:write"),
+            accessTtlSeconds = 600,
+            deviceId = "device-db-id"
+        )
+
+        val call = transport.calls[0]
+        assertEquals("/api/v1/device-auth/bootstrap", call.path)
+        assertEquals("bootstrap-token", call.bearerToken)
+        assertEquals("org-1", call.body.getString("org_id"))
+        assertEquals("device-1", call.body.getString("device_identifier"))
+        assertEquals(600, call.body.getInt("access_ttl_seconds"))
+        assertEquals("device-db-id", call.body.getString("device_id"))
+        val scopes = call.body.getJSONArray("scopes")
+        assertEquals("devices:write", scopes.getString(0))
+        assertEquals("heartbeat:write", scopes.getString(1))
+    }
+
+    @Test
     fun `refresh uses rotated refresh token after prior refresh`() = runBlocking {
         val transport = FakeTransport(
             responses = ArrayDeque(
