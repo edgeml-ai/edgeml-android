@@ -44,8 +44,46 @@ class DeviceAuthManagerTest {
         assertEquals("acc_refresh", refreshed.accessToken)
         assertEquals("ref_refresh", refreshed.refreshToken)
 
+        assertEquals("/api/v1/device-auth/bootstrap", transport.calls[0].path)
+        assertEquals("bootstrap-token", transport.calls[0].bearerToken)
+        assertEquals("org-1", transport.calls[0].body.getString("org_id"))
+        assertEquals("device-1", transport.calls[0].body.getString("device_identifier"))
+        assertEquals("/api/v1/device-auth/refresh", transport.calls[1].path)
+        assertEquals("ref_bootstrap", transport.calls[1].body.getString("refresh_token"))
+
         manager.revoke()
         assertNull(store.state)
+        assertEquals("/api/v1/device-auth/revoke", transport.calls[2].path)
+        assertEquals("sdk_revoke", transport.calls[2].body.getString("reason"))
+    }
+
+    @Test
+    fun `refresh uses rotated refresh token after prior refresh`() = runBlocking {
+        val transport = FakeTransport(
+            responses = ArrayDeque(
+                listOf(
+                    tokenPayload("acc_bootstrap", "ref_bootstrap", expiresIn = 900),
+                    tokenPayload("acc_refresh_1", "ref_refresh_1", expiresIn = 900),
+                    tokenPayload("acc_refresh_2", "ref_refresh_2", expiresIn = 900),
+                )
+            )
+        )
+        val store = InMemoryStore()
+
+        val manager = DeviceAuthManager(
+            baseUrl = "https://api.example.com",
+            orgId = "org-1",
+            deviceIdentifier = "device-1",
+            transport = transport,
+            stateStore = store,
+        )
+
+        manager.bootstrap(bootstrapBearerToken = "bootstrap-token")
+        manager.refresh()
+        manager.refresh()
+
+        assertEquals("ref_bootstrap", transport.calls[1].body.getString("refresh_token"))
+        assertEquals("ref_refresh_1", transport.calls[2].body.getString("refresh_token"))
     }
 
     @Test
