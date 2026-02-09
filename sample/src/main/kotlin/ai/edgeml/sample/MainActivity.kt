@@ -13,7 +13,6 @@ import androidx.lifecycle.repeatOnLifecycle
 import ai.edgeml.sample.databinding.ActivityMainBinding
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
-import timber.log.Timber
 
 /**
  * Main activity demonstrating EdgeML SDK usage.

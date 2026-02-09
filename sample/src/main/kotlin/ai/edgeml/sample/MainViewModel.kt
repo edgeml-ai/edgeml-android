@@ -78,7 +78,7 @@ class MainViewModel : ViewModel() {
             }
 
             viewModelScope.launch {
-                edgemlClient.deviceId.collect { id ->
+                edgemlClient.serverDeviceId.collect { id ->
                     _deviceId.value = id
                 }
             }

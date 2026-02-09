@@ -50,6 +50,7 @@ class EdgeMLSyncWorker(
         encodeDefaults = true
     }
 
+    @Suppress("InjectDispatcher") // Dispatcher is managed by WorkManager's CoroutineWorker
     override suspend fun doWork(): Result = withContext(Dispatchers.IO) {
         try {
             Timber.d("Starting EdgeML sync work")
@@ -127,7 +128,7 @@ class EdgeMLSyncWorker(
             return
         }
 
-        val deviceId = storage.getDeviceId() ?: return
+        val deviceId = storage.getServerDeviceId() ?: return
         val experimentId = storage.getExperimentId() ?: "default"
         var successCount = 0
 
@@ -304,8 +305,11 @@ class WorkManagerSync(
 
         // Apply server policy if available, otherwise use local config
         val batteryThreshold = policy?.batteryThreshold ?: config.minBatteryLevel
-        val requireWifiOnly = policy?.networkPolicy == "wifi_only"
-            ?: config.requireUnmeteredNetwork
+        val requireWifiOnly = if (policy != null) {
+            policy.networkPolicy == "wifi_only"
+        } else {
+            config.requireUnmeteredNetwork
+        }
 
         Timber.d(
             "Building constraints with battery≥$batteryThreshold%, " +

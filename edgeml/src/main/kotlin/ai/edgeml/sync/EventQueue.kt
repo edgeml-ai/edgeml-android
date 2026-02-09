@@ -1,6 +1,7 @@
 package ai.edgeml.sync
 
 import android.content.Context
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -20,6 +21,7 @@ import java.util.UUID
 class EventQueue private constructor(
     private val queueDir: File,
     private val json: Json,
+    private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
 ) {
     private val mutex = Mutex()
     private val maxQueueSize = 1000
@@ -47,7 +49,7 @@ class EventQueue private constructor(
                 encodeDefaults = true
             }
 
-            return EventQueue(queueDir, json)
+            return EventQueue(queueDir, json, Dispatchers.IO)
         }
     }
 
@@ -57,7 +59,7 @@ class EventQueue private constructor(
      * @param event The queued event to add
      * @return True if added successfully
      */
-    suspend fun addEvent(event: QueuedEvent): Boolean = withContext(Dispatchers.IO) {
+    suspend fun addEvent(event: QueuedEvent): Boolean = withContext(ioDispatcher) {
         mutex.withLock {
             try {
                 // Check queue size
@@ -66,7 +68,9 @@ class EventQueue private constructor(
                     // Remove oldest event
                     val oldest = queueDir.listFiles()
                         ?.minByOrNull { it.lastModified() }
-                    oldest?.delete()
+                    if (oldest?.delete() == false) {
+                        Timber.w("Failed to delete oldest event file: ${oldest.name}")
+                    }
                 }
 
                 // Write event to file
@@ -104,7 +108,7 @@ class EventQueue private constructor(
     /**
      * Get all pending events.
      */
-    suspend fun getPendingEvents(): List<QueuedEvent> = withContext(Dispatchers.IO) {
+    suspend fun getPendingEvents(): List<QueuedEvent> = withContext(ioDispatcher) {
         mutex.withLock {
             try {
                 queueDir.listFiles()
@@ -129,7 +133,7 @@ class EventQueue private constructor(
     /**
      * Remove an event from the queue.
      */
-    suspend fun removeEvent(eventId: String): Boolean = withContext(Dispatchers.IO) {
+    suspend fun removeEvent(eventId: String): Boolean = withContext(ioDispatcher) {
         mutex.withLock {
             try {
                 val eventFile = File(queueDir, "$eventId.json")
@@ -148,7 +152,7 @@ class EventQueue private constructor(
     /**
      * Get queue size.
      */
-    suspend fun getQueueSize(): Int = withContext(Dispatchers.IO) {
+    suspend fun getQueueSize(): Int = withContext(ioDispatcher) {
         mutex.withLock {
             queueDir.listFiles()?.count { it.extension == "json" } ?: 0
         }
@@ -157,9 +161,13 @@ class EventQueue private constructor(
     /**
      * Clear all events from the queue.
      */
-    suspend fun clear() = withContext(Dispatchers.IO) {
+    suspend fun clear() = withContext(ioDispatcher) {
         mutex.withLock {
-            queueDir.listFiles()?.forEach { it.delete() }
+            queueDir.listFiles()?.forEach { file ->
+                if (!file.delete()) {
+                    Timber.w("Failed to delete event file: ${file.name}")
+                }
+            }
             Timber.d("Event queue cleared")
         }
     }

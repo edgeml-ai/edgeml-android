@@ -14,7 +14,6 @@ import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import timber.log.Timber
 import java.io.File
-import java.util.Date
 
 /**
  * Manages continuous on-device personalization with incremental training.
@@ -105,7 +104,9 @@ class PersonalizationManager(
 
         // Delete personalized model file
         val personalizedFile = getPersonalizedModelFile(model.modelId)
-        personalizedFile.delete()
+        if (!personalizedFile.delete()) {
+            Timber.w("Failed to delete personalized model file: ${personalizedFile.absolutePath}")
+        }
 
         // Clear state
         personalizedModel = null
@@ -204,7 +205,7 @@ class PersonalizationManager(
         }
 
         // Get current model
-        val model = getCurrentModel() ?: return Result.failure(
+        getCurrentModel() ?: return Result.failure(
             IllegalStateException("No model loaded")
         )
 

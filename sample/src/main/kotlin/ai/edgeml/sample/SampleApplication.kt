@@ -24,11 +24,11 @@ class SampleApplication : Application() {
         // Build configuration
         // In production, these would come from secure storage or a config file
         val config = EdgeMLConfig.Builder()
-            .serverUrl(BuildConfig.EDGEML_SERVER_URL)
-            .apiKey(BuildConfig.EDGEML_API_KEY)
-            .orgId(BuildConfig.EDGEML_ORG_ID)
-            .modelId(BuildConfig.EDGEML_MODEL_ID)
-            .debugMode(BuildConfig.DEBUG)
+            .serverUrl(SampleConfig.EDGEML_SERVER_URL)
+            .deviceAccessToken(SampleConfig.EDGEML_DEVICE_ACCESS_TOKEN)
+            .orgId(SampleConfig.EDGEML_ORG_ID)
+            .modelId(SampleConfig.EDGEML_MODEL_ID)
+            .debugMode(SampleConfig.DEBUG)
             .enableGpuAcceleration(true)
             .enableBackgroundSync(true)
             .syncIntervalMinutes(60)
@@ -44,15 +44,15 @@ class SampleApplication : Application() {
 }
 
 /**
- * Build configuration constants.
+ * Sample configuration constants.
  *
  * In a real app, these would be in BuildConfig generated from gradle.
  * For the sample, we use placeholder values.
  */
-object BuildConfig {
+object SampleConfig {
     const val DEBUG = true
     const val EDGEML_SERVER_URL = "https://api.edgeml.ai"
-    const val EDGEML_API_KEY = "your-api-key-here"
+    const val EDGEML_DEVICE_ACCESS_TOKEN = "your-device-token-here"
     const val EDGEML_ORG_ID = "your-org-id-here"
     const val EDGEML_MODEL_ID = "your-model-id-here"
 }

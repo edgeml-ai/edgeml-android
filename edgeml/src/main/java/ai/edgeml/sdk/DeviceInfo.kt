@@ -7,8 +7,6 @@ import android.os.StatFs
 import android.provider.Settings
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
-import android.telephony.TelephonyManager
-import java.io.File
 import java.util.*
 
 /**
@@ -124,26 +122,15 @@ class DeviceInfo(private val context: Context) {
                 val connectivityManager = context.getSystemService(Context.CONNECTIVITY_SERVICE)
                     as ConnectivityManager
 
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                    val network = connectivityManager.activeNetwork ?: return "offline"
-                    val capabilities = connectivityManager.getNetworkCapabilities(network)
-                        ?: return "unknown"
+                val network = connectivityManager.activeNetwork ?: return "offline"
+                val capabilities = connectivityManager.getNetworkCapabilities(network)
+                    ?: return "unknown"
 
-                    when {
-                        capabilities.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) -> "wifi"
-                        capabilities.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) -> "cellular"
-                        capabilities.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET) -> "ethernet"
-                        else -> "unknown"
-                    }
-                } else {
-                    @Suppress("DEPRECATION")
-                    val activeNetwork = connectivityManager.activeNetworkInfo
-                    when (activeNetwork?.type) {
-                        ConnectivityManager.TYPE_WIFI -> "wifi"
-                        ConnectivityManager.TYPE_MOBILE -> "cellular"
-                        ConnectivityManager.TYPE_ETHERNET -> "ethernet"
-                        else -> if (activeNetwork?.isConnected == true) "unknown" else "offline"
-                    }
+                when {
+                    capabilities.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) -> "wifi"
+                    capabilities.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) -> "cellular"
+                    capabilities.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET) -> "ethernet"
+                    else -> "unknown"
                 }
             } catch (e: Exception) {
                 "unknown"

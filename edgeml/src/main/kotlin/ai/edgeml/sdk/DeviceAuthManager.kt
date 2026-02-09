@@ -2,6 +2,7 @@ package ai.edgeml.sdk
 
 import android.content.Context
 import android.util.Base64
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaType
@@ -17,7 +18,7 @@ import javax.crypto.KeyGenerator
 import javax.crypto.SecretKey
 import javax.crypto.spec.GCMParameterSpec
 
-internal interface DeviceAuthTransport {
+internal fun interface DeviceAuthTransport {
     fun postJson(
         path: String,
         body: JSONObject,
@@ -44,6 +45,7 @@ class DeviceAuthManager internal constructor(
     private val transport: DeviceAuthTransport,
     private val stateStore: DeviceAuthStateStore,
     private val nowMillisProvider: () -> Long = { System.currentTimeMillis() },
+    private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
 ) {
     constructor(
         context: Context,
@@ -51,6 +53,7 @@ class DeviceAuthManager internal constructor(
         orgId: String,
         deviceIdentifier: String,
         prefsName: String = "edgeml_device_auth",
+        ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
     ) : this(
         baseUrl = baseUrl,
         orgId = orgId,
@@ -62,6 +65,7 @@ class DeviceAuthManager internal constructor(
             orgId = orgId,
             deviceIdentifier = deviceIdentifier,
         ),
+        ioDispatcher = ioDispatcher,
     )
 
     data class DeviceTokenState(
@@ -80,7 +84,7 @@ class DeviceAuthManager internal constructor(
         scopes: List<String> = listOf("devices:write"),
         accessTtlSeconds: Int? = null,
         deviceId: String? = null
-    ): DeviceTokenState = withContext(Dispatchers.IO) {
+    ): DeviceTokenState = withContext(ioDispatcher) {
         val payload = JSONObject()
             .put("org_id", orgId)
             .put("device_identifier", deviceIdentifier)
@@ -100,7 +104,7 @@ class DeviceAuthManager internal constructor(
         state
     }
 
-    suspend fun refresh(): DeviceTokenState = withContext(Dispatchers.IO) {
+    suspend fun refresh(): DeviceTokenState = withContext(ioDispatcher) {
         val current = stateStore.load() ?: throw IllegalStateException("No token state stored")
 
         val response = transport.postJson(
@@ -114,7 +118,7 @@ class DeviceAuthManager internal constructor(
         state
     }
 
-    suspend fun revoke(reason: String = "sdk_revoke") = withContext(Dispatchers.IO) {
+    suspend fun revoke(reason: String = "sdk_revoke") = withContext(ioDispatcher) {
         val current = stateStore.load() ?: return@withContext
 
         transport.postJson(
@@ -128,7 +132,7 @@ class DeviceAuthManager internal constructor(
         stateStore.clear()
     }
 
-    suspend fun getAccessToken(refreshIfExpiringWithinSeconds: Long = 30): String = withContext(Dispatchers.IO) {
+    suspend fun getAccessToken(refreshIfExpiringWithinSeconds: Long = 30): String = withContext(ioDispatcher) {
         val state = stateStore.load() ?: throw IllegalStateException("No token state stored")
         val thresholdMillis = nowMillisProvider() + (refreshIfExpiringWithinSeconds * 1000)
         if (thresholdMillis >= state.expiresAtEpochMillis) {
@@ -186,8 +190,8 @@ private class OkHttpDeviceAuthTransport(
 
         client.newCall(builder.build()).execute().use { response ->
             val statusCode = response.code
-            if (!expectedStatusCodes.contains(statusCode)) {
-                throw IllegalStateException("Device auth request failed with status $statusCode")
+            check(expectedStatusCodes.contains(statusCode)) {
+                "Device auth request failed with status $statusCode"
             }
             if (statusCode == 204) {
                 return JSONObject()

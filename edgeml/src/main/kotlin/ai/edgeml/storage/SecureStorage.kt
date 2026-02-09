@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.SharedPreferences
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -21,6 +22,7 @@ import timber.log.Timber
 class SecureStorage private constructor(
     private val prefs: SharedPreferences,
     private val json: Json,
+    private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
 ) {
     private val mutex = Mutex()
 
@@ -71,7 +73,7 @@ class SecureStorage private constructor(
                 encodeDefaults = true
             }
 
-            return SecureStorage(prefs, json)
+            return SecureStorage(prefs, json, Dispatchers.IO)
         }
 
         private fun createEncryptedPrefs(context: Context): SharedPreferences {
@@ -103,7 +105,7 @@ class SecureStorage private constructor(
     /**
      * Store a string value securely.
      */
-    suspend fun putString(key: String, value: String) = withContext(Dispatchers.IO) {
+    suspend fun putString(key: String, value: String) = withContext(ioDispatcher) {
         mutex.withLock {
             prefs.edit().putString(key, value).apply()
         }
@@ -112,7 +114,7 @@ class SecureStorage private constructor(
     /**
      * Retrieve a string value.
      */
-    suspend fun getString(key: String): String? = withContext(Dispatchers.IO) {
+    suspend fun getString(key: String): String? = withContext(ioDispatcher) {
         mutex.withLock {
             prefs.getString(key, null)
         }
@@ -121,7 +123,7 @@ class SecureStorage private constructor(
     /**
      * Store a long value.
      */
-    suspend fun putLong(key: String, value: Long) = withContext(Dispatchers.IO) {
+    suspend fun putLong(key: String, value: Long) = withContext(ioDispatcher) {
         mutex.withLock {
             prefs.edit().putLong(key, value).apply()
         }
@@ -130,7 +132,7 @@ class SecureStorage private constructor(
     /**
      * Retrieve a long value.
      */
-    suspend fun getLong(key: String, defaultValue: Long = 0L): Long = withContext(Dispatchers.IO) {
+    suspend fun getLong(key: String, defaultValue: Long = 0L): Long = withContext(ioDispatcher) {
         mutex.withLock {
             prefs.getLong(key, defaultValue)
         }
@@ -139,7 +141,7 @@ class SecureStorage private constructor(
     /**
      * Store a boolean value.
      */
-    suspend fun putBoolean(key: String, value: Boolean) = withContext(Dispatchers.IO) {
+    suspend fun putBoolean(key: String, value: Boolean) = withContext(ioDispatcher) {
         mutex.withLock {
             prefs.edit().putBoolean(key, value).apply()
         }
@@ -148,7 +150,7 @@ class SecureStorage private constructor(
     /**
      * Retrieve a boolean value.
      */
-    suspend fun getBoolean(key: String, defaultValue: Boolean = false): Boolean = withContext(Dispatchers.IO) {
+    suspend fun getBoolean(key: String, defaultValue: Boolean = false): Boolean = withContext(ioDispatcher) {
         mutex.withLock {
             prefs.getBoolean(key, defaultValue)
         }
@@ -158,7 +160,7 @@ class SecureStorage private constructor(
      * Store a serializable object as JSON.
      */
     @PublishedApi
-    internal suspend fun <T> putObjectInternal(key: String, value: T, serializer: kotlinx.serialization.KSerializer<T>) = withContext(Dispatchers.IO) {
+    internal suspend fun <T> putObjectInternal(key: String, value: T, serializer: kotlinx.serialization.KSerializer<T>) = withContext(ioDispatcher) {
         mutex.withLock {
             val jsonString = json.encodeToString(serializer, value)
             prefs.edit().putString(key, jsonString).apply()
@@ -173,7 +175,7 @@ class SecureStorage private constructor(
      * Retrieve and deserialize an object from JSON.
      */
     @PublishedApi
-    internal suspend fun <T> getObjectInternal(key: String, serializer: kotlinx.serialization.KSerializer<T>): T? = withContext(Dispatchers.IO) {
+    internal suspend fun <T> getObjectInternal(key: String, serializer: kotlinx.serialization.KSerializer<T>): T? = withContext(ioDispatcher) {
         mutex.withLock {
             prefs.getString(key, null)?.let { jsonString ->
                 try {
@@ -193,7 +195,7 @@ class SecureStorage private constructor(
     /**
      * Remove a key from storage.
      */
-    suspend fun remove(key: String) = withContext(Dispatchers.IO) {
+    suspend fun remove(key: String) = withContext(ioDispatcher) {
         mutex.withLock {
             prefs.edit().remove(key).apply()
         }
@@ -202,7 +204,7 @@ class SecureStorage private constructor(
     /**
      * Check if a key exists.
      */
-    suspend fun contains(key: String): Boolean = withContext(Dispatchers.IO) {
+    suspend fun contains(key: String): Boolean = withContext(ioDispatcher) {
         mutex.withLock {
             prefs.contains(key)
         }
@@ -211,7 +213,7 @@ class SecureStorage private constructor(
     /**
      * Clear all stored data.
      */
-    suspend fun clear() = withContext(Dispatchers.IO) {
+    suspend fun clear() = withContext(ioDispatcher) {
         mutex.withLock {
             prefs.edit().clear().apply()
         }

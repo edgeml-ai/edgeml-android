@@ -27,5 +27,5 @@ build/
 # Local configuration
 local.properties
 
-# claude
-.claude/*
+# Claude
+.claude/

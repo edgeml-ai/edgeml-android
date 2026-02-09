@@ -96,11 +96,13 @@ dependencies {
     implementation("org.tensorflow:tensorflow-lite:2.14.0")
     implementation("org.tensorflow:tensorflow-lite-support:0.4.4")
     implementation("org.tensorflow:tensorflow-lite-gpu:2.14.0")
+    implementation("org.tensorflow:tensorflow-lite-gpu-api:2.14.0")
 
     // Logging
     implementation("com.jakewharton.timber:timber:5.0.1")
 
     // Testing
+    testImplementation("org.json:json:20231013")
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.jetbrains.kotlin:kotlin-test:1.9.21")
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.7.3")
