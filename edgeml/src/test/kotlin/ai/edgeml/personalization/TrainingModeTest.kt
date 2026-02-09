@@ -6,7 +6,6 @@ import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class TrainingModeTest {
-
     @Test
     fun `LOCAL_ONLY does not upload to server`() {
         assertFalse(TrainingMode.LOCAL_ONLY.uploadsToServer)

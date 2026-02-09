@@ -6,7 +6,6 @@ import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class PrivacyConfigurationTest {
-
     @Test
     fun `default configuration has staggered updates enabled`() {
         val config = PrivacyConfiguration.DEFAULT
@@ -53,11 +52,12 @@ class PrivacyConfigurationTest {
 
     @Test
     fun `randomUploadDelay returns value within configured range`() {
-        val config = PrivacyConfiguration(
-            enableStaggeredUpdates = true,
-            minUploadDelayMs = 100,
-            maxUploadDelayMs = 200,
-        )
+        val config =
+            PrivacyConfiguration(
+                enableStaggeredUpdates = true,
+                minUploadDelayMs = 100,
+                maxUploadDelayMs = 200,
+            )
 
         repeat(100) {
             val delay = config.randomUploadDelay()
@@ -67,25 +67,27 @@ class PrivacyConfigurationTest {
 
     @Test
     fun `randomUploadDelay returns exact min when range is zero`() {
-        val config = PrivacyConfiguration(
-            enableStaggeredUpdates = true,
-            minUploadDelayMs = 500,
-            maxUploadDelayMs = 500,
-        )
+        val config =
+            PrivacyConfiguration(
+                enableStaggeredUpdates = true,
+                minUploadDelayMs = 500,
+                maxUploadDelayMs = 500,
+            )
 
         assertEquals(500L, config.randomUploadDelay())
     }
 
     @Test
     fun `custom configuration preserves all values`() {
-        val config = PrivacyConfiguration(
-            enableStaggeredUpdates = false,
-            minUploadDelayMs = 42,
-            maxUploadDelayMs = 9999,
-            enableDifferentialPrivacy = true,
-            dpEpsilon = 3.14,
-            dpClippingNorm = 2.5,
-        )
+        val config =
+            PrivacyConfiguration(
+                enableStaggeredUpdates = false,
+                minUploadDelayMs = 42,
+                maxUploadDelayMs = 9999,
+                enableDifferentialPrivacy = true,
+                dpEpsilon = 3.14,
+                dpClippingNorm = 2.5,
+            )
 
         assertFalse(config.enableStaggeredUpdates)
         assertEquals(42L, config.minUploadDelayMs)

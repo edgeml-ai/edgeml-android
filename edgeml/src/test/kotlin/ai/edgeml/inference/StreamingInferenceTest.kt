@@ -6,7 +6,6 @@ import kotlin.test.assertEquals
 import kotlin.test.assertNotEquals
 
 class StreamingInferenceTest {
-
     // =========================================================================
     // Modality
     // =========================================================================
@@ -38,13 +37,14 @@ class StreamingInferenceTest {
     @Test
     fun `InferenceChunk stores all fields correctly`() {
         val data = byteArrayOf(1, 2, 3)
-        val chunk = InferenceChunk(
-            index = 5,
-            data = data,
-            modality = Modality.TEXT,
-            timestamp = 1000L,
-            latencyMs = 12.5,
-        )
+        val chunk =
+            InferenceChunk(
+                index = 5,
+                data = data,
+                modality = Modality.TEXT,
+                timestamp = 1000L,
+                latencyMs = 12.5,
+            )
 
         assertEquals(5, chunk.index)
         assertContentEquals(data, chunk.data)
@@ -55,20 +55,22 @@ class StreamingInferenceTest {
 
     @Test
     fun `InferenceChunk equality compares data by content`() {
-        val chunk1 = InferenceChunk(
-            index = 0,
-            data = byteArrayOf(1, 2, 3),
-            modality = Modality.TEXT,
-            timestamp = 100L,
-            latencyMs = 5.0,
-        )
-        val chunk2 = InferenceChunk(
-            index = 0,
-            data = byteArrayOf(1, 2, 3),
-            modality = Modality.TEXT,
-            timestamp = 100L,
-            latencyMs = 5.0,
-        )
+        val chunk1 =
+            InferenceChunk(
+                index = 0,
+                data = byteArrayOf(1, 2, 3),
+                modality = Modality.TEXT,
+                timestamp = 100L,
+                latencyMs = 5.0,
+            )
+        val chunk2 =
+            InferenceChunk(
+                index = 0,
+                data = byteArrayOf(1, 2, 3),
+                modality = Modality.TEXT,
+                timestamp = 100L,
+                latencyMs = 5.0,
+            )
 
         assertEquals(chunk1, chunk2)
         assertEquals(chunk1.hashCode(), chunk2.hashCode())
@@ -76,20 +78,22 @@ class StreamingInferenceTest {
 
     @Test
     fun `InferenceChunk not equal when data differs`() {
-        val chunk1 = InferenceChunk(
-            index = 0,
-            data = byteArrayOf(1, 2, 3),
-            modality = Modality.TEXT,
-            timestamp = 100L,
-            latencyMs = 5.0,
-        )
-        val chunk2 = InferenceChunk(
-            index = 0,
-            data = byteArrayOf(4, 5, 6),
-            modality = Modality.TEXT,
-            timestamp = 100L,
-            latencyMs = 5.0,
-        )
+        val chunk1 =
+            InferenceChunk(
+                index = 0,
+                data = byteArrayOf(1, 2, 3),
+                modality = Modality.TEXT,
+                timestamp = 100L,
+                latencyMs = 5.0,
+            )
+        val chunk2 =
+            InferenceChunk(
+                index = 0,
+                data = byteArrayOf(4, 5, 6),
+                modality = Modality.TEXT,
+                timestamp = 100L,
+                latencyMs = 5.0,
+            )
 
         assertNotEquals(chunk1, chunk2)
     }
@@ -118,15 +122,16 @@ class StreamingInferenceTest {
 
     @Test
     fun `StreamingInferenceResult stores all metrics`() {
-        val result = StreamingInferenceResult(
-            sessionId = "session-1",
-            modality = Modality.TEXT,
-            ttfcMs = 50.0,
-            avgChunkLatencyMs = 10.0,
-            totalChunks = 100,
-            totalDurationMs = 1000.0,
-            throughput = 100.0,
-        )
+        val result =
+            StreamingInferenceResult(
+                sessionId = "session-1",
+                modality = Modality.TEXT,
+                ttfcMs = 50.0,
+                avgChunkLatencyMs = 10.0,
+                totalChunks = 100,
+                totalDurationMs = 1000.0,
+                throughput = 100.0,
+            )
 
         assertEquals("session-1", result.sessionId)
         assertEquals(Modality.TEXT, result.modality)

@@ -10,11 +10,11 @@ import kotlin.test.assertNull
  * Tests for EventQueue data types and serialization.
  */
 class EventQueueTypesTest {
-
-    private val json = Json {
-        ignoreUnknownKeys = true
-        encodeDefaults = true
-    }
+    private val json =
+        Json {
+            ignoreUnknownKeys = true
+            encodeDefaults = true
+        }
 
     // =========================================================================
     // QueuedEvent
@@ -22,13 +22,14 @@ class EventQueueTypesTest {
 
     @Test
     fun `QueuedEvent serialization roundtrip with all fields`() {
-        val event = QueuedEvent(
-            id = "evt-1",
-            type = "inference_completed",
-            timestamp = 1706745600000,
-            metrics = mapOf("latency_ms" to 42.5, "accuracy" to 0.95),
-            metadata = mapOf("model_id" to "m1", "version" to "1.0"),
-        )
+        val event =
+            QueuedEvent(
+                id = "evt-1",
+                type = "inference_completed",
+                timestamp = 1706745600000,
+                metrics = mapOf("latency_ms" to 42.5, "accuracy" to 0.95),
+                metadata = mapOf("model_id" to "m1", "version" to "1.0"),
+            )
 
         val serialized = json.encodeToString(event)
         val deserialized = json.decodeFromString<QueuedEvent>(serialized)
@@ -43,11 +44,12 @@ class EventQueueTypesTest {
 
     @Test
     fun `QueuedEvent serialization roundtrip with null optional fields`() {
-        val event = QueuedEvent(
-            id = "evt-2",
-            type = "sync_started",
-            timestamp = 1000L,
-        )
+        val event =
+            QueuedEvent(
+                id = "evt-2",
+                type = "sync_started",
+                timestamp = 1000L,
+            )
 
         val serialized = json.encodeToString(event)
         val deserialized = json.decodeFromString<QueuedEvent>(serialized)
@@ -60,7 +62,8 @@ class EventQueueTypesTest {
 
     @Test
     fun `QueuedEvent deserialization from raw JSON`() {
-        val jsonStr = """
+        val jsonStr =
+            """
             {
                 "id": "evt-3",
                 "type": "training_completed",
@@ -68,7 +71,7 @@ class EventQueueTypesTest {
                 "metrics": {"loss": 0.01},
                 "metadata": {"tag": "test"}
             }
-        """.trimIndent()
+            """.trimIndent()
 
         val event = json.decodeFromString<QueuedEvent>(jsonStr)
 
@@ -81,14 +84,15 @@ class EventQueueTypesTest {
 
     @Test
     fun `QueuedEvent ignores unknown fields during deserialization`() {
-        val jsonStr = """
+        val jsonStr =
+            """
             {
                 "id": "evt-4",
                 "type": "test",
                 "timestamp": 100,
                 "unknown_field": "ignored"
             }
-        """.trimIndent()
+            """.trimIndent()
 
         val event = json.decodeFromString<QueuedEvent>(jsonStr)
         assertEquals("evt-4", event.id)

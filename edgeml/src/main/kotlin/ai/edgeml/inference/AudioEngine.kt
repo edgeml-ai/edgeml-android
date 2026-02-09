@@ -17,20 +17,23 @@ class AudioEngine(
     private val context: Context,
     private val totalFrames: Int = 80,
 ) : StreamingInferenceEngine {
-
-    override fun generate(input: Any, modality: Modality): Flow<InferenceChunk> = flow {
-        for (frame in 0 until totalFrames) {
-            val data = ByteArray(1024 * 2) // 1024 samples × 2 bytes
-            emit(
-                InferenceChunk(
-                    index = frame,
-                    data = data,
-                    modality = Modality.AUDIO,
-                    timestamp = System.currentTimeMillis(),
-                    latencyMs = 0.0,
+    override fun generate(
+        input: Any,
+        modality: Modality,
+    ): Flow<InferenceChunk> =
+        flow {
+            for (frame in 0 until totalFrames) {
+                val data = ByteArray(1024 * 2) // 1024 samples × 2 bytes
+                emit(
+                    InferenceChunk(
+                        index = frame,
+                        data = data,
+                        modality = Modality.AUDIO,
+                        timestamp = System.currentTimeMillis(),
+                        latencyMs = 0.0,
+                    ),
                 )
-            )
-            delay(10)
+                delay(10)
+            }
         }
-    }
 }

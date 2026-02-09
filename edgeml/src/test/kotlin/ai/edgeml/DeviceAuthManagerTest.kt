@@ -12,236 +12,263 @@ import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 
 class DeviceAuthManagerTest {
-
     @Test
-    fun `bootstrap refresh revoke lifecycle`() = runBlocking {
-        val transport = FakeTransport(
-            responses = ArrayDeque(
-                listOf(
-                    tokenPayload("acc_bootstrap", "ref_bootstrap", expiresIn = 900),
-                    tokenPayload("acc_refresh", "ref_refresh", expiresIn = 900),
-                    JSONObject(),
+    fun `bootstrap refresh revoke lifecycle`() =
+        runBlocking {
+            val transport =
+                FakeTransport(
+                    responses =
+                        ArrayDeque(
+                            listOf(
+                                tokenPayload("acc_bootstrap", "ref_bootstrap", expiresIn = 900),
+                                tokenPayload("acc_refresh", "ref_refresh", expiresIn = 900),
+                                JSONObject(),
+                            ),
+                        ),
                 )
-            )
-        )
-        val store = InMemoryStore()
-        var now = 1_000_000L
+            val store = InMemoryStore()
+            var now = 1_000_000L
 
-        val manager = DeviceAuthManager(
-            baseUrl = "https://api.example.com",
-            orgId = "org-1",
-            deviceIdentifier = "device-1",
-            transport = transport,
-            stateStore = store,
-            nowMillisProvider = { now },
-        )
-
-        val bootstrapped = manager.bootstrap(bootstrapBearerToken = "bootstrap-token")
-        assertEquals("acc_bootstrap", bootstrapped.accessToken)
-        assertNotNull(store.state)
-
-        val refreshed = manager.refresh()
-        assertEquals("acc_refresh", refreshed.accessToken)
-        assertEquals("ref_refresh", refreshed.refreshToken)
-
-        assertEquals("/api/v1/device-auth/bootstrap", transport.calls[0].path)
-        assertEquals("bootstrap-token", transport.calls[0].bearerToken)
-        assertEquals("org-1", transport.calls[0].body.getString("org_id"))
-        assertEquals("device-1", transport.calls[0].body.getString("device_identifier"))
-        assertEquals("/api/v1/device-auth/refresh", transport.calls[1].path)
-        assertEquals("ref_bootstrap", transport.calls[1].body.getString("refresh_token"))
-
-        manager.revoke()
-        assertNull(store.state)
-        assertEquals("/api/v1/device-auth/revoke", transport.calls[2].path)
-        assertEquals("sdk_revoke", transport.calls[2].body.getString("reason"))
-    }
-
-    @Test
-    fun `bootstrap sends expected payload and bearer token`() = runBlocking {
-        val transport = FakeTransport(
-            responses = ArrayDeque(
-                listOf(tokenPayload("acc_bootstrap", "ref_bootstrap", expiresIn = 900))
-            )
-        )
-        val store = InMemoryStore()
-        val manager = DeviceAuthManager(
-            baseUrl = "https://api.example.com",
-            orgId = "org-1",
-            deviceIdentifier = "device-1",
-            transport = transport,
-            stateStore = store,
-        )
-
-        manager.bootstrap(
-            bootstrapBearerToken = "bootstrap-token",
-            scopes = listOf("devices:write", "heartbeat:write"),
-            accessTtlSeconds = 600,
-            deviceId = "device-db-id"
-        )
-
-        val call = transport.calls[0]
-        assertEquals("/api/v1/device-auth/bootstrap", call.path)
-        assertEquals("bootstrap-token", call.bearerToken)
-        assertEquals("org-1", call.body.getString("org_id"))
-        assertEquals("device-1", call.body.getString("device_identifier"))
-        assertEquals(600, call.body.getInt("access_ttl_seconds"))
-        assertEquals("device-db-id", call.body.getString("device_id"))
-        val scopes = call.body.getJSONArray("scopes")
-        assertEquals("devices:write", scopes.getString(0))
-        assertEquals("heartbeat:write", scopes.getString(1))
-    }
-
-    @Test
-    fun `refresh uses rotated refresh token after prior refresh`() = runBlocking {
-        val transport = FakeTransport(
-            responses = ArrayDeque(
-                listOf(
-                    tokenPayload("acc_bootstrap", "ref_bootstrap", expiresIn = 900),
-                    tokenPayload("acc_refresh_1", "ref_refresh_1", expiresIn = 900),
-                    tokenPayload("acc_refresh_2", "ref_refresh_2", expiresIn = 900),
+            val manager =
+                DeviceAuthManager(
+                    baseUrl = "https://api.example.com",
+                    orgId = "org-1",
+                    deviceIdentifier = "device-1",
+                    transport = transport,
+                    stateStore = store,
+                    nowMillisProvider = { now },
                 )
-            )
-        )
-        val store = InMemoryStore()
 
-        val manager = DeviceAuthManager(
-            baseUrl = "https://api.example.com",
-            orgId = "org-1",
-            deviceIdentifier = "device-1",
-            transport = transport,
-            stateStore = store,
-        )
+            val bootstrapped = manager.bootstrap(bootstrapBearerToken = "bootstrap-token")
+            assertEquals("acc_bootstrap", bootstrapped.accessToken)
+            assertNotNull(store.state)
 
-        manager.bootstrap(bootstrapBearerToken = "bootstrap-token")
-        manager.refresh()
-        manager.refresh()
+            val refreshed = manager.refresh()
+            assertEquals("acc_refresh", refreshed.accessToken)
+            assertEquals("ref_refresh", refreshed.refreshToken)
 
-        assertEquals("ref_bootstrap", transport.calls[1].body.getString("refresh_token"))
-        assertEquals("ref_refresh_1", transport.calls[2].body.getString("refresh_token"))
-    }
+            assertEquals("/api/v1/device-auth/bootstrap", transport.calls[0].path)
+            assertEquals("bootstrap-token", transport.calls[0].bearerToken)
+            assertEquals("org-1", transport.calls[0].body.getString("org_id"))
+            assertEquals("device-1", transport.calls[0].body.getString("device_identifier"))
+            assertEquals("/api/v1/device-auth/refresh", transport.calls[1].path)
+            assertEquals("ref_bootstrap", transport.calls[1].body.getString("refresh_token"))
 
-    @Test
-    fun `getAccessToken falls back to current token when refresh fails but token still valid`() = runBlocking {
-        val transport = FakeTransport(
-            responses = ArrayDeque(
-                listOf(
-                    tokenPayload("acc_bootstrap", "ref_bootstrap", expiresIn = 600),
-                )
-            ),
-            throwOnCallIndex = 2, // fail first refresh call
-        )
-        val store = InMemoryStore()
-        var now = 2_000_000L
-
-        val manager = DeviceAuthManager(
-            baseUrl = "https://api.example.com",
-            orgId = "org-1",
-            deviceIdentifier = "device-1",
-            transport = transport,
-            stateStore = store,
-            nowMillisProvider = { now },
-        )
-
-        manager.bootstrap(bootstrapBearerToken = "bootstrap-token")
-        val token = manager.getAccessToken(refreshIfExpiringWithinSeconds = 700)
-        assertEquals("acc_bootstrap", token)
-    }
-
-    @Test
-    fun `getAccessToken throws when token expired and refresh fails`() = runBlocking {
-        val transport = FakeTransport(
-            responses = ArrayDeque(
-                listOf(
-                    tokenPayload("acc_bootstrap", "ref_bootstrap", expiresIn = 1),
-                )
-            ),
-            throwOnCallIndex = 2,
-        )
-        val store = InMemoryStore()
-        var now = 3_000_000L
-
-        val manager = DeviceAuthManager(
-            baseUrl = "https://api.example.com",
-            orgId = "org-1",
-            deviceIdentifier = "device-1",
-            transport = transport,
-            stateStore = store,
-            nowMillisProvider = { now },
-        )
-
-        manager.bootstrap(bootstrapBearerToken = "bootstrap-token")
-        now += 5_000L
-
-        assertFailsWith<IllegalStateException> {
-            manager.getAccessToken(refreshIfExpiringWithinSeconds = 30)
-        }
-        Unit
-    }
-
-    @Test
-    fun `getAccessToken returns current token when not near expiry`() = runBlocking {
-        val transport = FakeTransport(
-            responses = ArrayDeque(
-                listOf(
-                    tokenPayload("acc_bootstrap", "ref_bootstrap", expiresIn = 3_600),
-                )
-            )
-        )
-        val store = InMemoryStore()
-        var now = 4_000_000L
-
-        val manager = DeviceAuthManager(
-            baseUrl = "https://api.example.com",
-            orgId = "org-1",
-            deviceIdentifier = "device-1",
-            transport = transport,
-            stateStore = store,
-            nowMillisProvider = { now },
-        )
-
-        manager.bootstrap(bootstrapBearerToken = "bootstrap-token")
-        val token = manager.getAccessToken(refreshIfExpiringWithinSeconds = 30)
-        assertEquals("acc_bootstrap", token)
-        assertEquals(1, transport.calls.size)
-    }
-
-    @Test
-    fun `revoke failure preserves stored state`() = runBlocking {
-        val transport = FakeTransport(
-            responses = ArrayDeque(
-                listOf(
-                    tokenPayload("acc_bootstrap", "ref_bootstrap", expiresIn = 600),
-                )
-            ),
-            throwOnCallIndex = 2,
-        )
-        val store = InMemoryStore()
-
-        val manager = DeviceAuthManager(
-            baseUrl = "https://api.example.com",
-            orgId = "org-1",
-            deviceIdentifier = "device-1",
-            transport = transport,
-            stateStore = store,
-        )
-
-        manager.bootstrap(bootstrapBearerToken = "bootstrap-token")
-
-        assertFailsWith<IllegalStateException> {
             manager.revoke()
+            assertNull(store.state)
+            assertEquals("/api/v1/device-auth/revoke", transport.calls[2].path)
+            assertEquals("sdk_revoke", transport.calls[2].body.getString("reason"))
         }
-        assertNotNull(store.state)
-        Unit
-    }
+
+    @Test
+    fun `bootstrap sends expected payload and bearer token`() =
+        runBlocking {
+            val transport =
+                FakeTransport(
+                    responses =
+                        ArrayDeque(
+                            listOf(tokenPayload("acc_bootstrap", "ref_bootstrap", expiresIn = 900)),
+                        ),
+                )
+            val store = InMemoryStore()
+            val manager =
+                DeviceAuthManager(
+                    baseUrl = "https://api.example.com",
+                    orgId = "org-1",
+                    deviceIdentifier = "device-1",
+                    transport = transport,
+                    stateStore = store,
+                )
+
+            manager.bootstrap(
+                bootstrapBearerToken = "bootstrap-token",
+                scopes = listOf("devices:write", "heartbeat:write"),
+                accessTtlSeconds = 600,
+                deviceId = "device-db-id",
+            )
+
+            val call = transport.calls[0]
+            assertEquals("/api/v1/device-auth/bootstrap", call.path)
+            assertEquals("bootstrap-token", call.bearerToken)
+            assertEquals("org-1", call.body.getString("org_id"))
+            assertEquals("device-1", call.body.getString("device_identifier"))
+            assertEquals(600, call.body.getInt("access_ttl_seconds"))
+            assertEquals("device-db-id", call.body.getString("device_id"))
+            val scopes = call.body.getJSONArray("scopes")
+            assertEquals("devices:write", scopes.getString(0))
+            assertEquals("heartbeat:write", scopes.getString(1))
+        }
+
+    @Test
+    fun `refresh uses rotated refresh token after prior refresh`() =
+        runBlocking {
+            val transport =
+                FakeTransport(
+                    responses =
+                        ArrayDeque(
+                            listOf(
+                                tokenPayload("acc_bootstrap", "ref_bootstrap", expiresIn = 900),
+                                tokenPayload("acc_refresh_1", "ref_refresh_1", expiresIn = 900),
+                                tokenPayload("acc_refresh_2", "ref_refresh_2", expiresIn = 900),
+                            ),
+                        ),
+                )
+            val store = InMemoryStore()
+
+            val manager =
+                DeviceAuthManager(
+                    baseUrl = "https://api.example.com",
+                    orgId = "org-1",
+                    deviceIdentifier = "device-1",
+                    transport = transport,
+                    stateStore = store,
+                )
+
+            manager.bootstrap(bootstrapBearerToken = "bootstrap-token")
+            manager.refresh()
+            manager.refresh()
+
+            assertEquals("ref_bootstrap", transport.calls[1].body.getString("refresh_token"))
+            assertEquals("ref_refresh_1", transport.calls[2].body.getString("refresh_token"))
+        }
+
+    @Test
+    fun `getAccessToken falls back to current token when refresh fails but token still valid`() =
+        runBlocking {
+            val transport =
+                FakeTransport(
+                    responses =
+                        ArrayDeque(
+                            listOf(
+                                tokenPayload("acc_bootstrap", "ref_bootstrap", expiresIn = 600),
+                            ),
+                        ),
+                    throwOnCallIndex = 2, // fail first refresh call
+                )
+            val store = InMemoryStore()
+            var now = 2_000_000L
+
+            val manager =
+                DeviceAuthManager(
+                    baseUrl = "https://api.example.com",
+                    orgId = "org-1",
+                    deviceIdentifier = "device-1",
+                    transport = transport,
+                    stateStore = store,
+                    nowMillisProvider = { now },
+                )
+
+            manager.bootstrap(bootstrapBearerToken = "bootstrap-token")
+            val token = manager.getAccessToken(refreshIfExpiringWithinSeconds = 700)
+            assertEquals("acc_bootstrap", token)
+        }
+
+    @Test
+    fun `getAccessToken throws when token expired and refresh fails`() =
+        runBlocking {
+            val transport =
+                FakeTransport(
+                    responses =
+                        ArrayDeque(
+                            listOf(
+                                tokenPayload("acc_bootstrap", "ref_bootstrap", expiresIn = 1),
+                            ),
+                        ),
+                    throwOnCallIndex = 2,
+                )
+            val store = InMemoryStore()
+            var now = 3_000_000L
+
+            val manager =
+                DeviceAuthManager(
+                    baseUrl = "https://api.example.com",
+                    orgId = "org-1",
+                    deviceIdentifier = "device-1",
+                    transport = transport,
+                    stateStore = store,
+                    nowMillisProvider = { now },
+                )
+
+            manager.bootstrap(bootstrapBearerToken = "bootstrap-token")
+            now += 5_000L
+
+            assertFailsWith<IllegalStateException> {
+                manager.getAccessToken(refreshIfExpiringWithinSeconds = 30)
+            }
+            Unit
+        }
+
+    @Test
+    fun `getAccessToken returns current token when not near expiry`() =
+        runBlocking {
+            val transport =
+                FakeTransport(
+                    responses =
+                        ArrayDeque(
+                            listOf(
+                                tokenPayload("acc_bootstrap", "ref_bootstrap", expiresIn = 3_600),
+                            ),
+                        ),
+                )
+            val store = InMemoryStore()
+            var now = 4_000_000L
+
+            val manager =
+                DeviceAuthManager(
+                    baseUrl = "https://api.example.com",
+                    orgId = "org-1",
+                    deviceIdentifier = "device-1",
+                    transport = transport,
+                    stateStore = store,
+                    nowMillisProvider = { now },
+                )
+
+            manager.bootstrap(bootstrapBearerToken = "bootstrap-token")
+            val token = manager.getAccessToken(refreshIfExpiringWithinSeconds = 30)
+            assertEquals("acc_bootstrap", token)
+            assertEquals(1, transport.calls.size)
+        }
+
+    @Test
+    fun `revoke failure preserves stored state`() =
+        runBlocking {
+            val transport =
+                FakeTransport(
+                    responses =
+                        ArrayDeque(
+                            listOf(
+                                tokenPayload("acc_bootstrap", "ref_bootstrap", expiresIn = 600),
+                            ),
+                        ),
+                    throwOnCallIndex = 2,
+                )
+            val store = InMemoryStore()
+
+            val manager =
+                DeviceAuthManager(
+                    baseUrl = "https://api.example.com",
+                    orgId = "org-1",
+                    deviceIdentifier = "device-1",
+                    transport = transport,
+                    stateStore = store,
+                )
+
+            manager.bootstrap(bootstrapBearerToken = "bootstrap-token")
+
+            assertFailsWith<IllegalStateException> {
+                manager.revoke()
+            }
+            assertNotNull(store.state)
+            Unit
+        }
 }
 
 private fun tokenPayload(
     accessToken: String,
     refreshToken: String,
     expiresIn: Long,
-): JSONObject {
-    return JSONObject()
+): JSONObject =
+    JSONObject()
         .put("access_token", accessToken)
         .put("refresh_token", refreshToken)
         .put("token_type", "Bearer")
@@ -250,7 +277,6 @@ private fun tokenPayload(
         .put("org_id", "org-1")
         .put("device_identifier", "device-1")
         .put("scopes", listOf("devices:write"))
-}
 
 private class InMemoryStore : DeviceAuthStateStore {
     var state: DeviceAuthManager.DeviceTokenState? = null
@@ -274,7 +300,7 @@ private class FakeTransport(
         val path: String,
         val body: JSONObject,
         val bearerToken: String?,
-        val expectedStatusCodes: Set<Int>
+        val expectedStatusCodes: Set<Int>,
     )
 
     private var callCount = 0
@@ -284,7 +310,7 @@ private class FakeTransport(
         path: String,
         body: JSONObject,
         bearerToken: String?,
-        expectedStatusCodes: Set<Int>
+        expectedStatusCodes: Set<Int>,
     ): JSONObject {
         callCount += 1
         calls += Call(path = path, body = body, bearerToken = bearerToken, expectedStatusCodes = expectedStatusCodes)

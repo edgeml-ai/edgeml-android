@@ -19,19 +19,16 @@ data class PrivacyConfiguration(
      * Prevents timing correlation attacks by randomizing upload times.
      */
     val enableStaggeredUpdates: Boolean = true,
-
     /**
      * Minimum delay before upload (milliseconds).
      */
     val minUploadDelayMs: Long = 0,
-
     /**
      * Maximum delay before upload (milliseconds).
      *
      * Default: 300,000 ms = 5 minutes
      */
     val maxUploadDelayMs: Long = 300_000,
-
     /**
      * Whether to enable differential privacy (noise injection).
      *
@@ -39,7 +36,6 @@ data class PrivacyConfiguration(
      * Note: Actual DP is applied server-side; this is client-side config.
      */
     val enableDifferentialPrivacy: Boolean = false,
-
     /**
      * Privacy budget (epsilon) for differential privacy.
      *
@@ -49,7 +45,6 @@ data class PrivacyConfiguration(
      * Default: 1.0 (balanced)
      */
     val dpEpsilon: Double = 1.0,
-
     /**
      * Gradient clipping norm for differential privacy.
      *
@@ -59,7 +54,6 @@ data class PrivacyConfiguration(
      */
     val dpClippingNorm: Double = 1.0,
 ) {
-
     /**
      * Compute a random upload delay based on configuration.
      *
@@ -86,39 +80,42 @@ data class PrivacyConfiguration(
          *
          * Staggered updates + differential privacy with strong guarantees.
          */
-        val HIGH_PRIVACY = PrivacyConfiguration(
-            enableStaggeredUpdates = true,
-            minUploadDelayMs = 60_000,      // 1 minute
-            maxUploadDelayMs = 600_000,     // 10 minutes
-            enableDifferentialPrivacy = true,
-            dpEpsilon = 0.5,                // Strong privacy
-            dpClippingNorm = 1.0,
-        )
+        val HIGH_PRIVACY =
+            PrivacyConfiguration(
+                enableStaggeredUpdates = true,
+                minUploadDelayMs = 60_000, // 1 minute
+                maxUploadDelayMs = 600_000, // 10 minutes
+                enableDifferentialPrivacy = true,
+                dpEpsilon = 0.5, // Strong privacy
+                dpClippingNorm = 1.0,
+            )
 
         /**
          * No privacy enhancements.
          *
          * For testing/debugging only.
          */
-        val DISABLED = PrivacyConfiguration(
-            enableStaggeredUpdates = false,
-            minUploadDelayMs = 0,
-            maxUploadDelayMs = 0,
-            enableDifferentialPrivacy = false,
-        )
+        val DISABLED =
+            PrivacyConfiguration(
+                enableStaggeredUpdates = false,
+                minUploadDelayMs = 0,
+                maxUploadDelayMs = 0,
+                enableDifferentialPrivacy = false,
+            )
 
         /**
          * Moderate privacy configuration.
          *
          * Balanced privacy/utility tradeoff.
          */
-        val MODERATE = PrivacyConfiguration(
-            enableStaggeredUpdates = true,
-            minUploadDelayMs = 0,
-            maxUploadDelayMs = 300_000,     // 5 minutes
-            enableDifferentialPrivacy = true,
-            dpEpsilon = 1.0,                // Moderate privacy
-            dpClippingNorm = 1.0,
-        )
+        val MODERATE =
+            PrivacyConfiguration(
+                enableStaggeredUpdates = true,
+                minUploadDelayMs = 0,
+                maxUploadDelayMs = 300_000, // 5 minutes
+                enableDifferentialPrivacy = true,
+                dpEpsilon = 1.0, // Moderate privacy
+                dpClippingNorm = 1.0,
+            )
     }
 }

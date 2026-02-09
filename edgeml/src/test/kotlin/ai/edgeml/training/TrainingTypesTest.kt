@@ -7,7 +7,6 @@ import kotlin.test.assertEquals
 import kotlin.test.assertNotEquals
 
 class TrainingTypesTest {
-
     // =========================================================================
     // TrainingConfig
     // =========================================================================
@@ -24,13 +23,14 @@ class TrainingTypesTest {
 
     @Test
     fun `TrainingConfig allows custom values`() {
-        val config = TrainingConfig(
-            epochs = 10,
-            batchSize = 64,
-            learningRate = 0.01f,
-            lossFunction = "mse",
-            optimizer = "sgd",
-        )
+        val config =
+            TrainingConfig(
+                epochs = 10,
+                batchSize = 64,
+                learningRate = 0.01f,
+                lossFunction = "mse",
+                optimizer = "sgd",
+            )
         assertEquals(10, config.epochs)
         assertEquals(64, config.batchSize)
         assertEquals(0.01f, config.learningRate)
@@ -44,14 +44,15 @@ class TrainingTypesTest {
 
     @Test
     fun `TrainingResult stores all fields`() {
-        val result = TrainingResult(
-            sampleCount = 100,
-            loss = 0.5,
-            accuracy = 0.85,
-            trainingTime = 12.3,
-            metrics = mapOf("f1_score" to 0.9),
-            updatedModelPath = "/tmp/model.tflite",
-        )
+        val result =
+            TrainingResult(
+                sampleCount = 100,
+                loss = 0.5,
+                accuracy = 0.85,
+                trainingTime = 12.3,
+                metrics = mapOf("f1_score" to 0.9),
+                updatedModelPath = "/tmp/model.tflite",
+            )
 
         assertEquals(100, result.sampleCount)
         assertEquals(0.5, result.loss)
@@ -63,12 +64,13 @@ class TrainingTypesTest {
 
     @Test
     fun `TrainingResult defaults to empty metrics and null path`() {
-        val result = TrainingResult(
-            sampleCount = 10,
-            loss = null,
-            accuracy = null,
-            trainingTime = 1.0,
-        )
+        val result =
+            TrainingResult(
+                sampleCount = 10,
+                loss = null,
+                accuracy = null,
+                trainingTime = 1.0,
+            )
 
         assertEquals(emptyMap(), result.metrics)
         assertEquals(null, result.updatedModelPath)
@@ -80,18 +82,20 @@ class TrainingTypesTest {
 
     @Test
     fun `WeightUpdate equality compares weightsData by content`() {
-        val update1 = WeightUpdate(
-            modelId = "m1",
-            version = "1.0",
-            weightsData = byteArrayOf(1, 2, 3),
-            sampleCount = 10,
-        )
-        val update2 = WeightUpdate(
-            modelId = "m1",
-            version = "1.0",
-            weightsData = byteArrayOf(1, 2, 3),
-            sampleCount = 10,
-        )
+        val update1 =
+            WeightUpdate(
+                modelId = "m1",
+                version = "1.0",
+                weightsData = byteArrayOf(1, 2, 3),
+                sampleCount = 10,
+            )
+        val update2 =
+            WeightUpdate(
+                modelId = "m1",
+                version = "1.0",
+                weightsData = byteArrayOf(1, 2, 3),
+                sampleCount = 10,
+            )
 
         assertEquals(update1, update2)
         assertEquals(update1.hashCode(), update2.hashCode())
@@ -125,35 +129,40 @@ class TrainingTypesTest {
     // =========================================================================
 
     @Test
-    fun `InMemoryTrainingDataProvider returns all data`() = runBlocking {
-        val data = listOf(
-            floatArrayOf(1f, 2f) to floatArrayOf(0f, 1f),
-            floatArrayOf(3f, 4f) to floatArrayOf(1f, 0f),
-        )
-        val provider = InMemoryTrainingDataProvider(data)
+    fun `InMemoryTrainingDataProvider returns all data`() =
+        runBlocking {
+            val data =
+                listOf(
+                    floatArrayOf(1f, 2f) to floatArrayOf(0f, 1f),
+                    floatArrayOf(3f, 4f) to floatArrayOf(1f, 0f),
+                )
+            val provider = InMemoryTrainingDataProvider(data)
 
-        val trainingData = provider.getTrainingData()
-        assertEquals(2, trainingData.size)
-        assertContentEquals(floatArrayOf(1f, 2f), trainingData[0].first)
-        assertContentEquals(floatArrayOf(0f, 1f), trainingData[0].second)
-    }
-
-    @Test
-    fun `InMemoryTrainingDataProvider returns correct sample count`() = runBlocking {
-        val data = listOf(
-            floatArrayOf(1f) to floatArrayOf(0f),
-            floatArrayOf(2f) to floatArrayOf(1f),
-            floatArrayOf(3f) to floatArrayOf(0f),
-        )
-        val provider = InMemoryTrainingDataProvider(data)
-
-        assertEquals(3, provider.getSampleCount())
-    }
+            val trainingData = provider.getTrainingData()
+            assertEquals(2, trainingData.size)
+            assertContentEquals(floatArrayOf(1f, 2f), trainingData[0].first)
+            assertContentEquals(floatArrayOf(0f, 1f), trainingData[0].second)
+        }
 
     @Test
-    fun `InMemoryTrainingDataProvider handles empty data`() = runBlocking {
-        val provider = InMemoryTrainingDataProvider(emptyList())
-        assertEquals(0, provider.getSampleCount())
-        assertEquals(emptyList(), provider.getTrainingData())
-    }
+    fun `InMemoryTrainingDataProvider returns correct sample count`() =
+        runBlocking {
+            val data =
+                listOf(
+                    floatArrayOf(1f) to floatArrayOf(0f),
+                    floatArrayOf(2f) to floatArrayOf(1f),
+                    floatArrayOf(3f) to floatArrayOf(0f),
+                )
+            val provider = InMemoryTrainingDataProvider(data)
+
+            assertEquals(3, provider.getSampleCount())
+        }
+
+    @Test
+    fun `InMemoryTrainingDataProvider handles empty data`() =
+        runBlocking {
+            val provider = InMemoryTrainingDataProvider(emptyList())
+            assertEquals(0, provider.getSampleCount())
+            assertEquals(emptyList(), provider.getTrainingData())
+        }
 }

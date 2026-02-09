@@ -116,10 +116,9 @@ class EdgeMLClient private constructor(
          *
          * @throws IllegalStateException if not initialized
          */
-        fun getInstance(): EdgeMLClient {
-            return instance
+        fun getInstance(): EdgeMLClient =
+            instance
                 ?: throw IllegalStateException("EdgeMLClient not initialized. Call Builder.build() first.")
-        }
 
         /**
          * Check if the client is initialized.
@@ -141,33 +140,34 @@ class EdgeMLClient private constructor(
      *
      * @return Result indicating success or failure
      */
-    suspend fun initialize(): Result<Unit> = withContext(ioDispatcher) {
-        try {
-            _state.value = ClientState.INITIALIZING
-            Timber.i("Initializing EdgeML SDK v$VERSION")
+    suspend fun initialize(): Result<Unit> =
+        withContext(ioDispatcher) {
+            try {
+                _state.value = ClientState.INITIALIZING
+                Timber.i("Initializing EdgeML SDK v$VERSION")
 
-            val deviceIdentifier = resolveDeviceIdentifier()
-            _deviceIdentifier.value = deviceIdentifier
+                val deviceIdentifier = resolveDeviceIdentifier()
+                _deviceIdentifier.value = deviceIdentifier
 
-            val serverId = ensureDeviceRegistered(deviceIdentifier)
-            _serverDeviceId.value = serverId
+                val serverId = ensureDeviceRegistered(deviceIdentifier)
+                _serverDeviceId.value = serverId
 
-            if (serverId != null) {
-                fetchGroupMemberships(serverId)
+                if (serverId != null) {
+                    fetchGroupMemberships(serverId)
+                }
+
+                ensureModelLoaded()
+                setupBackgroundServices(serverId)
+
+                _state.value = ClientState.READY
+                Timber.i("EdgeML SDK initialized successfully")
+                Result.success(Unit)
+            } catch (e: Exception) {
+                Timber.e(e, "EdgeML initialization failed")
+                _state.value = ClientState.ERROR
+                Result.failure(e)
             }
-
-            ensureModelLoaded()
-            setupBackgroundServices(serverId)
-
-            _state.value = ClientState.READY
-            Timber.i("EdgeML SDK initialized successfully")
-            Result.success(Unit)
-        } catch (e: Exception) {
-            Timber.e(e, "EdgeML initialization failed")
-            _state.value = ClientState.ERROR
-            Result.failure(e)
         }
-    }
 
     private suspend fun resolveDeviceIdentifier(): String {
         val existing = storage.getClientDeviceIdentifier()
@@ -214,56 +214,60 @@ class EdgeMLClient private constructor(
     /**
      * Register the device with the EdgeML server.
      */
-    private suspend fun registerDevice(deviceIdentifier: String): Result<Unit> = withContext(ioDispatcher) {
-        try {
-            Timber.d("Registering device: $deviceIdentifier")
+    private suspend fun registerDevice(deviceIdentifier: String): Result<Unit> =
+        withContext(ioDispatcher) {
+            try {
+                Timber.d("Registering device: $deviceIdentifier")
 
-            val request = DeviceRegistrationRequest(
-                deviceIdentifier = deviceIdentifier,
-                orgId = config.orgId,
-                platform = "android",
-                osVersion = DeviceUtils.getOsVersion(),
-                sdkVersion = VERSION,
-                manufacturer = DeviceUtils.getManufacturer(),
-                model = DeviceUtils.getModel(),
-                locale = DeviceUtils.getLocale(),
-                region = DeviceUtils.getRegion(),
-                appVersion = config.appVersion,
-                capabilities = DeviceUtils.getDeviceCapabilities(context),
-            )
+                val request =
+                    DeviceRegistrationRequest(
+                        deviceIdentifier = deviceIdentifier,
+                        orgId = config.orgId,
+                        platform = "android",
+                        osVersion = DeviceUtils.getOsVersion(),
+                        sdkVersion = VERSION,
+                        manufacturer = DeviceUtils.getManufacturer(),
+                        model = DeviceUtils.getModel(),
+                        locale = DeviceUtils.getLocale(),
+                        region = DeviceUtils.getRegion(),
+                        appVersion = config.appVersion,
+                        capabilities = DeviceUtils.getDeviceCapabilities(context),
+                    )
 
-            val response = api.registerDevice(request)
+                val response = api.registerDevice(request)
 
-            if (!response.isSuccessful) {
-                val errorMsg = "Device registration failed: ${response.code()}"
-                Timber.e(errorMsg)
-                return@withContext Result.failure(Exception(errorMsg))
-            }
+                if (!response.isSuccessful) {
+                    val errorMsg = "Device registration failed: ${response.code()}"
+                    Timber.e(errorMsg)
+                    return@withContext Result.failure(Exception(errorMsg))
+                }
 
-            val body = response.body()
-                ?: return@withContext Result.failure(Exception("Empty registration response"))
+                val body =
+                    response.body()
+                        ?: return@withContext Result.failure(Exception("Empty registration response"))
 
-            storage.setServerDeviceId(body.id)
-            storage.setClientDeviceIdentifier(deviceIdentifier)
-            body.apiToken?.let { storage.setApiToken(it) }
+                storage.setServerDeviceId(body.id)
+                storage.setClientDeviceIdentifier(deviceIdentifier)
+                body.apiToken?.let { storage.setApiToken(it) }
 
-            fetchAndCacheDevicePolicy()
+                fetchAndCacheDevicePolicy()
 
-            eventQueue.addTrainingEvent(
-                type = EventTypes.DEVICE_REGISTERED,
-                metadata = mapOf(
-                    "device_id" to body.id,
-                    "device_identifier" to deviceIdentifier
+                eventQueue.addTrainingEvent(
+                    type = EventTypes.DEVICE_REGISTERED,
+                    metadata =
+                        mapOf(
+                            "device_id" to body.id,
+                            "device_identifier" to deviceIdentifier,
+                        ),
                 )
-            )
 
-            Timber.i("Device registered successfully: ${body.id}")
-            Result.success(Unit)
-        } catch (e: Exception) {
-            Timber.e(e, "Device registration error")
-            Result.failure(e)
+                Timber.i("Device registered successfully: ${body.id}")
+                Result.success(Unit)
+            } catch (e: Exception) {
+                Timber.e(e, "Device registration error")
+                Result.failure(e)
+            }
         }
-    }
 
     private suspend fun fetchAndCacheDevicePolicy() {
         try {
@@ -290,13 +294,14 @@ class EdgeMLClient private constructor(
      */
     private fun startHeartbeat(deviceId: String) {
         heartbeatJob?.cancel()
-        heartbeatJob = scope.launch(ioDispatcher) {
-            Timber.d("Starting heartbeat with interval ${heartbeatIntervalMs}ms")
-            while (isActive) {
-                sendHeartbeat(deviceId)
-                delay(heartbeatIntervalMs)
+        heartbeatJob =
+            scope.launch(ioDispatcher) {
+                Timber.d("Starting heartbeat with interval ${heartbeatIntervalMs}ms")
+                while (isActive) {
+                    sendHeartbeat(deviceId)
+                    delay(heartbeatIntervalMs)
+                }
             }
-        }
     }
 
     /**
@@ -313,16 +318,17 @@ class EdgeMLClient private constructor(
      */
     private suspend fun sendHeartbeat(deviceId: String) {
         try {
-            val request = HeartbeatRequest(
-                sdkVersion = VERSION,
-                osVersion = DeviceUtils.getOsVersion(),
-                appVersion = config.appVersion,
-                batteryLevel = BatteryUtils.getBatteryLevel(context),
-                isCharging = BatteryUtils.isCharging(context),
-                availableStorageMb = DeviceUtils.getAvailableStorageMb(),
-                availableMemoryMb = DeviceUtils.getAvailableMemoryMb(context),
-                networkType = if (NetworkUtils.isWifiConnected(context)) "wifi" else "cellular",
-            )
+            val request =
+                HeartbeatRequest(
+                    sdkVersion = VERSION,
+                    osVersion = DeviceUtils.getOsVersion(),
+                    appVersion = config.appVersion,
+                    batteryLevel = BatteryUtils.getBatteryLevel(context),
+                    isCharging = BatteryUtils.isCharging(context),
+                    availableStorageMb = DeviceUtils.getAvailableStorageMb(),
+                    availableMemoryMb = DeviceUtils.getAvailableMemoryMb(context),
+                    networkType = if (NetworkUtils.isWifiConnected(context)) "wifi" else "cellular",
+                )
 
             val response = api.sendHeartbeat(deviceId, request)
 
@@ -339,14 +345,15 @@ class EdgeMLClient private constructor(
     /**
      * Manually trigger a heartbeat.
      */
-    suspend fun triggerHeartbeat(): Result<Unit> = withContext(ioDispatcher) {
-        val deviceId = _serverDeviceId.value
-        if (deviceId == null) {
-            return@withContext Result.failure(Exception("Device not registered"))
+    suspend fun triggerHeartbeat(): Result<Unit> =
+        withContext(ioDispatcher) {
+            val deviceId = _serverDeviceId.value
+            if (deviceId == null) {
+                return@withContext Result.failure(Exception("Device not registered"))
+            }
+            sendHeartbeat(deviceId)
+            Result.success(Unit)
         }
-        sendHeartbeat(deviceId)
-        Result.success(Unit)
-    }
 
     // =========================================================================
     // Device Groups
@@ -373,39 +380,36 @@ class EdgeMLClient private constructor(
     /**
      * Refresh group memberships from the server.
      */
-    suspend fun refreshGroupMemberships(): Result<List<GroupMembership>> = withContext(ioDispatcher) {
-        val deviceId = _serverDeviceId.value
-        if (deviceId == null) {
-            return@withContext Result.failure(Exception("Device not registered"))
-        }
-
-        try {
-            val response = api.getDeviceGroups(deviceId)
-            if (response.isSuccessful) {
-                val memberships = response.body()?.memberships ?: emptyList()
-                _groupMemberships.value = memberships
-                Result.success(memberships)
-            } else {
-                Result.failure(Exception("Failed to fetch groups: ${response.code()}"))
+    suspend fun refreshGroupMemberships(): Result<List<GroupMembership>> =
+        withContext(ioDispatcher) {
+            val deviceId = _serverDeviceId.value
+            if (deviceId == null) {
+                return@withContext Result.failure(Exception("Device not registered"))
             }
-        } catch (e: Exception) {
-            Result.failure(e)
+
+            try {
+                val response = api.getDeviceGroups(deviceId)
+                if (response.isSuccessful) {
+                    val memberships = response.body()?.memberships ?: emptyList()
+                    _groupMemberships.value = memberships
+                    Result.success(memberships)
+                } else {
+                    Result.failure(Exception("Failed to fetch groups: ${response.code()}"))
+                }
+            } catch (e: Exception) {
+                Result.failure(e)
+            }
         }
-    }
 
     /**
      * Check if the device belongs to a specific group.
      */
-    fun isInGroup(groupId: String): Boolean {
-        return _groupMemberships.value.any { it.groupId == groupId }
-    }
+    fun isInGroup(groupId: String): Boolean = _groupMemberships.value.any { it.groupId == groupId }
 
     /**
      * Check if the device belongs to a group with a specific name.
      */
-    fun isInGroupNamed(groupName: String): Boolean {
-        return _groupMemberships.value.any { it.groupName == groupName }
-    }
+    fun isInGroupNamed(groupName: String): Boolean = _groupMemberships.value.any { it.groupName == groupName }
 
     // =========================================================================
     // Inference
@@ -421,19 +425,21 @@ class EdgeMLClient private constructor(
         checkReady()
 
         return trainer.runInference(input).also { result ->
-            result.onSuccess { output ->
-                eventQueue.addTrainingEvent(
-                    type = EventTypes.INFERENCE_COMPLETED,
-                    metrics = mapOf(
-                        "inference_time_ms" to output.inferenceTimeMs.toDouble()
+            result
+                .onSuccess { output ->
+                    eventQueue.addTrainingEvent(
+                        type = EventTypes.INFERENCE_COMPLETED,
+                        metrics =
+                            mapOf(
+                                "inference_time_ms" to output.inferenceTimeMs.toDouble(),
+                            ),
                     )
-                )
-            }.onFailure {
-                eventQueue.addTrainingEvent(
-                    type = EventTypes.INFERENCE_FAILED,
-                    metadata = mapOf("error" to (it.message ?: "unknown"))
-                )
-            }
+                }.onFailure {
+                    eventQueue.addTrainingEvent(
+                        type = EventTypes.INFERENCE_FAILED,
+                        metadata = mapOf("error" to (it.message ?: "unknown")),
+                    )
+                }
         }
     }
 
@@ -443,9 +449,7 @@ class EdgeMLClient private constructor(
      * @param input Inference input with data and shape
      * @return Inference output with results and timing
      */
-    suspend fun runInference(input: InferenceInput): Result<InferenceOutput> {
-        return runInference(input.data)
-    }
+    suspend fun runInference(input: InferenceInput): Result<InferenceOutput> = runInference(input.data)
 
     /**
      * Classify input and get top predictions.
@@ -454,7 +458,10 @@ class EdgeMLClient private constructor(
      * @param topK Number of top predictions to return
      * @return List of (class index, confidence) pairs
      */
-    suspend fun classify(input: FloatArray, topK: Int = 5): Result<List<Pair<Int, Float>>> {
+    suspend fun classify(
+        input: FloatArray,
+        topK: Int = 5,
+    ): Result<List<Pair<Int, Float>>> {
         checkReady()
         return trainer.classify(input, topK)
     }
@@ -486,7 +493,10 @@ class EdgeMLClient private constructor(
 
         val resolvedEngine = resolveStreamingEngine(engine, modality)
 
-        val sessionId = java.util.UUID.randomUUID().toString()
+        val sessionId =
+            java.util.UUID
+                .randomUUID()
+                .toString()
         val deviceId = _serverDeviceId.value
         val resolvedModelId = modelId ?: config.modelId
         val resolvedVersion = version ?: "latest"
@@ -509,7 +519,7 @@ class EdgeMLClient private constructor(
                         eventType = "generation_started",
                         timestampMs = sessionStart,
                         orgId = config.orgId,
-                    )
+                    ),
                 )
             }
 
@@ -535,7 +545,7 @@ class EdgeMLClient private constructor(
                             modality = modality,
                             timestamp = now,
                             latencyMs = latencyMs,
-                        )
+                        ),
                     )
                 }
             } catch (e: Exception) {
@@ -555,13 +565,14 @@ class EdgeMLClient private constructor(
 
             eventQueue.addTrainingEvent(
                 type = ai.edgeml.sync.EventTypes.GENERATION_COMPLETED,
-                metrics = mapOf(
-                    "ttfc_ms" to ttfcMs,
-                    "avg_chunk_latency_ms" to avgLatency,
-                    "total_chunks" to chunkCount.toDouble(),
-                    "total_duration_ms" to totalDurationMs,
-                    "throughput" to throughput,
-                ),
+                metrics =
+                    mapOf(
+                        "ttfc_ms" to ttfcMs,
+                        "avg_chunk_latency_ms" to avgLatency,
+                        "total_chunks" to chunkCount.toDouble(),
+                        "total_duration_ms" to totalDurationMs,
+                        "throughput" to throughput,
+                    ),
                 metadata = mapOf("session_id" to sessionId),
             )
 
@@ -575,14 +586,15 @@ class EdgeMLClient private constructor(
                         sessionId = sessionId,
                         eventType = "generation_completed",
                         timestampMs = sessionEnd,
-                        metrics = ai.edgeml.api.dto.InferenceEventMetrics(
-                            ttfcMs = ttfcMs,
-                            totalChunks = chunkCount,
-                            totalDurationMs = totalDurationMs,
-                            throughput = throughput,
-                        ),
+                        metrics =
+                            ai.edgeml.api.dto.InferenceEventMetrics(
+                                ttfcMs = ttfcMs,
+                                totalChunks = chunkCount,
+                                totalDurationMs = totalDurationMs,
+                                throughput = throughput,
+                            ),
                         orgId = config.orgId,
-                    )
+                    ),
                 )
             }
         }
@@ -591,18 +603,15 @@ class EdgeMLClient private constructor(
     private fun resolveStreamingEngine(
         engine: ai.edgeml.inference.StreamingInferenceEngine?,
         modality: ai.edgeml.inference.Modality,
-    ): ai.edgeml.inference.StreamingInferenceEngine {
-        return engine ?: when (modality) {
+    ): ai.edgeml.inference.StreamingInferenceEngine =
+        engine ?: when (modality) {
             ai.edgeml.inference.Modality.TEXT -> ai.edgeml.inference.LLMEngine(context)
             ai.edgeml.inference.Modality.IMAGE -> ai.edgeml.inference.ImageEngine(context)
             ai.edgeml.inference.Modality.AUDIO -> ai.edgeml.inference.AudioEngine(context)
             ai.edgeml.inference.Modality.VIDEO -> ai.edgeml.inference.VideoEngine(context)
         }
-    }
 
-    private suspend fun reportStreamingEventSafely(
-        request: ai.edgeml.api.dto.InferenceEventRequest,
-    ) {
+    private suspend fun reportStreamingEventSafely(request: ai.edgeml.api.dto.InferenceEventRequest) {
         try {
             api.reportInferenceEvent(request)
         } catch (e: Exception) {
@@ -625,13 +634,12 @@ class EdgeMLClient private constructor(
      *
      * @return The downloaded model
      */
-    suspend fun updateModel(): Result<CachedModel> {
-        return modelManager.ensureModelAvailable(forceDownload = true).also { result ->
+    suspend fun updateModel(): Result<CachedModel> =
+        modelManager.ensureModelAvailable(forceDownload = true).also { result ->
             result.onSuccess { model ->
                 trainer.loadModel(model)
             }
         }
-    }
 
     /**
      * Get the currently loaded model.
@@ -731,7 +739,9 @@ class EdgeMLClient private constructor(
     /**
      * Builder for creating EdgeMLClient instances.
      */
-    class Builder(private val context: Context) {
+    class Builder(
+        private val context: Context,
+    ) {
         private var config: EdgeMLConfig? = null
         private var ioDispatcher: CoroutineDispatcher = Dispatchers.IO
         private var mainDispatcher: CoroutineDispatcher = Dispatchers.Main
@@ -739,42 +749,47 @@ class EdgeMLClient private constructor(
         /**
          * Set the configuration.
          */
-        fun config(config: EdgeMLConfig) = apply {
-            this.config = config
-        }
+        fun config(config: EdgeMLConfig) =
+            apply {
+                this.config = config
+            }
 
         /**
          * Set the IO dispatcher (default: Dispatchers.IO).
          */
-        fun ioDispatcher(dispatcher: CoroutineDispatcher) = apply {
-            this.ioDispatcher = dispatcher
-        }
+        fun ioDispatcher(dispatcher: CoroutineDispatcher) =
+            apply {
+                this.ioDispatcher = dispatcher
+            }
 
         /**
          * Set the Main dispatcher (default: Dispatchers.Main).
          */
-        fun mainDispatcher(dispatcher: CoroutineDispatcher) = apply {
-            this.mainDispatcher = dispatcher
-        }
+        fun mainDispatcher(dispatcher: CoroutineDispatcher) =
+            apply {
+                this.mainDispatcher = dispatcher
+            }
 
         /**
          * Build and return the EdgeMLClient instance.
          */
         fun build(): EdgeMLClient {
-            val cfg = config
-                ?: throw IllegalStateException("Configuration is required. Call config() first.")
+            val cfg =
+                config
+                    ?: throw IllegalStateException("Configuration is required. Call config() first.")
 
             // Setup logging in debug mode
             if (cfg.debugMode && Timber.treeCount == 0) {
                 Timber.plant(Timber.DebugTree())
             }
 
-            val client = EdgeMLClient(
-                context = context.applicationContext,
-                config = cfg,
-                ioDispatcher = ioDispatcher,
-                mainDispatcher = mainDispatcher,
-            )
+            val client =
+                EdgeMLClient(
+                    context = context.applicationContext,
+                    config = cfg,
+                    ioDispatcher = ioDispatcher,
+                    mainDispatcher = mainDispatcher,
+                )
             instance = client
             return client
         }

@@ -44,7 +44,6 @@ import java.nio.ByteOrder
 class WeightExtractor(
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
 ) {
-
     companion object {
         private const val TAG = "WeightExtractor"
 
@@ -73,28 +72,29 @@ class WeightExtractor(
     suspend fun extractWeightDelta(
         originalModelPath: String,
         updatedModelPath: String,
-    ): ByteArray = withContext(ioDispatcher) {
-        Timber.i("Extracting weight delta from trained model")
+    ): ByteArray =
+        withContext(ioDispatcher) {
+            Timber.i("Extracting weight delta from trained model")
 
-        try {
-            // Extract weights from both models
-            val originalWeights = extractWeights(originalModelPath)
-            val updatedWeights = extractWeights(updatedModelPath)
+            try {
+                // Extract weights from both models
+                val originalWeights = extractWeights(originalModelPath)
+                val updatedWeights = extractWeights(updatedModelPath)
 
-            // Compute delta (updated - original)
-            val delta = computeDelta(originalWeights, updatedWeights)
+                // Compute delta (updated - original)
+                val delta = computeDelta(originalWeights, updatedWeights)
 
-            // Serialize to PyTorch format
-            val serialized = serializeToPyTorch(delta)
+                // Serialize to PyTorch format
+                val serialized = serializeToPyTorch(delta)
 
-            Timber.i("Weight delta extracted: ${serialized.size} bytes")
+                Timber.i("Weight delta extracted: ${serialized.size} bytes")
 
-            serialized
-        } catch (e: Exception) {
-            Timber.e(e, "Failed to extract weight delta")
-            throw WeightExtractionException("Weight delta extraction failed: ${e.message}", e)
+                serialized
+            } catch (e: Exception) {
+                Timber.e(e, "Failed to extract weight delta")
+                throw WeightExtractionException("Weight delta extraction failed: ${e.message}", e)
+            }
         }
-    }
 
     /**
      * Extracts full weights from a trained model (for full weight uploads).
@@ -103,26 +103,25 @@ class WeightExtractor(
      * @return Serialized full weights in PyTorch-compatible format
      * @throws Exception if extraction fails
      */
-    suspend fun extractFullWeights(
-        modelPath: String,
-    ): ByteArray = withContext(ioDispatcher) {
-        Timber.i("Extracting full weights from trained model")
+    suspend fun extractFullWeights(modelPath: String): ByteArray =
+        withContext(ioDispatcher) {
+            Timber.i("Extracting full weights from trained model")
 
-        try {
-            // Extract weights
-            val weights = extractWeights(modelPath)
+            try {
+                // Extract weights
+                val weights = extractWeights(modelPath)
 
-            // Serialize to PyTorch format
-            val serialized = serializeToPyTorch(weights)
+                // Serialize to PyTorch format
+                val serialized = serializeToPyTorch(weights)
 
-            Timber.i("Full weights extracted: ${serialized.size} bytes")
+                Timber.i("Full weights extracted: ${serialized.size} bytes")
 
-            serialized
-        } catch (e: Exception) {
-            Timber.e(e, "Failed to extract full weights")
-            throw WeightExtractionException("Full weight extraction failed: ${e.message}", e)
+                serialized
+            } catch (e: Exception) {
+                Timber.e(e, "Failed to extract full weights")
+                throw WeightExtractionException("Full weight extraction failed: ${e.message}", e)
+            }
         }
-    }
 
     // =========================================================================
     // Private Methods
@@ -185,12 +184,13 @@ class WeightExtractor(
                 deltaData[i] = updatedTensor.data[i] - originalTensor.data[i]
             }
 
-            delta[name] = TensorData(
-                name = name,
-                shape = updatedTensor.shape,
-                dataType = updatedTensor.dataType,
-                data = deltaData,
-            )
+            delta[name] =
+                TensorData(
+                    name = name,
+                    shape = updatedTensor.shape,
+                    dataType = updatedTensor.dataType,
+                    data = deltaData,
+                )
         }
 
         return delta

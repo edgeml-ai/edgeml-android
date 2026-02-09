@@ -11,19 +11,15 @@ data class TrainingConfig(
     /** Number of training epochs */
     @SerialName("epochs")
     val epochs: Int = 1,
-
     /** Batch size for training */
     @SerialName("batch_size")
     val batchSize: Int = 32,
-
     /** Learning rate */
     @SerialName("learning_rate")
     val learningRate: Float = 0.001f,
-
     /** Loss function type (e.g., "categorical_crossentropy", "mse") */
     @SerialName("loss_function")
     val lossFunction: String = "categorical_crossentropy",
-
     /** Optimizer type (e.g., "adam", "sgd") */
     @SerialName("optimizer")
     val optimizer: String = "adam",
@@ -35,19 +31,14 @@ data class TrainingConfig(
 data class TrainingResult(
     /** Number of samples used for training */
     val sampleCount: Int,
-
     /** Final training loss */
     val loss: Double?,
-
     /** Training accuracy (if available) */
     val accuracy: Double?,
-
     /** Training time in seconds */
     val trainingTime: Double,
-
     /** Additional training metrics */
     val metrics: Map<String, Double> = emptyMap(),
-
     /** Path to the updated model file */
     val updatedModelPath: String? = null,
 )
@@ -60,19 +51,15 @@ data class WeightUpdate(
     /** Model identifier */
     @SerialName("model_id")
     val modelId: String,
-
     /** Model version */
     @SerialName("version")
     val version: String,
-
     /** Serialized weight data (delta or full weights) */
     @SerialName("weights_data")
     val weightsData: ByteArray,
-
     /** Number of samples used for training */
     @SerialName("sample_count")
     val sampleCount: Int,
-
     /** Training metrics */
     @SerialName("metrics")
     val metrics: Map<String, Double> = emptyMap(),
@@ -125,7 +112,6 @@ interface TrainingDataProvider {
 class InMemoryTrainingDataProvider(
     private val data: List<Pair<FloatArray, FloatArray>>,
 ) : TrainingDataProvider {
-
     override suspend fun getTrainingData(): List<Pair<FloatArray, FloatArray>> = data
 
     override suspend fun getSampleCount(): Int = data.size

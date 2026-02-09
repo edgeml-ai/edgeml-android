@@ -13,7 +13,6 @@ import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
 
 class WeightExtractorTest {
-
     private lateinit var tempDir: File
     private lateinit var extractor: WeightExtractor
 
@@ -34,82 +33,89 @@ class WeightExtractorTest {
     // =========================================================================
 
     @Test
-    fun `extractWeightDelta returns valid bytes for existing files`() = runBlocking {
-        val original = createTempModelFile("original.tflite")
-        val updated = createTempModelFile("updated.tflite")
+    fun `extractWeightDelta returns valid bytes for existing files`() =
+        runBlocking {
+            val original = createTempModelFile("original.tflite")
+            val updated = createTempModelFile("updated.tflite")
 
-        val delta = extractor.extractWeightDelta(original.absolutePath, updated.absolutePath)
+            val delta = extractor.extractWeightDelta(original.absolutePath, updated.absolutePath)
 
-        // Since extractWeights returns empty maps, the delta should be a header-only payload
-        // Header: magic (4) + version (4) + param count (4) = 12 bytes
-        assertEquals(12, delta.size)
-        verifyHeader(delta, parameterCount = 0)
-    }
+            // Since extractWeights returns empty maps, the delta should be a header-only payload
+            // Header: magic (4) + version (4) + param count (4) = 12 bytes
+            assertEquals(12, delta.size)
+            verifyHeader(delta, parameterCount = 0)
+        }
 
     @Test
-    fun `extractWeightDelta throws when original file missing`() = runBlocking {
-        val updated = createTempModelFile("updated.tflite")
+    fun `extractWeightDelta throws when original file missing`() =
+        runBlocking {
+            val updated = createTempModelFile("updated.tflite")
 
-        assertFailsWith<WeightExtractionException> {
-            extractor.extractWeightDelta("/nonexistent/path.tflite", updated.absolutePath)
+            assertFailsWith<WeightExtractionException> {
+                extractor.extractWeightDelta("/nonexistent/path.tflite", updated.absolutePath)
+            }
+            Unit
         }
-        Unit
-    }
 
     @Test
-    fun `extractWeightDelta throws when updated file missing`() = runBlocking {
-        val original = createTempModelFile("original.tflite")
+    fun `extractWeightDelta throws when updated file missing`() =
+        runBlocking {
+            val original = createTempModelFile("original.tflite")
 
-        assertFailsWith<WeightExtractionException> {
-            extractor.extractWeightDelta(original.absolutePath, "/nonexistent/path.tflite")
+            assertFailsWith<WeightExtractionException> {
+                extractor.extractWeightDelta(original.absolutePath, "/nonexistent/path.tflite")
+            }
+            Unit
         }
-        Unit
-    }
 
     // =========================================================================
     // extractFullWeights
     // =========================================================================
 
     @Test
-    fun `extractFullWeights returns valid bytes for existing file`() = runBlocking {
-        val model = createTempModelFile("model.tflite")
+    fun `extractFullWeights returns valid bytes for existing file`() =
+        runBlocking {
+            val model = createTempModelFile("model.tflite")
 
-        val weights = extractor.extractFullWeights(model.absolutePath)
+            val weights = extractor.extractFullWeights(model.absolutePath)
 
-        assertEquals(12, weights.size)
-        verifyHeader(weights, parameterCount = 0)
-    }
+            assertEquals(12, weights.size)
+            verifyHeader(weights, parameterCount = 0)
+        }
 
     @Test
-    fun `extractFullWeights throws when file missing`() = runBlocking {
-        assertFailsWith<WeightExtractionException> {
-            extractor.extractFullWeights("/nonexistent/path.tflite")
+    fun `extractFullWeights throws when file missing`() =
+        runBlocking {
+            assertFailsWith<WeightExtractionException> {
+                extractor.extractFullWeights("/nonexistent/path.tflite")
+            }
+            Unit
         }
-        Unit
-    }
 
     // =========================================================================
     // Serialization format
     // =========================================================================
 
     @Test
-    fun `serialized output starts with correct magic number`() = runBlocking {
-        val model = createTempModelFile("model.tflite")
-        val weights = extractor.extractFullWeights(model.absolutePath)
+    fun `serialized output starts with correct magic number`() =
+        runBlocking {
+            val model = createTempModelFile("model.tflite")
+            val weights = extractor.extractFullWeights(model.absolutePath)
 
-        val buffer = ByteBuffer.wrap(weights).order(ByteOrder.BIG_ENDIAN)
-        assertEquals(0x50545448, buffer.getInt()) // "PTTH"
-    }
+            val buffer = ByteBuffer.wrap(weights).order(ByteOrder.BIG_ENDIAN)
+            assertEquals(0x50545448, buffer.getInt()) // "PTTH"
+        }
 
     @Test
-    fun `serialized output has correct format version`() = runBlocking {
-        val model = createTempModelFile("model.tflite")
-        val weights = extractor.extractFullWeights(model.absolutePath)
+    fun `serialized output has correct format version`() =
+        runBlocking {
+            val model = createTempModelFile("model.tflite")
+            val weights = extractor.extractFullWeights(model.absolutePath)
 
-        val buffer = ByteBuffer.wrap(weights).order(ByteOrder.BIG_ENDIAN)
-        buffer.getInt() // skip magic
-        assertEquals(1, buffer.getInt()) // version
-    }
+            val buffer = ByteBuffer.wrap(weights).order(ByteOrder.BIG_ENDIAN)
+            buffer.getInt() // skip magic
+            assertEquals(1, buffer.getInt()) // version
+        }
 
     // =========================================================================
     // WeightExtractionException
@@ -142,7 +148,10 @@ class WeightExtractorTest {
         return file
     }
 
-    private fun verifyHeader(data: ByteArray, parameterCount: Int) {
+    private fun verifyHeader(
+        data: ByteArray,
+        parameterCount: Int,
+    ) {
         val buffer = ByteBuffer.wrap(data).order(ByteOrder.BIG_ENDIAN)
         assertEquals(0x50545448, buffer.getInt(), "Magic number mismatch")
         assertEquals(1, buffer.getInt(), "Format version mismatch")

@@ -17,20 +17,23 @@ class VideoEngine(
     private val context: Context,
     private val frameCount: Int = 30,
 ) : StreamingInferenceEngine {
-
-    override fun generate(input: Any, modality: Modality): Flow<InferenceChunk> = flow {
-        for (frame in 0 until frameCount) {
-            val data = ByteArray(1024) { (frame % 256).toByte() }
-            emit(
-                InferenceChunk(
-                    index = frame,
-                    data = data,
-                    modality = Modality.VIDEO,
-                    timestamp = System.currentTimeMillis(),
-                    latencyMs = 0.0,
+    override fun generate(
+        input: Any,
+        modality: Modality,
+    ): Flow<InferenceChunk> =
+        flow {
+            for (frame in 0 until frameCount) {
+                val data = ByteArray(1024) { (frame % 256).toByte() }
+                emit(
+                    InferenceChunk(
+                        index = frame,
+                        data = data,
+                        modality = Modality.VIDEO,
+                        timestamp = System.currentTimeMillis(),
+                        latencyMs = 0.0,
+                    ),
                 )
-            )
-            delay(33) // ~30fps
+                delay(33) // ~30fps
+            }
         }
-    }
 }

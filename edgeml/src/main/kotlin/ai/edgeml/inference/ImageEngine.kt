@@ -17,20 +17,23 @@ class ImageEngine(
     private val context: Context,
     private val steps: Int = 20,
 ) : StreamingInferenceEngine {
-
-    override fun generate(input: Any, modality: Modality): Flow<InferenceChunk> = flow {
-        for (step in 0 until steps) {
-            val data = ByteArray(64) { step.toByte() }
-            emit(
-                InferenceChunk(
-                    index = step,
-                    data = data,
-                    modality = Modality.IMAGE,
-                    timestamp = System.currentTimeMillis(),
-                    latencyMs = 0.0,
+    override fun generate(
+        input: Any,
+        modality: Modality,
+    ): Flow<InferenceChunk> =
+        flow {
+            for (step in 0 until steps) {
+                val data = ByteArray(64) { step.toByte() }
+                emit(
+                    InferenceChunk(
+                        index = step,
+                        data = data,
+                        modality = Modality.IMAGE,
+                        timestamp = System.currentTimeMillis(),
+                        latencyMs = 0.0,
+                    ),
                 )
-            )
-            delay(50)
+                delay(50)
+            }
         }
-    }
 }

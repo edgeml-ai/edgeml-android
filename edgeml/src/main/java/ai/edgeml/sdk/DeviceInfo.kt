@@ -1,13 +1,15 @@
 package ai.edgeml.sdk
 
 import android.content.Context
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
 import android.os.BatteryManager
 import android.os.Build
 import android.os.StatFs
 import android.provider.Settings
-import android.net.ConnectivityManager
-import android.net.NetworkCapabilities
-import java.util.*
+import java.util.Locale
+import java.util.TimeZone
+import java.util.UUID
 
 /**
  * Collects and manages device information for EdgeML platform.
@@ -25,18 +27,20 @@ import java.util.*
  * val registrationData = deviceInfo.toRegistrationMap()
  * ```
  */
-class DeviceInfo(private val context: Context) {
-
+class DeviceInfo(
+    private val context: Context,
+) {
     // MARK: - Properties
 
     /**
      * Stable device identifier (Android ID)
      */
     val deviceId: String
-        get() = Settings.Secure.getString(
-            context.contentResolver,
-            Settings.Secure.ANDROID_ID
-        ) ?: UUID.randomUUID().toString()
+        get() =
+            Settings.Secure.getString(
+                context.contentResolver,
+                Settings.Secure.ANDROID_ID,
+            ) ?: UUID.randomUUID().toString()
 
     // MARK: - Device Hardware
 
@@ -73,8 +77,9 @@ class DeviceInfo(private val context: Context) {
     val totalMemoryMB: Long?
         get() {
             return try {
-                val activityManager = context.getSystemService(Context.ACTIVITY_SERVICE)
-                    as android.app.ActivityManager
+                val activityManager =
+                    context.getSystemService(Context.ACTIVITY_SERVICE)
+                        as android.app.ActivityManager
                 val memInfo = android.app.ActivityManager.MemoryInfo()
                 activityManager.getMemoryInfo(memInfo)
                 memInfo.totalMem / (1024 * 1024)
@@ -105,8 +110,9 @@ class DeviceInfo(private val context: Context) {
     val batteryLevel: Int?
         get() {
             return try {
-                val batteryManager = context.getSystemService(Context.BATTERY_SERVICE)
-                    as BatteryManager
+                val batteryManager =
+                    context.getSystemService(Context.BATTERY_SERVICE)
+                        as BatteryManager
                 batteryManager.getIntProperty(BatteryManager.BATTERY_PROPERTY_CAPACITY)
             } catch (e: Exception) {
                 null
@@ -119,12 +125,14 @@ class DeviceInfo(private val context: Context) {
     val networkType: String
         get() {
             return try {
-                val connectivityManager = context.getSystemService(Context.CONNECTIVITY_SERVICE)
-                    as ConnectivityManager
+                val connectivityManager =
+                    context.getSystemService(Context.CONNECTIVITY_SERVICE)
+                        as ConnectivityManager
 
                 val network = connectivityManager.activeNetwork ?: return "offline"
-                val capabilities = connectivityManager.getNetworkCapabilities(network)
-                    ?: return "unknown"
+                val capabilities =
+                    connectivityManager.getNetworkCapabilities(network)
+                        ?: return "unknown"
 
                 when {
                     capabilities.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) -> "wifi"
@@ -174,12 +182,13 @@ class DeviceInfo(private val context: Context) {
      * Collect complete device hardware information
      */
     fun collectDeviceInfo(): Map<String, Any?> {
-        val info = mutableMapOf<String, Any?>(
-            "manufacturer" to manufacturer,
-            "model" to model,
-            "cpu_architecture" to cpuArchitecture,
-            "gpu_available" to gpuAvailable
-        )
+        val info =
+            mutableMapOf<String, Any?>(
+                "manufacturer" to manufacturer,
+                "model" to model,
+                "cpu_architecture" to cpuArchitecture,
+                "gpu_available" to gpuAvailable,
+            )
 
         totalMemoryMB?.let { info["total_memory_mb"] = it }
         availableStorageMB?.let { info["available_storage_mb"] = it }
@@ -191,9 +200,10 @@ class DeviceInfo(private val context: Context) {
      * Collect runtime metadata (battery, network)
      */
     fun collectMetadata(): Map<String, Any?> {
-        val metadata = mutableMapOf<String, Any?>(
-            "network_type" to networkType
-        )
+        val metadata =
+            mutableMapOf<String, Any?>(
+                "network_type" to networkType,
+            )
 
         batteryLevel?.let { metadata["battery_level"] = it }
 
@@ -203,20 +213,19 @@ class DeviceInfo(private val context: Context) {
     /**
      * Collect ML capabilities
      */
-    fun collectCapabilities(): Map<String, Any> {
-        return mapOf(
+    fun collectCapabilities(): Map<String, Any> =
+        mapOf(
             "cpu_architecture" to cpuArchitecture,
             "gpu_available" to gpuAvailable,
             "nnapi" to (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1),
-            "tflite" to true
+            "tflite" to true,
         )
-    }
 
     /**
      * Create registration payload for EdgeML API
      */
-    fun toRegistrationMap(): Map<String, Any?> {
-        return mapOf(
+    fun toRegistrationMap(): Map<String, Any?> =
+        mapOf(
             "device_identifier" to deviceId,
             "platform" to platform,
             "os_version" to osVersion,
@@ -225,16 +234,13 @@ class DeviceInfo(private val context: Context) {
             "region" to region,
             "timezone" to timezone,
             "metadata" to collectMetadata(),
-            "capabilities" to collectCapabilities()
+            "capabilities" to collectCapabilities(),
         )
-    }
 
     /**
      * Get updated metadata for heartbeat updates.
      *
      * Call this periodically to send updated battery/network status.
      */
-    fun updateMetadata(): Map<String, Any?> {
-        return collectMetadata()
-    }
+    fun updateMetadata(): Map<String, Any?> = collectMetadata()
 }

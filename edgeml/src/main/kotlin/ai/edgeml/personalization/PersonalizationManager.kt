@@ -38,7 +38,6 @@ class PersonalizationManager(
     private val uploadThreshold: Int = 10,
     private val onUploadNeeded: (suspend () -> Unit)? = null,
 ) {
-
     private val mutex = Mutex()
     private val maxBufferSize = bufferSizeThreshold * 2
 
@@ -69,57 +68,62 @@ class PersonalizationManager(
      *
      * @param model The base model to personalize
      */
-    suspend fun setBaseModel(model: CachedModel) = mutex.withLock {
-        baseModel = model
+    suspend fun setBaseModel(model: CachedModel) =
+        mutex.withLock {
+            baseModel = model
 
-        // Check if a personalized version exists
-        val personalizedFile = getPersonalizedModelFile(model.modelId)
-        if (personalizedFile.exists()) {
-            personalizedModel = model.copy(
-                filePath = personalizedFile.absolutePath,
-                version = "${model.version}-personalized",
-            )
+            // Check if a personalized version exists
+            val personalizedFile = getPersonalizedModelFile(model.modelId)
+            if (personalizedFile.exists()) {
+                personalizedModel =
+                    model.copy(
+                        filePath = personalizedFile.absolutePath,
+                        version = "${model.version}-personalized",
+                    )
 
-            Timber.i("Loaded personalized model for ${model.modelId}")
+                Timber.i("Loaded personalized model for ${model.modelId}")
+            }
+
+            // Load training history
+            loadTrainingHistory()
         }
-
-        // Load training history
-        loadTrainingHistory()
-    }
 
     /**
      * Gets the current model (personalized if available, otherwise base).
      */
-    suspend fun getCurrentModel(): CachedModel? = mutex.withLock {
-        return personalizedModel ?: baseModel
-    }
+    suspend fun getCurrentModel(): CachedModel? =
+        mutex.withLock {
+            return personalizedModel ?: baseModel
+        }
 
     /**
      * Resets personalization by deleting the personalized model.
      */
-    suspend fun resetPersonalization() = mutex.withLock {
-        val model = baseModel ?: run {
-            Timber.w("No base model set")
-            return@withLock
+    suspend fun resetPersonalization() =
+        mutex.withLock {
+            val model =
+                baseModel ?: run {
+                    Timber.w("No base model set")
+                    return@withLock
+                }
+
+            // Delete personalized model file
+            val personalizedFile = getPersonalizedModelFile(model.modelId)
+            if (!personalizedFile.delete()) {
+                Timber.w("Failed to delete personalized model file: ${personalizedFile.absolutePath}")
+            }
+
+            // Clear state
+            personalizedModel = null
+            trainingBuffer.clear()
+            trainingHistory.clear()
+            lastTrainingTimeMs = null
+
+            // Save empty history
+            saveTrainingHistory()
+
+            Timber.i("Reset personalization for model ${model.modelId}")
         }
-
-        // Delete personalized model file
-        val personalizedFile = getPersonalizedModelFile(model.modelId)
-        if (!personalizedFile.delete()) {
-            Timber.w("Failed to delete personalized model file: ${personalizedFile.absolutePath}")
-        }
-
-        // Clear state
-        personalizedModel = null
-        trainingBuffer.clear()
-        trainingHistory.clear()
-        lastTrainingTimeMs = null
-
-        // Save empty history
-        saveTrainingHistory()
-
-        Timber.i("Reset personalization for model ${model.modelId}")
-    }
 
     // =========================================================================
     // Training Data Collection
@@ -139,12 +143,13 @@ class PersonalizationManager(
         target: FloatArray,
         metadata: Map<String, String>? = null,
     ) = mutex.withLock {
-        val sample = TrainingSample(
-            input = input,
-            target = target,
-            timestampMs = System.currentTimeMillis(),
-            metadata = metadata,
-        )
+        val sample =
+            TrainingSample(
+                input = input,
+                target = target,
+                timestampMs = System.currentTimeMillis(),
+                metadata = metadata,
+            )
 
         trainingBuffer.add(sample)
 
@@ -207,7 +212,7 @@ class PersonalizationManager(
 
         // Get current model
         getCurrentModel() ?: return Result.failure(
-            IllegalStateException("No model loaded")
+            IllegalStateException("No model loaded"),
         )
 
         isTraining = true
@@ -221,11 +226,12 @@ class PersonalizationManager(
             val dataProvider = BufferedTrainingDataProvider(samples)
 
             // Configure training (small updates for incremental learning)
-            val trainingConfig = TrainingConfig(
-                epochs = 1, // Single epoch for incremental updates
-                batchSize = minOf(bufferSize, 32),
-                learningRate = 0.0001f, // Small learning rate for fine-tuning
-            )
+            val trainingConfig =
+                TrainingConfig(
+                    epochs = 1, // Single epoch for incremental updates
+                    batchSize = minOf(bufferSize, 32),
+                    learningRate = 0.0001f, // Small learning rate for fine-tuning
+                )
 
             // Train the model
             val result = trainer.train(dataProvider, trainingConfig).getOrThrow()
@@ -234,13 +240,14 @@ class PersonalizationManager(
             savePersonalizedModel(result)
 
             // Record training session
-            val session = TrainingSession(
-                timestampMs = System.currentTimeMillis(),
-                sampleCount = bufferSize,
-                trainingTimeMs = System.currentTimeMillis() - startTime,
-                loss = result.loss,
-                accuracy = result.accuracy,
-            )
+            val session =
+                TrainingSession(
+                    timestampMs = System.currentTimeMillis(),
+                    sampleCount = bufferSize,
+                    trainingTimeMs = System.currentTimeMillis() - startTime,
+                    loss = result.loss,
+                    accuracy = result.accuracy,
+                )
 
             mutex.withLock {
                 trainingHistory.add(session)
@@ -288,33 +295,36 @@ class PersonalizationManager(
     /**
      * Gets statistics about personalization progress.
      */
-    suspend fun getStatistics(): PersonalizationStatistics = mutex.withLock {
-        PersonalizationStatistics(
-            totalTrainingSessions = trainingHistory.size,
-            totalSamplesTrained = trainingHistory.sumOf { it.sampleCount },
-            bufferedSamples = trainingBuffer.size,
-            lastTrainingTimeMs = lastTrainingTimeMs,
-            averageLoss = trainingHistory.mapNotNull { it.loss }.average().takeIf { !it.isNaN() },
-            averageAccuracy = trainingHistory.mapNotNull { it.accuracy }.average().takeIf { !it.isNaN() },
-            isPersonalized = personalizedModel != null,
-            trainingMode = trainingMode,
-        )
-    }
+    suspend fun getStatistics(): PersonalizationStatistics =
+        mutex.withLock {
+            PersonalizationStatistics(
+                totalTrainingSessions = trainingHistory.size,
+                totalSamplesTrained = trainingHistory.sumOf { it.sampleCount },
+                bufferedSamples = trainingBuffer.size,
+                lastTrainingTimeMs = lastTrainingTimeMs,
+                averageLoss = trainingHistory.mapNotNull { it.loss }.average().takeIf { !it.isNaN() },
+                averageAccuracy = trainingHistory.mapNotNull { it.accuracy }.average().takeIf { !it.isNaN() },
+                isPersonalized = personalizedModel != null,
+                trainingMode = trainingMode,
+            )
+        }
 
     /**
      * Gets the training history.
      */
-    suspend fun getTrainingHistory(): List<TrainingSession> = mutex.withLock {
-        trainingHistory.toList()
-    }
+    suspend fun getTrainingHistory(): List<TrainingSession> =
+        mutex.withLock {
+            trainingHistory.toList()
+        }
 
     /**
      * Clears the training buffer without training.
      */
-    suspend fun clearBuffer() = mutex.withLock {
-        trainingBuffer.clear()
-        Timber.i("Training buffer cleared")
-    }
+    suspend fun clearBuffer() =
+        mutex.withLock {
+            trainingBuffer.clear()
+            Timber.i("Training buffer cleared")
+        }
 
     // =========================================================================
     // Private Methods
@@ -355,28 +365,28 @@ class PersonalizationManager(
         return File(modelsDir, "$modelId-personalized.tflite")
     }
 
-    private fun getTrainingHistoryFile(): File {
-        return File(context.filesDir, TRAINING_HISTORY_FILE)
-    }
+    private fun getTrainingHistoryFile(): File = File(context.filesDir, TRAINING_HISTORY_FILE)
 
     private suspend fun savePersonalizedModel(result: TrainingResult) {
         val model = baseModel ?: return
 
         // Get the updated model path from training result
-        val updatedModelPath = result.updatedModelPath ?: run {
-            Timber.w("No updated model path in training result")
-            return
-        }
+        val updatedModelPath =
+            result.updatedModelPath ?: run {
+                Timber.w("No updated model path in training result")
+                return
+            }
 
         // Copy to personalized model location
         val personalizedFile = getPersonalizedModelFile(model.modelId)
         File(updatedModelPath).copyTo(personalizedFile, overwrite = true)
 
         // Update personalized model reference
-        personalizedModel = model.copy(
-            filePath = personalizedFile.absolutePath,
-            version = "${model.version}-personalized",
-        )
+        personalizedModel =
+            model.copy(
+                filePath = personalizedFile.absolutePath,
+                version = "${model.version}-personalized",
+            )
 
         Timber.i("Saved personalized model to ${personalizedFile.absolutePath}")
     }
@@ -448,10 +458,7 @@ data class TrainingSample(
 private class BufferedTrainingDataProvider(
     private val samples: List<TrainingSample>,
 ) : TrainingDataProvider {
-
-    override suspend fun getTrainingData(): List<Pair<FloatArray, FloatArray>> {
-        return samples.map { it.input to it.target }
-    }
+    override suspend fun getTrainingData(): List<Pair<FloatArray, FloatArray>> = samples.map { it.input to it.target }
 
     override suspend fun getSampleCount(): Int = samples.size
 }

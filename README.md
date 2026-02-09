@@ -12,12 +12,12 @@
 
 ## Overview
 
-The EdgeML Android SDK brings production-ready federated learning to Android smartphones and tablets. Designed with Google's Android security model in mind, it enables on-device training while maintaining complete data sovereignty.
+The EdgeML Android SDK brings production-ready federated learning to Android smartphones and tablets. Designed with Google's Android security model in mind, it implements real on-device training via TFLite model signatures while maintaining complete data sovereignty.
 
 ### Key Features
 
 - **🔒 Privacy-First**: All training happens on-device, data never leaves the phone
-- **⚡ TensorFlow Lite Optimized**: Leverages NNAPI for hardware-accelerated on-device training
+- **⚡ TensorFlow Lite Optimized**: Leverages NNAPI for hardware-accelerated on-device training via model signatures
 - **📱 Production Ready**: Complete hardware metadata and runtime constraint monitoring
 - **🔋 Battery Aware**: Training eligibility based on battery level and charging state
 - **📶 Network Smart**: Respects WiFi-only preferences for model sync
@@ -243,6 +243,14 @@ The SDK automatically handles token refresh and secure credential storage.
 - **API Level**: Android API level
 - **Locale**: User's language and region
 - **Timezone**: Device timezone
+
+## On-Device Training
+
+The SDK implements real on-device training using TFLite model signatures. The `TFLiteTrainer` uses `runSignature` to invoke dedicated train, infer, save, and restore operations defined in the TFLite model. For models without training signatures, the trainer falls back to inference-only mode with real loss computation.
+
+### Weight Extraction
+
+The `WeightExtractor` directly parses `.tflite` FlatBuffer binary format to extract model weights for federated aggregation. This approach requires no additional dependencies beyond the core TFLite runtime.
 
 ## Configuration
 

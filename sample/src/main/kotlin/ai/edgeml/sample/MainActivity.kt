@@ -2,6 +2,7 @@ package ai.edgeml.sample
 
 import ai.edgeml.client.ClientState
 import ai.edgeml.models.DownloadState
+import ai.edgeml.sample.databinding.ActivityMainBinding
 import android.os.Bundle
 import android.widget.Toast
 import androidx.activity.viewModels
@@ -9,7 +10,6 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
-import ai.edgeml.sample.databinding.ActivityMainBinding
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 
@@ -17,7 +17,6 @@ import kotlinx.coroutines.launch
  * Main activity demonstrating EdgeML SDK usage.
  */
 class MainActivity : AppCompatActivity() {
-
     private lateinit var binding: ActivityMainBinding
     private val viewModel: MainViewModel by viewModels()
 
@@ -90,13 +89,14 @@ class MainActivity : AppCompatActivity() {
                 launch {
                     viewModel.modelInfo.collectLatest { info ->
                         if (info != null) {
-                            binding.tvModelInfo.text = """
+                            binding.tvModelInfo.text =
+                                """
                                 Model: ${info.modelId}
                                 Version: ${info.version}
                                 Format: ${info.format}
                                 Size: ${info.sizeBytes / 1024} KB
                                 GPU: ${if (info.usingGpu) "Yes" else "No"}
-                            """.trimIndent()
+                                """.trimIndent()
                         } else {
                             binding.tvModelInfo.text = "No model loaded"
                         }
@@ -107,13 +107,14 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun updateClientStateUI(state: ClientState) {
-        val stateText = when (state) {
-            ClientState.UNINITIALIZED -> "Uninitialized"
-            ClientState.INITIALIZING -> "Initializing..."
-            ClientState.READY -> "Ready"
-            ClientState.ERROR -> "Error"
-            ClientState.CLOSED -> "Closed"
-        }
+        val stateText =
+            when (state) {
+                ClientState.UNINITIALIZED -> "Uninitialized"
+                ClientState.INITIALIZING -> "Initializing..."
+                ClientState.READY -> "Ready"
+                ClientState.ERROR -> "Error"
+                ClientState.CLOSED -> "Closed"
+            }
 
         binding.tvClientState.text = "State: $stateText"
         binding.btnInitialize.isEnabled = state == ClientState.UNINITIALIZED || state == ClientState.ERROR
@@ -123,15 +124,16 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun updateDownloadStateUI(state: DownloadState?) {
-        val statusText = when (state) {
-            null, DownloadState.Idle -> "Idle"
-            DownloadState.CheckingForUpdates -> "Checking for updates..."
-            is DownloadState.Downloading -> "Downloading: ${state.progress.progress}%"
-            DownloadState.Verifying -> "Verifying..."
-            is DownloadState.Completed -> "Download completed"
-            is DownloadState.Failed -> "Failed: ${state.error.message}"
-            is DownloadState.UpToDate -> "Model up to date"
-        }
+        val statusText =
+            when (state) {
+                null, DownloadState.Idle -> "Idle"
+                DownloadState.CheckingForUpdates -> "Checking for updates..."
+                is DownloadState.Downloading -> "Downloading: ${state.progress.progress}%"
+                DownloadState.Verifying -> "Verifying..."
+                is DownloadState.Completed -> "Download completed"
+                is DownloadState.Failed -> "Failed: ${state.error.message}"
+                is DownloadState.UpToDate -> "Model up to date"
+            }
 
         binding.tvDownloadStatus.text = "Download: $statusText"
 
@@ -141,9 +143,11 @@ class MainActivity : AppCompatActivity() {
                 binding.progressBar.isIndeterminate = false
                 binding.progressBar.progress = state.progress.progress
             }
+
             is DownloadState.CheckingForUpdates, DownloadState.Verifying -> {
                 binding.progressBar.isIndeterminate = true
             }
+
             else -> {
                 binding.progressBar.isIndeterminate = false
                 binding.progressBar.progress = 0
@@ -153,11 +157,12 @@ class MainActivity : AppCompatActivity() {
 
     private fun updateInferenceResultUI(result: InferenceResultUI?) {
         if (result != null) {
-            binding.tvInferenceResult.text = """
+            binding.tvInferenceResult.text =
+                """
                 Inference Result:
                 Top prediction: Class ${result.topClass} (${String.format("%.2f", result.confidence * 100)}%)
                 Time: ${result.inferenceTimeMs} ms
-            """.trimIndent()
+                """.trimIndent()
         } else {
             binding.tvInferenceResult.text = "No inference result yet"
         }

@@ -23,13 +23,15 @@ internal fun interface DeviceAuthTransport {
         path: String,
         body: JSONObject,
         bearerToken: String?,
-        expectedStatusCodes: Set<Int>
+        expectedStatusCodes: Set<Int>,
     ): JSONObject
 }
 
 internal interface DeviceAuthStateStore {
     fun save(state: DeviceAuthManager.DeviceTokenState)
+
     fun load(): DeviceAuthManager.DeviceTokenState?
+
     fun clear()
 }
 
@@ -59,12 +61,13 @@ class DeviceAuthManager internal constructor(
         orgId = orgId,
         deviceIdentifier = deviceIdentifier,
         transport = OkHttpDeviceAuthTransport(baseUrl),
-        stateStore = KeystorePrefsDeviceAuthStateStore(
-            context = context,
-            prefsName = prefsName,
-            orgId = orgId,
-            deviceIdentifier = deviceIdentifier,
-        ),
+        stateStore =
+            KeystorePrefsDeviceAuthStateStore(
+                context = context,
+                prefsName = prefsName,
+                orgId = orgId,
+                deviceIdentifier = deviceIdentifier,
+            ),
         ioDispatcher = ioDispatcher,
     )
 
@@ -76,79 +79,87 @@ class DeviceAuthManager internal constructor(
         val expiresAtEpochMillis: Long,
         val orgId: String,
         val deviceIdentifier: String,
-        val scopes: List<String>
+        val scopes: List<String>,
     )
 
     suspend fun bootstrap(
         bootstrapBearerToken: String,
         scopes: List<String> = listOf("devices:write"),
         accessTtlSeconds: Int? = null,
-        deviceId: String? = null
-    ): DeviceTokenState = withContext(ioDispatcher) {
-        val payload = JSONObject()
-            .put("org_id", orgId)
-            .put("device_identifier", deviceIdentifier)
-            .put("scopes", JSONArray(scopes))
+        deviceId: String? = null,
+    ): DeviceTokenState =
+        withContext(ioDispatcher) {
+            val payload =
+                JSONObject()
+                    .put("org_id", orgId)
+                    .put("device_identifier", deviceIdentifier)
+                    .put("scopes", JSONArray(scopes))
 
-        if (accessTtlSeconds != null) payload.put("access_ttl_seconds", accessTtlSeconds)
-        if (deviceId != null) payload.put("device_id", deviceId)
+            if (accessTtlSeconds != null) payload.put("access_ttl_seconds", accessTtlSeconds)
+            if (deviceId != null) payload.put("device_id", deviceId)
 
-        val response = transport.postJson(
-            path = "/api/v1/device-auth/bootstrap",
-            body = payload,
-            bearerToken = bootstrapBearerToken,
-            expectedStatusCodes = setOf(200, 201)
-        )
-        val state = parseState(response)
-        stateStore.save(state)
-        state
-    }
+            val response =
+                transport.postJson(
+                    path = "/api/v1/device-auth/bootstrap",
+                    body = payload,
+                    bearerToken = bootstrapBearerToken,
+                    expectedStatusCodes = setOf(200, 201),
+                )
+            val state = parseState(response)
+            stateStore.save(state)
+            state
+        }
 
-    suspend fun refresh(): DeviceTokenState = withContext(ioDispatcher) {
-        val current = stateStore.load() ?: throw IllegalStateException("No token state stored")
+    suspend fun refresh(): DeviceTokenState =
+        withContext(ioDispatcher) {
+            val current = stateStore.load() ?: throw IllegalStateException("No token state stored")
 
-        val response = transport.postJson(
-            path = "/api/v1/device-auth/refresh",
-            body = JSONObject().put("refresh_token", current.refreshToken),
-            bearerToken = null,
-            expectedStatusCodes = setOf(200)
-        )
-        val state = parseState(response)
-        stateStore.save(state)
-        state
-    }
+            val response =
+                transport.postJson(
+                    path = "/api/v1/device-auth/refresh",
+                    body = JSONObject().put("refresh_token", current.refreshToken),
+                    bearerToken = null,
+                    expectedStatusCodes = setOf(200),
+                )
+            val state = parseState(response)
+            stateStore.save(state)
+            state
+        }
 
-    suspend fun revoke(reason: String = "sdk_revoke") = withContext(ioDispatcher) {
-        val current = stateStore.load() ?: return@withContext
+    suspend fun revoke(reason: String = "sdk_revoke") =
+        withContext(ioDispatcher) {
+            val current = stateStore.load() ?: return@withContext
 
-        transport.postJson(
-            path = "/api/v1/device-auth/revoke",
-            body = JSONObject()
-                .put("refresh_token", current.refreshToken)
-                .put("reason", reason),
-            bearerToken = null,
-            expectedStatusCodes = setOf(200, 204)
-        )
-        stateStore.clear()
-    }
+            transport.postJson(
+                path = "/api/v1/device-auth/revoke",
+                body =
+                    JSONObject()
+                        .put("refresh_token", current.refreshToken)
+                        .put("reason", reason),
+                bearerToken = null,
+                expectedStatusCodes = setOf(200, 204),
+            )
+            stateStore.clear()
+        }
 
-    suspend fun getAccessToken(refreshIfExpiringWithinSeconds: Long = 30): String = withContext(ioDispatcher) {
-        val state = stateStore.load() ?: throw IllegalStateException("No token state stored")
-        val thresholdMillis = nowMillisProvider() + (refreshIfExpiringWithinSeconds * 1000)
-        if (thresholdMillis >= state.expiresAtEpochMillis) {
-            return@withContext try {
-                refresh().accessToken
-            } catch (error: Exception) {
-                // Offline-safe fallback: keep current token until hard expiry.
-                if (nowMillisProvider() < state.expiresAtEpochMillis) {
-                    state.accessToken
-                } else {
-                    throw error
+    suspend fun getAccessToken(refreshIfExpiringWithinSeconds: Long = 30): String =
+        withContext(ioDispatcher) {
+            val state = stateStore.load() ?: throw IllegalStateException("No token state stored")
+            val thresholdMillis = nowMillisProvider() + (refreshIfExpiringWithinSeconds * 1000)
+            if (thresholdMillis >= state.expiresAtEpochMillis) {
+                return@withContext try {
+                    refresh().accessToken
+                } catch (error: Exception) {
+                    // Offline-safe fallback: keep current token until hard expiry.
+                    if (nowMillisProvider() < state.expiresAtEpochMillis) {
+                        state.accessToken
+                    } else {
+                        throw error
+                    }
                 }
             }
+            state.accessToken
         }
-        state.accessToken
-    }
 
     private fun parseState(payload: JSONObject): DeviceTokenState {
         val scopesArray = payload.optJSONArray("scopes") ?: JSONArray()
@@ -168,7 +179,7 @@ class DeviceAuthManager internal constructor(
 }
 
 private class OkHttpDeviceAuthTransport(
-    private val baseUrl: String
+    private val baseUrl: String,
 ) : DeviceAuthTransport {
     private val client = OkHttpClient()
     private val contentType = "application/json".toMediaType()
@@ -177,13 +188,15 @@ private class OkHttpDeviceAuthTransport(
         path: String,
         body: JSONObject,
         bearerToken: String?,
-        expectedStatusCodes: Set<Int>
+        expectedStatusCodes: Set<Int>,
     ): JSONObject {
         val requestBody = body.toString().toRequestBody(contentType)
-        val builder = Request.Builder()
-            .url("${baseUrl.trimEnd('/')}$path")
-            .post(requestBody)
-            .header("Content-Type", "application/json")
+        val builder =
+            Request
+                .Builder()
+                .url("${baseUrl.trimEnd('/')}$path")
+                .post(requestBody)
+                .header("Content-Type", "application/json")
         if (!bearerToken.isNullOrBlank()) {
             builder.header("Authorization", "Bearer $bearerToken")
         }
@@ -217,16 +230,17 @@ private class KeystorePrefsDeviceAuthStateStore(
     private fun storageKey(): String = "$orgId:$deviceIdentifier"
 
     override fun save(state: DeviceAuthManager.DeviceTokenState) {
-        val stateJson = JSONObject()
-            .put("access_token", state.accessToken)
-            .put("refresh_token", state.refreshToken)
-            .put("token_type", state.tokenType)
-            .put("expires_at", state.expiresAt)
-            .put("expires_at_epoch_ms", state.expiresAtEpochMillis)
-            .put("org_id", state.orgId)
-            .put("device_identifier", state.deviceIdentifier)
-            .put("scopes", JSONArray(state.scopes))
-            .toString()
+        val stateJson =
+            JSONObject()
+                .put("access_token", state.accessToken)
+                .put("refresh_token", state.refreshToken)
+                .put("token_type", state.tokenType)
+                .put("expires_at", state.expiresAt)
+                .put("expires_at_epoch_ms", state.expiresAtEpochMillis)
+                .put("org_id", state.orgId)
+                .put("device_identifier", state.deviceIdentifier)
+                .put("scopes", JSONArray(state.scopes))
+                .toString()
 
         val encrypted = encrypt(stateJson)
         prefs.edit().putString(storageKey(), encrypted).apply()
@@ -259,14 +273,15 @@ private class KeystorePrefsDeviceAuthStateStore(
         if (existing != null) return existing
 
         val keyGenerator = KeyGenerator.getInstance("AES", keyStoreProvider)
-        val parameterSpec = android.security.keystore.KeyGenParameterSpec.Builder(
-            alias,
-            android.security.keystore.KeyProperties.PURPOSE_ENCRYPT or
-                android.security.keystore.KeyProperties.PURPOSE_DECRYPT
-        )
-            .setBlockModes(android.security.keystore.KeyProperties.BLOCK_MODE_GCM)
-            .setEncryptionPaddings(android.security.keystore.KeyProperties.ENCRYPTION_PADDING_NONE)
-            .build()
+        val parameterSpec =
+            android.security.keystore.KeyGenParameterSpec
+                .Builder(
+                    alias,
+                    android.security.keystore.KeyProperties.PURPOSE_ENCRYPT or
+                        android.security.keystore.KeyProperties.PURPOSE_DECRYPT,
+                ).setBlockModes(android.security.keystore.KeyProperties.BLOCK_MODE_GCM)
+                .setEncryptionPaddings(android.security.keystore.KeyProperties.ENCRYPTION_PADDING_NONE)
+                .build()
         keyGenerator.init(parameterSpec)
         return keyGenerator.generateKey()
     }

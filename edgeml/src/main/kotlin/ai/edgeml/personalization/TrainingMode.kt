@@ -46,7 +46,9 @@ enum class TrainingMode {
      * - Apps with millions of users
      * - When users opt-in to sharing
      */
-    FEDERATED;
+    FEDERATED,
+
+    ;
 
     /**
      * Whether this mode uploads updates to the server.
@@ -58,26 +60,29 @@ enum class TrainingMode {
      * User-friendly description of what this mode does.
      */
     val description: String
-        get() = when (this) {
-            LOCAL_ONLY -> "Your model learns your patterns. Data never leaves your device."
-            FEDERATED -> "Your model learns from millions while keeping your data private."
-        }
+        get() =
+            when (this) {
+                LOCAL_ONLY -> "Your model learns your patterns. Data never leaves your device."
+                FEDERATED -> "Your model learns from millions while keeping your data private."
+            }
 
     /**
      * Privacy level indicator.
      */
     val privacyLevel: String
-        get() = when (this) {
-            LOCAL_ONLY -> "Maximum"
-            FEDERATED -> "High"
-        }
+        get() =
+            when (this) {
+                LOCAL_ONLY -> "Maximum"
+                FEDERATED -> "High"
+            }
 
     /**
      * Data transmission indicator for UI display.
      */
     val dataTransmitted: String
-        get() = when (this) {
-            LOCAL_ONLY -> "0 bytes"
-            FEDERATED -> "Encrypted weight deltas only"
-        }
+        get() =
+            when (this) {
+                LOCAL_ONLY -> "0 bytes"
+                FEDERATED -> "Encrypted weight deltas only"
+            }
 }
