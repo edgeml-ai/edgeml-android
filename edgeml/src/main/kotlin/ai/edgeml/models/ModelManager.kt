@@ -282,7 +282,7 @@ class ModelManager(
     private fun getCacheKey(modelId: String, version: String): String = "${modelId}_$version"
 
     private suspend fun getDeviceId(): String {
-        return storage.getDeviceId()
+        return storage.getServerDeviceId()
             ?: throw ModelDownloadException(
                 "Device not registered",
                 errorCode = ModelDownloadException.ErrorCode.UNAUTHORIZED

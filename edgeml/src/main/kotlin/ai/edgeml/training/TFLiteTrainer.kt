@@ -85,6 +85,7 @@ class TFLiteTrainer(
                 // Try to use GPU delegate if enabled
                 if (config.enableGpuAcceleration && isGpuSupported()) {
                     try {
+                        @Suppress("DEPRECATION")
                         val delegateOptions = GpuDelegate.Options()
                         gpuDelegate = GpuDelegate(delegateOptions)
                         options.addDelegate(gpuDelegate)
@@ -239,7 +240,7 @@ class TFLiteTrainer(
      * Get model input/output tensor details.
      */
     fun getTensorInfo(): TensorInfo? {
-        val interp = interpreter ?: return null
+        interpreter ?: return null
         return TensorInfo(
             inputShape = inputShape.copyOf(),
             outputShape = outputShape.copyOf(),

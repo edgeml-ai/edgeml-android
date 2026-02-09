@@ -534,7 +534,6 @@ class EdgeMLClient private constructor(
                 metadata = mapOf("session_id" to sessionId, "modality" to modality.value),
             )
 
-            var failed = false
             try {
                 resolvedEngine.generate(input, modality).collect { rawChunk ->
                     val now = System.currentTimeMillis()
@@ -556,7 +555,6 @@ class EdgeMLClient private constructor(
                     )
                 }
             } catch (e: Exception) {
-                failed = true
                 eventQueue.addTrainingEvent(
                     type = ai.edgeml.sync.EventTypes.GENERATION_FAILED,
                     metadata = mapOf("session_id" to sessionId, "error" to (e.message ?: "unknown")),

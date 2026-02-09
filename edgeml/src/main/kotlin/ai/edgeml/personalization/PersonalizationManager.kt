@@ -204,7 +204,7 @@ class PersonalizationManager(
         }
 
         // Get current model
-        val model = getCurrentModel() ?: return Result.failure(
+        getCurrentModel() ?: return Result.failure(
             IllegalStateException("No model loaded")
         )
 
