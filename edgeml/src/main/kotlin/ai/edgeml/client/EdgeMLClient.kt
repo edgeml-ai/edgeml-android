@@ -498,10 +498,20 @@ class EdgeMLClient private constructor(
             val latencies = mutableListOf<Double>()
             var chunkCount = 0
 
-            reportStreamingEventSafely(
-                deviceId, resolvedModelId, resolvedVersion, modality,
-                sessionId, "generation_started", sessionStart,
-            )
+            deviceId?.let { id ->
+                reportStreamingEventSafely(
+                    ai.edgeml.api.dto.InferenceEventRequest(
+                        deviceId = id,
+                        modelId = resolvedModelId,
+                        version = resolvedVersion,
+                        modality = modality.value,
+                        sessionId = sessionId,
+                        eventType = "generation_started",
+                        timestampMs = sessionStart,
+                        orgId = config.orgId,
+                    )
+                )
+            }
 
             eventQueue.addTrainingEvent(
                 type = ai.edgeml.sync.EventTypes.GENERATION_STARTED,
@@ -555,16 +565,26 @@ class EdgeMLClient private constructor(
                 metadata = mapOf("session_id" to sessionId),
             )
 
-            reportStreamingEventSafely(
-                deviceId, resolvedModelId, resolvedVersion, modality,
-                sessionId, "generation_completed", sessionEnd,
-                metrics = ai.edgeml.api.dto.InferenceEventMetrics(
-                    ttfcMs = ttfcMs,
-                    totalChunks = chunkCount,
-                    totalDurationMs = totalDurationMs,
-                    throughput = throughput,
-                ),
-            )
+            deviceId?.let { id ->
+                reportStreamingEventSafely(
+                    ai.edgeml.api.dto.InferenceEventRequest(
+                        deviceId = id,
+                        modelId = resolvedModelId,
+                        version = resolvedVersion,
+                        modality = modality.value,
+                        sessionId = sessionId,
+                        eventType = "generation_completed",
+                        timestampMs = sessionEnd,
+                        metrics = ai.edgeml.api.dto.InferenceEventMetrics(
+                            ttfcMs = ttfcMs,
+                            totalChunks = chunkCount,
+                            totalDurationMs = totalDurationMs,
+                            throughput = throughput,
+                        ),
+                        orgId = config.orgId,
+                    )
+                )
+            }
         }
     }
 
@@ -581,32 +601,12 @@ class EdgeMLClient private constructor(
     }
 
     private suspend fun reportStreamingEventSafely(
-        deviceId: String?,
-        modelId: String,
-        version: String,
-        modality: ai.edgeml.inference.Modality,
-        sessionId: String,
-        eventType: String,
-        timestampMs: Long,
-        metrics: ai.edgeml.api.dto.InferenceEventMetrics? = null,
+        request: ai.edgeml.api.dto.InferenceEventRequest,
     ) {
-        if (deviceId == null) return
         try {
-            api.reportInferenceEvent(
-                ai.edgeml.api.dto.InferenceEventRequest(
-                    deviceId = deviceId,
-                    modelId = modelId,
-                    version = version,
-                    modality = modality.value,
-                    sessionId = sessionId,
-                    eventType = eventType,
-                    timestampMs = timestampMs,
-                    metrics = metrics,
-                    orgId = config.orgId,
-                )
-            )
+            api.reportInferenceEvent(request)
         } catch (e: Exception) {
-            Timber.w(e, "Failed to report $eventType event")
+            Timber.w(e, "Failed to report ${request.eventType} event")
         }
     }
 
