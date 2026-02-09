@@ -18,73 +18,50 @@ import kotlinx.serialization.Serializable
 data class EdgeMLConfig(
     /** Base URL of the EdgeML server */
     val serverUrl: String,
-
     /** Short-lived device access token for authentication */
     val deviceAccessToken: String,
-
     /** Organization ID */
     val orgId: String,
-
     /** Model ID to use for training/inference */
     val modelId: String,
-
     /** Device ID (auto-generated if not provided) */
     val deviceId: String? = null,
-
     /** App version for device metadata */
     val appVersion: String? = null,
-
     /** Enable debug logging */
     val debugMode: Boolean = false,
-
     /** Connection timeout in milliseconds */
     val connectionTimeoutMs: Long = 30_000L,
-
     /** Read timeout in milliseconds */
     val readTimeoutMs: Long = 60_000L,
-
     /** Write timeout in milliseconds */
     val writeTimeoutMs: Long = 60_000L,
-
     /** Maximum retries for network operations */
     val maxRetries: Int = 3,
-
     /** Retry delay in milliseconds (with exponential backoff) */
     val retryDelayMs: Long = 1_000L,
-
     /** Model cache size in bytes (default: 100MB) */
     val modelCacheSizeBytes: Long = 100 * 1024 * 1024L,
-
     /** Enable TensorFlow Lite GPU delegate */
     val enableGpuAcceleration: Boolean = true,
-
     /** Number of TFLite interpreter threads */
     val numThreads: Int = 4,
-
     /** Enable background sync via WorkManager */
     val enableBackgroundSync: Boolean = true,
-
     /** Background sync interval in minutes */
     val syncIntervalMinutes: Long = 60L,
-
     /** Enable heartbeat for device health tracking */
     val enableHeartbeat: Boolean = true,
-
     /** Heartbeat interval in seconds */
     val heartbeatIntervalSeconds: Long = 300L,
-
     /** Minimum battery level for background sync (0-100) */
     val minBatteryLevel: Int = 20,
-
     /** Require charging for background sync */
     val requireCharging: Boolean = false,
-
     /** Require unmetered network (WiFi) for background sync */
     val requireUnmeteredNetwork: Boolean = true,
-
     /** Enable encrypted storage for sensitive data */
     val enableEncryptedStorage: Boolean = true,
-
     /** Privacy configuration for upload behavior and differential privacy */
     val privacyConfiguration: PrivacyConfiguration = PrivacyConfiguration.DEFAULT,
 ) {
@@ -135,56 +112,80 @@ data class EdgeMLConfig(
         private var privacyConfiguration: PrivacyConfiguration = PrivacyConfiguration.DEFAULT
 
         fun serverUrl(url: String) = apply { this.serverUrl = url.trimEnd('/') }
+
         fun deviceAccessToken(token: String) = apply { this.deviceAccessToken = token }
+
         fun orgId(id: String) = apply { this.orgId = id }
+
         fun modelId(id: String) = apply { this.modelId = id }
+
         fun deviceId(id: String?) = apply { this.deviceId = id }
+
         fun appVersion(version: String?) = apply { this.appVersion = version }
+
         fun debugMode(enabled: Boolean) = apply { this.debugMode = enabled }
+
         fun connectionTimeoutMs(timeout: Long) = apply { this.connectionTimeoutMs = timeout }
+
         fun readTimeoutMs(timeout: Long) = apply { this.readTimeoutMs = timeout }
+
         fun writeTimeoutMs(timeout: Long) = apply { this.writeTimeoutMs = timeout }
+
         fun maxRetries(retries: Int) = apply { this.maxRetries = retries }
+
         fun retryDelayMs(delay: Long) = apply { this.retryDelayMs = delay }
+
         fun modelCacheSizeBytes(size: Long) = apply { this.modelCacheSizeBytes = size }
+
         fun enableGpuAcceleration(enabled: Boolean) = apply { this.enableGpuAcceleration = enabled }
+
         fun numThreads(threads: Int) = apply { this.numThreads = threads }
+
         fun enableBackgroundSync(enabled: Boolean) = apply { this.enableBackgroundSync = enabled }
+
         fun syncIntervalMinutes(minutes: Long) = apply { this.syncIntervalMinutes = minutes }
+
         fun enableHeartbeat(enabled: Boolean) = apply { this.enableHeartbeat = enabled }
+
         fun heartbeatIntervalSeconds(seconds: Long) = apply { this.heartbeatIntervalSeconds = seconds }
+
         fun minBatteryLevel(level: Int) = apply { this.minBatteryLevel = level }
+
         fun requireCharging(required: Boolean) = apply { this.requireCharging = required }
+
         fun requireUnmeteredNetwork(required: Boolean) = apply { this.requireUnmeteredNetwork = required }
+
         fun enableEncryptedStorage(enabled: Boolean) = apply { this.enableEncryptedStorage = enabled }
+
         fun privacyConfiguration(config: PrivacyConfiguration) = apply { this.privacyConfiguration = config }
 
-        fun build(): EdgeMLConfig = EdgeMLConfig(
-            serverUrl = serverUrl,
-            deviceAccessToken = deviceAccessToken,
-            orgId = orgId,
-            modelId = modelId,
-            deviceId = deviceId,
-            appVersion = appVersion,
-            debugMode = debugMode,
-            connectionTimeoutMs = connectionTimeoutMs,
-            readTimeoutMs = readTimeoutMs,
-            writeTimeoutMs = writeTimeoutMs,
-            maxRetries = maxRetries,
-            retryDelayMs = retryDelayMs,
-            modelCacheSizeBytes = modelCacheSizeBytes,
-            enableGpuAcceleration = enableGpuAcceleration,
-            numThreads = numThreads,
-            enableBackgroundSync = enableBackgroundSync,
-            syncIntervalMinutes = syncIntervalMinutes,
-            enableHeartbeat = enableHeartbeat,
-            heartbeatIntervalSeconds = heartbeatIntervalSeconds,
-            minBatteryLevel = minBatteryLevel,
-            requireCharging = requireCharging,
-            requireUnmeteredNetwork = requireUnmeteredNetwork,
-            enableEncryptedStorage = enableEncryptedStorage,
-            privacyConfiguration = privacyConfiguration,
-        )
+        fun build(): EdgeMLConfig =
+            EdgeMLConfig(
+                serverUrl = serverUrl,
+                deviceAccessToken = deviceAccessToken,
+                orgId = orgId,
+                modelId = modelId,
+                deviceId = deviceId,
+                appVersion = appVersion,
+                debugMode = debugMode,
+                connectionTimeoutMs = connectionTimeoutMs,
+                readTimeoutMs = readTimeoutMs,
+                writeTimeoutMs = writeTimeoutMs,
+                maxRetries = maxRetries,
+                retryDelayMs = retryDelayMs,
+                modelCacheSizeBytes = modelCacheSizeBytes,
+                enableGpuAcceleration = enableGpuAcceleration,
+                numThreads = numThreads,
+                enableBackgroundSync = enableBackgroundSync,
+                syncIntervalMinutes = syncIntervalMinutes,
+                enableHeartbeat = enableHeartbeat,
+                heartbeatIntervalSeconds = heartbeatIntervalSeconds,
+                minBatteryLevel = minBatteryLevel,
+                requireCharging = requireCharging,
+                requireUnmeteredNetwork = requireUnmeteredNetwork,
+                enableEncryptedStorage = enableEncryptedStorage,
+                privacyConfiguration = privacyConfiguration,
+            )
     }
 
     companion object {

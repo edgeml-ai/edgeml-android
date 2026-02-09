@@ -7,7 +7,20 @@ import ai.edgeml.config.EdgeMLConfig
 import ai.edgeml.models.ModelManager
 import ai.edgeml.storage.SecureStorage
 import android.content.Context
-import androidx.work.*
+import androidx.work.BackoffPolicy
+import androidx.work.Constraints
+import androidx.work.CoroutineWorker
+import androidx.work.ExistingPeriodicWorkPolicy
+import androidx.work.ExistingWorkPolicy
+import androidx.work.NetworkType
+import androidx.work.OneTimeWorkRequestBuilder
+import androidx.work.OutOfQuotaPolicy
+import androidx.work.PeriodicWorkRequestBuilder
+import androidx.work.WorkInfo
+import androidx.work.WorkManager
+import androidx.work.WorkRequest
+import androidx.work.WorkerParameters
+import androidx.work.workDataOf
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
@@ -30,7 +43,6 @@ class EdgeMLSyncWorker(
     context: Context,
     params: WorkerParameters,
 ) : CoroutineWorker(context, params) {
-
     companion object {
         const val TAG = "EdgeMLSyncWorker"
         const val WORK_NAME_PERIODIC = "edgeml_periodic_sync"
@@ -46,10 +58,11 @@ class EdgeMLSyncWorker(
         const val SYNC_TYPE_FULL = "full"
     }
 
-    private val json = Json {
-        ignoreUnknownKeys = true
-        encodeDefaults = true
-    }
+    private val json =
+        Json {
+            ignoreUnknownKeys = true
+            encodeDefaults = true
+        }
 
     override suspend fun doWork(): Result {
         return try {
@@ -72,8 +85,14 @@ class EdgeMLSyncWorker(
 
             // Perform sync based on type
             when (syncType) {
-                SYNC_TYPE_MODEL -> syncModels(modelManager)
-                SYNC_TYPE_EVENTS -> syncEvents(api, storage, config)
+                SYNC_TYPE_MODEL -> {
+                    syncModels(modelManager)
+                }
+
+                SYNC_TYPE_EVENTS -> {
+                    syncEvents(api, storage, config)
+                }
+
                 SYNC_TYPE_FULL -> {
                     syncModels(modelManager)
                     syncEvents(api, storage, config)
@@ -96,7 +115,7 @@ class EdgeMLSyncWorker(
                     workDataOf(
                         "error" to e.message,
                         "attempts" to runAttemptCount,
-                    )
+                    ),
                 )
             }
         }
@@ -112,11 +131,12 @@ class EdgeMLSyncWorker(
         Timber.d("Checking for model updates")
         val result = modelManager.ensureModelAvailable()
 
-        result.onSuccess { model ->
-            Timber.i("Model sync successful: ${model.modelId} v${model.version}")
-        }.onFailure { error ->
-            Timber.w(error, "Model sync failed (non-critical)")
-        }
+        result
+            .onSuccess { model ->
+                Timber.i("Model sync successful: ${model.modelId} v${model.version}")
+            }.onFailure { error ->
+                Timber.w(error, "Model sync failed (non-critical)")
+            }
     }
 
     private suspend fun syncEvents(
@@ -140,15 +160,16 @@ class EdgeMLSyncWorker(
 
         for (event in events) {
             try {
-                val request = TrainingEventRequest(
-                    deviceId = deviceId,
-                    modelId = config.modelId,
-                    version = storage.getCurrentModelVersion() ?: "unknown",
-                    eventType = event.type,
-                    timestamp = formatIso8601(event.timestamp),
-                    metrics = event.metrics,
-                    metadata = event.metadata,
-                )
+                val request =
+                    TrainingEventRequest(
+                        deviceId = deviceId,
+                        modelId = config.modelId,
+                        version = storage.getCurrentModelVersion() ?: "unknown",
+                        eventType = event.type,
+                        timestamp = formatIso8601(event.timestamp),
+                        metrics = event.metrics,
+                        metadata = event.metadata,
+                    )
 
                 val response = api.reportTrainingEvent(experimentId, request)
                 if (response.isSuccessful) {
@@ -196,27 +217,25 @@ class WorkManagerSync(
         val constraints = buildConstraints()
         val configJson = json.encodeToString(config)
 
-        val syncRequest = PeriodicWorkRequestBuilder<EdgeMLSyncWorker>(
-            config.syncIntervalMinutes,
-            TimeUnit.MINUTES,
-            // Flex interval of 15 minutes
-            15,
-            TimeUnit.MINUTES,
-        )
-            .setConstraints(constraints)
-            .setInputData(
-                workDataOf(
-                    EdgeMLSyncWorker.KEY_CONFIG_JSON to configJson,
-                    EdgeMLSyncWorker.KEY_SYNC_TYPE to EdgeMLSyncWorker.SYNC_TYPE_FULL,
-                )
-            )
-            .setBackoffCriteria(
-                BackoffPolicy.EXPONENTIAL,
-                WorkRequest.MIN_BACKOFF_MILLIS,
-                TimeUnit.MILLISECONDS,
-            )
-            .addTag(EdgeMLSyncWorker.TAG)
-            .build()
+        val syncRequest =
+            PeriodicWorkRequestBuilder<EdgeMLSyncWorker>(
+                config.syncIntervalMinutes,
+                TimeUnit.MINUTES,
+                // Flex interval of 15 minutes
+                15,
+                TimeUnit.MINUTES,
+            ).setConstraints(constraints)
+                .setInputData(
+                    workDataOf(
+                        EdgeMLSyncWorker.KEY_CONFIG_JSON to configJson,
+                        EdgeMLSyncWorker.KEY_SYNC_TYPE to EdgeMLSyncWorker.SYNC_TYPE_FULL,
+                    ),
+                ).setBackoffCriteria(
+                    BackoffPolicy.EXPONENTIAL,
+                    WorkRequest.MIN_BACKOFF_MILLIS,
+                    TimeUnit.MILLISECONDS,
+                ).addTag(EdgeMLSyncWorker.TAG)
+                .build()
 
         workManager.enqueueUniquePeriodicWork(
             EdgeMLSyncWorker.WORK_NAME_PERIODIC,
@@ -247,25 +266,24 @@ class WorkManagerSync(
     ) {
         val configJson = json.encodeToString(config)
 
-        val syncRequest = OneTimeWorkRequestBuilder<EdgeMLSyncWorker>()
-            .setInputData(
-                workDataOf(
-                    EdgeMLSyncWorker.KEY_CONFIG_JSON to configJson,
-                    EdgeMLSyncWorker.KEY_SYNC_TYPE to syncType,
-                )
-            )
-            .setConstraints(
-                Constraints.Builder()
-                    .setRequiredNetworkType(NetworkType.CONNECTED)
-                    .build()
-            )
-            .apply {
-                if (expedited) {
-                    setExpedited(OutOfQuotaPolicy.RUN_AS_NON_EXPEDITED_WORK_REQUEST)
-                }
-            }
-            .addTag(EdgeMLSyncWorker.TAG)
-            .build()
+        val syncRequest =
+            OneTimeWorkRequestBuilder<EdgeMLSyncWorker>()
+                .setInputData(
+                    workDataOf(
+                        EdgeMLSyncWorker.KEY_CONFIG_JSON to configJson,
+                        EdgeMLSyncWorker.KEY_SYNC_TYPE to syncType,
+                    ),
+                ).setConstraints(
+                    Constraints
+                        .Builder()
+                        .setRequiredNetworkType(NetworkType.CONNECTED)
+                        .build(),
+                ).apply {
+                    if (expedited) {
+                        setExpedited(OutOfQuotaPolicy.RUN_AS_NON_EXPEDITED_WORK_REQUEST)
+                    }
+                }.addTag(EdgeMLSyncWorker.TAG)
+                .build()
 
         workManager.enqueueUniqueWork(
             EdgeMLSyncWorker.WORK_NAME_ONE_TIME,
@@ -279,16 +297,17 @@ class WorkManagerSync(
     /**
      * Get sync work status.
      */
-    fun getSyncStatus(): LiveDataStatus {
-        return LiveDataStatus(
-            periodicWork = workManager.getWorkInfosForUniqueWorkLiveData(
-                EdgeMLSyncWorker.WORK_NAME_PERIODIC
-            ),
-            oneTimeWork = workManager.getWorkInfosForUniqueWorkLiveData(
-                EdgeMLSyncWorker.WORK_NAME_ONE_TIME
-            ),
+    fun getSyncStatus(): LiveDataStatus =
+        LiveDataStatus(
+            periodicWork =
+                workManager.getWorkInfosForUniqueWorkLiveData(
+                    EdgeMLSyncWorker.WORK_NAME_PERIODIC,
+                ),
+            oneTimeWork =
+                workManager.getWorkInfosForUniqueWorkLiveData(
+                    EdgeMLSyncWorker.WORK_NAME_ONE_TIME,
+                ),
         )
-    }
 
     /**
      * Cancel all sync work.
@@ -300,35 +319,40 @@ class WorkManagerSync(
 
     private fun buildConstraints(): Constraints {
         // Fetch device policy from server cache, fall back to local config
-        val policy = runBlocking {
-            try {
-                storage.getDevicePolicy()
-            } catch (e: Exception) {
-                Timber.w(e, "Failed to fetch cached device policy, using defaults")
-                null
+        val policy =
+            runBlocking {
+                try {
+                    storage.getDevicePolicy()
+                } catch (e: Exception) {
+                    Timber.w(e, "Failed to fetch cached device policy, using defaults")
+                    null
+                }
             }
-        }
 
         // Apply server policy if available, otherwise use local config
         val batteryThreshold = policy?.batteryThreshold ?: config.minBatteryLevel
-        val requireWifiOnly = if (policy != null) {
-            policy.networkPolicy == "wifi_only"
-        } else {
-            config.requireUnmeteredNetwork
-        }
+        val requireWifiOnly =
+            if (policy != null) {
+                policy.networkPolicy == "wifi_only"
+            } else {
+                config.requireUnmeteredNetwork
+            }
 
         Timber.d(
             "Building constraints with battery≥$batteryThreshold%, " +
-            "wifi_only=$requireWifiOnly, charging=${config.requireCharging} " +
-            "(source: ${if (policy != null) "server" else "local config"})"
+                "wifi_only=$requireWifiOnly, charging=${config.requireCharging} " +
+                "(source: ${if (policy != null) "server" else "local config"})",
         )
 
-        return Constraints.Builder()
+        return Constraints
+            .Builder()
             .setRequiredNetworkType(
-                if (requireWifiOnly) NetworkType.UNMETERED
-                else NetworkType.CONNECTED
-            )
-            .setRequiresCharging(config.requireCharging)
+                if (requireWifiOnly) {
+                    NetworkType.UNMETERED
+                } else {
+                    NetworkType.CONNECTED
+                },
+            ).setRequiresCharging(config.requireCharging)
             .setRequiresBatteryNotLow(batteryThreshold >= 20)
             .build()
     }

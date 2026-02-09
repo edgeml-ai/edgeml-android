@@ -67,58 +67,60 @@ class TFLiteTrainer(
      * @param model The cached model to load
      * @return True if loaded successfully
      */
-    suspend fun loadModel(model: CachedModel): Result<Boolean> = withContext(ioDispatcher) {
-        mutex.withLock {
-            try {
-                // Close existing interpreter
-                closeInternal()
+    suspend fun loadModel(model: CachedModel): Result<Boolean> =
+        withContext(ioDispatcher) {
+            mutex.withLock {
+                try {
+                    // Close existing interpreter
+                    closeInternal()
 
-                val modelFile = File(model.filePath)
-                if (!modelFile.exists()) {
-                    return@withContext Result.failure(
-                        IllegalStateException("Model file not found: ${model.filePath}")
-                    )
-                }
-
-                // Create interpreter options
-                val options = Interpreter.Options().apply {
-                    setNumThreads(config.numThreads)
-                }
-
-                // Try to use GPU delegate if enabled
-                if (config.enableGpuAcceleration && isGpuSupported()) {
-                    try {
-                        @Suppress("DEPRECATION")
-                        val delegateOptions = GpuDelegate.Options()
-                        gpuDelegate = GpuDelegate(delegateOptions)
-                        options.addDelegate(gpuDelegate)
-                        Timber.d("GPU delegate enabled")
-                    } catch (e: Exception) {
-                        Timber.w(e, "Failed to create GPU delegate, falling back to CPU")
-                        gpuDelegate?.close()
-                        gpuDelegate = null
+                    val modelFile = File(model.filePath)
+                    if (!modelFile.exists()) {
+                        return@withContext Result.failure(
+                            IllegalStateException("Model file not found: ${model.filePath}"),
+                        )
                     }
+
+                    // Create interpreter options
+                    val options =
+                        Interpreter.Options().apply {
+                            setNumThreads(config.numThreads)
+                        }
+
+                    // Try to use GPU delegate if enabled
+                    if (config.enableGpuAcceleration && isGpuSupported()) {
+                        try {
+                            @Suppress("DEPRECATION")
+                            val delegateOptions = GpuDelegate.Options()
+                            gpuDelegate = GpuDelegate(delegateOptions)
+                            options.addDelegate(gpuDelegate)
+                            Timber.d("GPU delegate enabled")
+                        } catch (e: Exception) {
+                            Timber.w(e, "Failed to create GPU delegate, falling back to CPU")
+                            gpuDelegate?.close()
+                            gpuDelegate = null
+                        }
+                    }
+
+                    // Load model into memory-mapped buffer
+                    val modelBuffer = loadModelFile(modelFile)
+
+                    // Create interpreter
+                    interpreter = Interpreter(modelBuffer, options)
+                    _currentModel = model
+
+                    // Get input/output tensor info
+                    extractTensorInfo()
+
+                    Timber.i("Model loaded: ${model.modelId} v${model.version}")
+                    Result.success(true)
+                } catch (e: Exception) {
+                    Timber.e(e, "Failed to load model")
+                    closeInternal()
+                    Result.failure(e)
                 }
-
-                // Load model into memory-mapped buffer
-                val modelBuffer = loadModelFile(modelFile)
-
-                // Create interpreter
-                interpreter = Interpreter(modelBuffer, options)
-                _currentModel = model
-
-                // Get input/output tensor info
-                extractTensorInfo()
-
-                Timber.i("Model loaded: ${model.modelId} v${model.version}")
-                Result.success(true)
-            } catch (e: Exception) {
-                Timber.e(e, "Failed to load model")
-                closeInternal()
-                Result.failure(e)
             }
         }
-    }
 
     /**
      * Check if a model is currently loaded.
@@ -140,35 +142,37 @@ class TFLiteTrainer(
      * @param input Input data as float array
      * @return Inference output with results and timing
      */
-    suspend fun runInference(input: FloatArray): Result<InferenceOutput> = withContext(defaultDispatcher) {
-        mutex.withLock {
-            val interp = interpreter
-                ?: return@withContext Result.failure(
-                    IllegalStateException("No model loaded. Call loadModel() first.")
-                )
+    suspend fun runInference(input: FloatArray): Result<InferenceOutput> =
+        withContext(defaultDispatcher) {
+            mutex.withLock {
+                val interp =
+                    interpreter
+                        ?: return@withContext Result.failure(
+                            IllegalStateException("No model loaded. Call loadModel() first."),
+                        )
 
-            try {
-                // Prepare input buffer
-                val inputBuffer = createInputBuffer(input)
+                try {
+                    // Prepare input buffer
+                    val inputBuffer = createInputBuffer(input)
 
-                // Prepare output buffer
-                val outputBuffer = createOutputBuffer()
+                    // Prepare output buffer
+                    val outputBuffer = createOutputBuffer()
 
-                // Run inference
-                val startTime = System.nanoTime()
-                interp.run(inputBuffer, outputBuffer)
-                val inferenceTimeMs = (System.nanoTime() - startTime) / 1_000_000
+                    // Run inference
+                    val startTime = System.nanoTime()
+                    interp.run(inputBuffer, outputBuffer)
+                    val inferenceTimeMs = (System.nanoTime() - startTime) / 1_000_000
 
-                // Extract output
-                val output = extractOutput(outputBuffer, inferenceTimeMs)
+                    // Extract output
+                    val output = extractOutput(outputBuffer, inferenceTimeMs)
 
-                Result.success(output)
-            } catch (e: Exception) {
-                Timber.e(e, "Inference failed")
-                Result.failure(e)
+                    Result.success(output)
+                } catch (e: Exception) {
+                    Timber.e(e, "Inference failed")
+                    Result.failure(e)
+                }
             }
         }
-    }
 
     /**
      * Run inference with structured input.
@@ -176,9 +180,7 @@ class TFLiteTrainer(
      * @param input Inference input with data and shape
      * @return Inference output with results and timing
      */
-    suspend fun runInference(input: InferenceInput): Result<InferenceOutput> {
-        return runInference(input.data)
-    }
+    suspend fun runInference(input: InferenceInput): Result<InferenceOutput> = runInference(input.data)
 
     /**
      * Run batch inference on multiple inputs.
@@ -189,9 +191,10 @@ class TFLiteTrainer(
     suspend fun runBatchInference(inputs: List<FloatArray>): Result<List<InferenceOutput>> =
         withContext(defaultDispatcher) {
             try {
-                val results = inputs.map { input ->
-                    runInference(input).getOrThrow()
-                }
+                val results =
+                    inputs.map { input ->
+                        runInference(input).getOrThrow()
+                    }
                 Result.success(results)
             } catch (e: Exception) {
                 Timber.e(e, "Batch inference failed")
@@ -209,11 +212,12 @@ class TFLiteTrainer(
     suspend fun classify(
         input: FloatArray,
         topK: Int = 5,
-    ): Result<List<Pair<Int, Float>>> = withContext(defaultDispatcher) {
-        runInference(input).map { output ->
-            output.topK(topK)
+    ): Result<List<Pair<Int, Float>>> =
+        withContext(defaultDispatcher) {
+            runInference(input).map { output ->
+                output.topK(topK)
+            }
         }
-    }
 
     // =========================================================================
     // Tensor Information
@@ -271,67 +275,71 @@ class TFLiteTrainer(
     suspend fun train(
         dataProvider: TrainingDataProvider,
         trainingConfig: TrainingConfig = TrainingConfig(),
-    ): Result<TrainingResult> = withContext(defaultDispatcher) {
-        mutex.withLock {
-            val model = currentModel
-                ?: return@withContext Result.failure(
-                    IllegalStateException("No model loaded. Call loadModel() first.")
-                )
+    ): Result<TrainingResult> =
+        withContext(defaultDispatcher) {
+            mutex.withLock {
+                val model =
+                    currentModel
+                        ?: return@withContext Result.failure(
+                            IllegalStateException("No model loaded. Call loadModel() first."),
+                        )
 
-            try {
-                Timber.i("Starting local training...")
-                val startTime = System.currentTimeMillis()
+                try {
+                    Timber.i("Starting local training...")
+                    val startTime = System.currentTimeMillis()
 
-                // Store original model path for delta computation
-                originalModelPath = model.filePath
+                    // Store original model path for delta computation
+                    originalModelPath = model.filePath
 
-                // Get training data
-                val trainingData = dataProvider.getTrainingData()
-                val sampleCount = trainingData.size
+                    // Get training data
+                    val trainingData = dataProvider.getTrainingData()
+                    val sampleCount = trainingData.size
 
-                Timber.i("Training on $sampleCount samples for ${trainingConfig.epochs} epochs")
+                    Timber.i("Training on $sampleCount samples for ${trainingConfig.epochs} epochs")
 
-                // Simulate training (replace with actual TFLite training API when available)
-                // In production, you would:
-                // 1. Use TensorFlow Lite's training APIs (if model supports it)
-                // 2. Or use a custom training loop with gradient computation
-                // 3. Or integrate with TensorFlow Lite Model Maker
+                    // Simulate training (replace with actual TFLite training API when available)
+                    // In production, you would:
+                    // 1. Use TensorFlow Lite's training APIs (if model supports it)
+                    // 2. Or use a custom training loop with gradient computation
+                    // 3. Or integrate with TensorFlow Lite Model Maker
 
-                // For now, we'll create a placeholder "trained" model
-                // by copying the original model to a new location
-                val tempDir = context.cacheDir
-                val updatedFile = File(tempDir, "updated_${System.currentTimeMillis()}.tflite")
-                File(model.filePath).copyTo(updatedFile, overwrite = true)
-                updatedModelPath = updatedFile.absolutePath
+                    // For now, we'll create a placeholder "trained" model
+                    // by copying the original model to a new location
+                    val tempDir = context.cacheDir
+                    val updatedFile = File(tempDir, "updated_${System.currentTimeMillis()}.tflite")
+                    File(model.filePath).copyTo(updatedFile, overwrite = true)
+                    updatedModelPath = updatedFile.absolutePath
 
-                val trainingTime = (System.currentTimeMillis() - startTime) / 1000.0
+                    val trainingTime = (System.currentTimeMillis() - startTime) / 1000.0
 
-                // Calculate placeholder metrics
-                val loss = 0.1 // Placeholder
-                val accuracy = 0.95 // Placeholder
+                    // Calculate placeholder metrics
+                    val loss = 0.1 // Placeholder
+                    val accuracy = 0.95 // Placeholder
 
-                val result = TrainingResult(
-                    sampleCount = sampleCount,
-                    loss = loss,
-                    accuracy = accuracy,
-                    trainingTime = trainingTime,
-                    metrics = mapOf(
-                        "epochs" to trainingConfig.epochs.toDouble(),
-                        "batch_size" to trainingConfig.batchSize.toDouble(),
-                        "learning_rate" to trainingConfig.learningRate.toDouble(),
-                    ),
-                    updatedModelPath = updatedModelPath,
-                )
+                    val result =
+                        TrainingResult(
+                            sampleCount = sampleCount,
+                            loss = loss,
+                            accuracy = accuracy,
+                            trainingTime = trainingTime,
+                            metrics =
+                                mapOf(
+                                    "epochs" to trainingConfig.epochs.toDouble(),
+                                    "batch_size" to trainingConfig.batchSize.toDouble(),
+                                    "learning_rate" to trainingConfig.learningRate.toDouble(),
+                                ),
+                            updatedModelPath = updatedModelPath,
+                        )
 
-                Timber.i("Training completed: $sampleCount samples in ${String.format("%.2f", trainingTime)}s")
+                    Timber.i("Training completed: $sampleCount samples in ${String.format("%.2f", trainingTime)}s")
 
-                Result.success(result)
-            } catch (e: Exception) {
-                Timber.e(e, "Training failed")
-                Result.failure(e)
+                    Result.success(result)
+                } catch (e: Exception) {
+                    Timber.e(e, "Training failed")
+                    Result.failure(e)
+                }
             }
         }
-    }
 
     /**
      * Extracts weight updates from a trained model.
@@ -342,73 +350,78 @@ class TFLiteTrainer(
      * @param trainingResult Result from training
      * @return Weight update for upload
      */
-    suspend fun extractWeightUpdate(
-        trainingResult: TrainingResult,
-    ): Result<WeightUpdate> = withContext(ioDispatcher) {
-        try {
-            val model = currentModel
-                ?: return@withContext Result.failure(
-                    IllegalStateException("No model loaded")
-                )
+    suspend fun extractWeightUpdate(trainingResult: TrainingResult): Result<WeightUpdate> =
+        withContext(ioDispatcher) {
+            try {
+                val model =
+                    currentModel
+                        ?: return@withContext Result.failure(
+                            IllegalStateException("No model loaded"),
+                        )
 
-            val updatedPath = updatedModelPath
-                ?: return@withContext Result.failure(
-                    IllegalStateException("No training session available. Train the model first.")
-                )
+                val updatedPath =
+                    updatedModelPath
+                        ?: return@withContext Result.failure(
+                            IllegalStateException("No training session available. Train the model first."),
+                        )
 
-            Timber.i("Extracting weight updates...")
+                Timber.i("Extracting weight updates...")
 
-            // Try to extract weight delta
-            var weightsData: ByteArray
-            var updateFormat: String
+                // Try to extract weight delta
+                var weightsData: ByteArray
+                var updateFormat: String
 
-            if (originalModelPath != null) {
-                // Try delta extraction first
-                try {
-                    weightsData = weightExtractor.extractWeightDelta(
-                        originalModelPath = originalModelPath!!,
-                        updatedModelPath = updatedPath,
-                    )
-                    updateFormat = "delta"
+                if (originalModelPath != null) {
+                    // Try delta extraction first
+                    try {
+                        weightsData =
+                            weightExtractor.extractWeightDelta(
+                                originalModelPath = originalModelPath!!,
+                                updatedModelPath = updatedPath,
+                            )
+                        updateFormat = "delta"
 
-                    Timber.i("Successfully extracted weight delta")
-                } catch (e: Exception) {
-                    // Fall back to full weights if delta extraction fails
-                    Timber.w(e, "Delta extraction failed, falling back to full weights")
+                        Timber.i("Successfully extracted weight delta")
+                    } catch (e: Exception) {
+                        // Fall back to full weights if delta extraction fails
+                        Timber.w(e, "Delta extraction failed, falling back to full weights")
 
-                    weightsData = weightExtractor.extractFullWeights(
-                        modelPath = updatedPath,
-                    )
+                        weightsData =
+                            weightExtractor.extractFullWeights(
+                                modelPath = updatedPath,
+                            )
+                        updateFormat = "weights"
+                    }
+                } else {
+                    // No original model path, extract full weights
+                    weightsData =
+                        weightExtractor.extractFullWeights(
+                            modelPath = updatedPath,
+                        )
                     updateFormat = "weights"
                 }
-            } else {
-                // No original model path, extract full weights
-                weightsData = weightExtractor.extractFullWeights(
-                    modelPath = updatedPath,
-                )
-                updateFormat = "weights"
+
+                // Add update format to metrics
+                val metrics = trainingResult.metrics.toMutableMap()
+                metrics["update_format"] = if (updateFormat == "delta") 1.0 else 0.0
+
+                Timber.i("Weight extraction completed: ${weightsData.size} bytes ($updateFormat)")
+
+                val weightUpdate =
+                    WeightUpdate(
+                        modelId = model.modelId,
+                        version = model.version,
+                        weightsData = weightsData,
+                        sampleCount = trainingResult.sampleCount,
+                        metrics = metrics,
+                    )
+
+                Result.success(weightUpdate)
+            } catch (e: Exception) {
+                Timber.e(e, "Weight extraction failed")
+                Result.failure(e)
             }
-
-            // Add update format to metrics
-            val metrics = trainingResult.metrics.toMutableMap()
-            metrics["update_format"] = if (updateFormat == "delta") 1.0 else 0.0
-
-            Timber.i("Weight extraction completed: ${weightsData.size} bytes ($updateFormat)")
-
-            val weightUpdate = WeightUpdate(
-                modelId = model.modelId,
-                version = model.version,
-                weightsData = weightsData,
-                sampleCount = trainingResult.sampleCount,
-                metrics = metrics,
-            )
-
-            Result.success(weightUpdate)
-        } catch (e: Exception) {
-            Timber.e(e, "Weight extraction failed")
-            Result.failure(e)
         }
-    }
 
     // =========================================================================
     // GPU Support
@@ -417,15 +430,14 @@ class TFLiteTrainer(
     /**
      * Check if GPU acceleration is supported on this device.
      */
-    fun isGpuSupported(): Boolean {
-        return try {
+    fun isGpuSupported(): Boolean =
+        try {
             val compatList = CompatibilityList()
             compatList.isDelegateSupportedOnThisDevice
         } catch (e: Exception) {
             Timber.w(e, "Failed to check GPU support")
             false
         }
-    }
 
     /**
      * Check if GPU delegate is currently active.
@@ -464,11 +476,10 @@ class TFLiteTrainer(
     // Private Helpers
     // =========================================================================
 
-    private fun loadModelFile(file: File): MappedByteBuffer {
-        return file.inputStream().channel.use { channel ->
+    private fun loadModelFile(file: File): MappedByteBuffer =
+        file.inputStream().channel.use { channel ->
             channel.map(FileChannel.MapMode.READ_ONLY, 0, channel.size())
         }
-    }
 
     private fun extractTensorInfo() {
         val interp = interpreter ?: return
@@ -513,7 +524,10 @@ class TFLiteTrainer(
         return buffer
     }
 
-    private fun extractOutput(buffer: ByteBuffer, inferenceTimeMs: Long): InferenceOutput {
+    private fun extractOutput(
+        buffer: ByteBuffer,
+        inferenceTimeMs: Long,
+    ): InferenceOutput {
         buffer.rewind()
         val outputSize = getOutputSize()
         val outputData = FloatArray(outputSize)

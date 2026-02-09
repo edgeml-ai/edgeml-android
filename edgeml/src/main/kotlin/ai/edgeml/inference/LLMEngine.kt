@@ -24,31 +24,34 @@ class LLMEngine(
     private val maxTokens: Int = 512,
     private val temperature: Float = 0.7f,
 ) : StreamingInferenceEngine {
+    override fun generate(
+        input: Any,
+        modality: Modality,
+    ): Flow<InferenceChunk> =
+        flow {
+            val prompt = input.toString()
 
-    override fun generate(input: Any, modality: Modality): Flow<InferenceChunk> = flow {
-        val prompt = input.toString()
+            // In production: use MediaPipe LlmInference for token streaming.
+            // Placeholder implementation for interface demonstration.
+            val response = "Generated response for: ${prompt.take(30)}..."
+            val tokens = response.split(" ")
 
-        // In production: use MediaPipe LlmInference for token streaming.
-        // Placeholder implementation for interface demonstration.
-        val response = "Generated response for: ${prompt.take(30)}..."
-        val tokens = response.split(" ")
+            for ((index, token) in tokens.withIndex()) {
+                if (index >= maxTokens) break
 
-        for ((index, token) in tokens.withIndex()) {
-            if (index >= maxTokens) break
-
-            val data = "$token ".toByteArray(Charsets.UTF_8)
-            emit(
-                InferenceChunk(
-                    index = index,
-                    data = data,
-                    modality = Modality.TEXT,
-                    timestamp = System.currentTimeMillis(),
-                    latencyMs = 0.0, // filled by timing wrapper
+                val data = "$token ".toByteArray(Charsets.UTF_8)
+                emit(
+                    InferenceChunk(
+                        index = index,
+                        data = data,
+                        modality = Modality.TEXT,
+                        timestamp = System.currentTimeMillis(),
+                        latencyMs = 0.0, // filled by timing wrapper
+                    ),
                 )
-            )
 
-            // Simulate per-token latency
-            delay(5)
+                // Simulate per-token latency
+                delay(5)
+            }
         }
-    }
 }

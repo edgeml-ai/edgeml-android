@@ -11,12 +11,12 @@ import kotlin.test.assertTrue
  * Tests JSON serialization/deserialization roundtrips for all API DTOs.
  */
 class ApiDtoSerializationTest {
-
-    private val json = Json {
-        ignoreUnknownKeys = true
-        encodeDefaults = true
-        explicitNulls = false
-    }
+    private val json =
+        Json {
+            ignoreUnknownKeys = true
+            encodeDefaults = true
+            explicitNulls = false
+        }
 
     // =========================================================================
     // DeviceRegistrationRequest
@@ -24,12 +24,13 @@ class ApiDtoSerializationTest {
 
     @Test
     fun `DeviceRegistrationRequest serializes required fields`() {
-        val request = DeviceRegistrationRequest(
-            deviceIdentifier = "device-1",
-            orgId = "org-1",
-            osVersion = "Android 14",
-            sdkVersion = "1.0.0",
-        )
+        val request =
+            DeviceRegistrationRequest(
+                deviceIdentifier = "device-1",
+                orgId = "org-1",
+                osVersion = "Android 14",
+                sdkVersion = "1.0.0",
+            )
 
         val serialized = json.encodeToString(request)
         val deserialized = json.decodeFromString<DeviceRegistrationRequest>(serialized)
@@ -43,24 +44,26 @@ class ApiDtoSerializationTest {
 
     @Test
     fun `DeviceRegistrationRequest serializes optional fields`() {
-        val request = DeviceRegistrationRequest(
-            deviceIdentifier = "device-1",
-            orgId = "org-1",
-            osVersion = "Android 14",
-            sdkVersion = "1.0.0",
-            manufacturer = "Google",
-            model = "Pixel 8",
-            locale = "en_US",
-            region = "us",
-            appVersion = "2.0.0",
-            capabilities = DeviceCapabilities(
-                cpuArchitecture = "arm64-v8a",
-                gpuAvailable = true,
-                nnapiAvailable = true,
-                totalMemoryMb = 8192,
-                availableStorageMb = 50000,
-            ),
-        )
+        val request =
+            DeviceRegistrationRequest(
+                deviceIdentifier = "device-1",
+                orgId = "org-1",
+                osVersion = "Android 14",
+                sdkVersion = "1.0.0",
+                manufacturer = "Google",
+                model = "Pixel 8",
+                locale = "en_US",
+                region = "us",
+                appVersion = "2.0.0",
+                capabilities =
+                    DeviceCapabilities(
+                        cpuArchitecture = "arm64-v8a",
+                        gpuAvailable = true,
+                        nnapiAvailable = true,
+                        totalMemoryMb = 8192,
+                        availableStorageMb = 50000,
+                    ),
+            )
 
         val serialized = json.encodeToString(request)
         val deserialized = json.decodeFromString<DeviceRegistrationRequest>(serialized)
@@ -77,12 +80,13 @@ class ApiDtoSerializationTest {
 
     @Test
     fun `DeviceRegistrationRequest defaults platform to android`() {
-        val request = DeviceRegistrationRequest(
-            deviceIdentifier = "d1",
-            orgId = "o1",
-            osVersion = "14",
-            sdkVersion = "1.0",
-        )
+        val request =
+            DeviceRegistrationRequest(
+                deviceIdentifier = "d1",
+                orgId = "o1",
+                osVersion = "14",
+                sdkVersion = "1.0",
+            )
         assertEquals("android", request.platform)
     }
 
@@ -92,16 +96,17 @@ class ApiDtoSerializationTest {
 
     @Test
     fun `DeviceRegistrationResponse roundtrips correctly`() {
-        val response = DeviceRegistrationResponse(
-            id = "uuid-1",
-            deviceIdentifier = "device-1",
-            orgId = "org-1",
-            platform = "android",
-            status = "active",
-            createdAt = "2024-01-01T00:00:00Z",
-            updatedAt = "2024-01-01T00:00:00Z",
-            apiToken = "token-123",
-        )
+        val response =
+            DeviceRegistrationResponse(
+                id = "uuid-1",
+                deviceIdentifier = "device-1",
+                orgId = "org-1",
+                platform = "android",
+                status = "active",
+                createdAt = "2024-01-01T00:00:00Z",
+                updatedAt = "2024-01-01T00:00:00Z",
+                apiToken = "token-123",
+            )
 
         val serialized = json.encodeToString(response)
         val deserialized = json.decodeFromString<DeviceRegistrationResponse>(serialized)
@@ -113,7 +118,8 @@ class ApiDtoSerializationTest {
 
     @Test
     fun `DeviceRegistrationResponse handles null optional fields`() {
-        val jsonStr = """
+        val jsonStr =
+            """
             {
                 "id": "uuid-1",
                 "device_identifier": "device-1",
@@ -123,7 +129,7 @@ class ApiDtoSerializationTest {
                 "created_at": "2024-01-01T00:00:00Z",
                 "updated_at": "2024-01-01T00:00:00Z"
             }
-        """.trimIndent()
+            """.trimIndent()
 
         val response = json.decodeFromString<DeviceRegistrationResponse>(jsonStr)
         assertNull(response.manufacturer)
@@ -137,16 +143,17 @@ class ApiDtoSerializationTest {
 
     @Test
     fun `HeartbeatRequest roundtrips with all fields`() {
-        val request = HeartbeatRequest(
-            sdkVersion = "1.0.0",
-            osVersion = "Android 14",
-            appVersion = "2.0.0",
-            batteryLevel = 85,
-            isCharging = true,
-            availableStorageMb = 50000,
-            availableMemoryMb = 4096,
-            networkType = "wifi",
-        )
+        val request =
+            HeartbeatRequest(
+                sdkVersion = "1.0.0",
+                osVersion = "Android 14",
+                appVersion = "2.0.0",
+                batteryLevel = 85,
+                isCharging = true,
+                availableStorageMb = 50000,
+                availableMemoryMb = 4096,
+                networkType = "wifi",
+            )
 
         val serialized = json.encodeToString(request)
         val deserialized = json.decodeFromString<HeartbeatRequest>(serialized)
@@ -159,10 +166,11 @@ class ApiDtoSerializationTest {
 
     @Test
     fun `HeartbeatResponse roundtrips correctly`() {
-        val response = HeartbeatResponse(
-            acknowledged = true,
-            serverTime = "2024-01-01T12:00:00Z",
-        )
+        val response =
+            HeartbeatResponse(
+                acknowledged = true,
+                serverTime = "2024-01-01T12:00:00Z",
+            )
 
         val serialized = json.encodeToString(response)
         val deserialized = json.decodeFromString<HeartbeatResponse>(serialized)
@@ -177,17 +185,18 @@ class ApiDtoSerializationTest {
 
     @Test
     fun `DeviceGroup roundtrips correctly`() {
-        val group = DeviceGroup(
-            id = "group-1",
-            name = "beta-testers",
-            description = "Beta testing group",
-            groupType = "manual",
-            isActive = true,
-            deviceCount = 42,
-            tags = listOf("beta", "internal"),
-            createdAt = "2024-01-01T00:00:00Z",
-            updatedAt = "2024-01-01T00:00:00Z",
-        )
+        val group =
+            DeviceGroup(
+                id = "group-1",
+                name = "beta-testers",
+                description = "Beta testing group",
+                groupType = "manual",
+                isActive = true,
+                deviceCount = 42,
+                tags = listOf("beta", "internal"),
+                createdAt = "2024-01-01T00:00:00Z",
+                updatedAt = "2024-01-01T00:00:00Z",
+            )
 
         val serialized = json.encodeToString(group)
         val deserialized = json.decodeFromString<DeviceGroup>(serialized)
@@ -200,12 +209,14 @@ class ApiDtoSerializationTest {
 
     @Test
     fun `DeviceGroupsResponse roundtrips correctly`() {
-        val response = DeviceGroupsResponse(
-            groups = listOf(
-                DeviceGroup("g1", "group1", null, "manual", true, 10, null, "2024-01-01T00:00:00Z", "2024-01-01T00:00:00Z"),
-            ),
-            count = 1,
-        )
+        val response =
+            DeviceGroupsResponse(
+                groups =
+                    listOf(
+                        DeviceGroup("g1", "group1", null, "manual", true, 10, null, "2024-01-01T00:00:00Z", "2024-01-01T00:00:00Z"),
+                    ),
+                count = 1,
+            )
 
         val serialized = json.encodeToString(response)
         val deserialized = json.decodeFromString<DeviceGroupsResponse>(serialized)
@@ -220,14 +231,15 @@ class ApiDtoSerializationTest {
 
     @Test
     fun `GroupMembership roundtrips correctly`() {
-        val membership = GroupMembership(
-            id = "m1",
-            deviceId = "d1",
-            groupId = "g1",
-            groupName = "beta",
-            membershipType = "manual",
-            createdAt = "2024-01-01T00:00:00Z",
-        )
+        val membership =
+            GroupMembership(
+                id = "m1",
+                deviceId = "d1",
+                groupId = "g1",
+                groupName = "beta",
+                membershipType = "manual",
+                createdAt = "2024-01-01T00:00:00Z",
+            )
 
         val serialized = json.encodeToString(membership)
         val deserialized = json.decodeFromString<GroupMembership>(serialized)
@@ -239,12 +251,14 @@ class ApiDtoSerializationTest {
 
     @Test
     fun `GroupMembershipsResponse roundtrips correctly`() {
-        val response = GroupMembershipsResponse(
-            memberships = listOf(
-                GroupMembership("m1", "d1", "g1", "beta", "manual", "2024-01-01T00:00:00Z"),
-            ),
-            count = 1,
-        )
+        val response =
+            GroupMembershipsResponse(
+                memberships =
+                    listOf(
+                        GroupMembership("m1", "d1", "g1", "beta", "manual", "2024-01-01T00:00:00Z"),
+                    ),
+                count = 1,
+            )
 
         val serialized = json.encodeToString(response)
         val deserialized = json.decodeFromString<GroupMembershipsResponse>(serialized)
@@ -259,13 +273,14 @@ class ApiDtoSerializationTest {
 
     @Test
     fun `VersionResolutionResponse roundtrips with optional fields`() {
-        val response = VersionResolutionResponse(
-            version = "2.0.0",
-            source = "rollout",
-            experimentId = "exp-1",
-            rolloutId = 42,
-            deviceBucket = 73,
-        )
+        val response =
+            VersionResolutionResponse(
+                version = "2.0.0",
+                source = "rollout",
+                experimentId = "exp-1",
+                rolloutId = 42,
+                deviceBucket = 73,
+            )
 
         val serialized = json.encodeToString(response)
         val deserialized = json.decodeFromString<VersionResolutionResponse>(serialized)
@@ -294,17 +309,18 @@ class ApiDtoSerializationTest {
 
     @Test
     fun `ModelResponse roundtrips correctly`() {
-        val response = ModelResponse(
-            id = "model-1",
-            orgId = "org-1",
-            name = "my-model",
-            framework = "tensorflow_lite",
-            useCase = "classification",
-            description = "A test model",
-            versionCount = 3,
-            createdAt = "2024-01-01T00:00:00Z",
-            updatedAt = "2024-01-01T00:00:00Z",
-        )
+        val response =
+            ModelResponse(
+                id = "model-1",
+                orgId = "org-1",
+                name = "my-model",
+                framework = "tensorflow_lite",
+                useCase = "classification",
+                description = "A test model",
+                versionCount = 3,
+                createdAt = "2024-01-01T00:00:00Z",
+                updatedAt = "2024-01-01T00:00:00Z",
+            )
 
         val serialized = json.encodeToString(response)
         val deserialized = json.decodeFromString<ModelResponse>(serialized)
@@ -316,19 +332,20 @@ class ApiDtoSerializationTest {
 
     @Test
     fun `ModelVersionResponse roundtrips with metrics`() {
-        val response = ModelVersionResponse(
-            id = "v1",
-            modelId = "m1",
-            version = "1.0.0",
-            status = "published",
-            storagePath = "s3://bucket/model.tflite",
-            format = "tensorflow_lite",
-            checksum = "abc123",
-            sizeBytes = 1_000_000,
-            metrics = mapOf("accuracy" to 0.95, "f1" to 0.92),
-            createdAt = "2024-01-01T00:00:00Z",
-            updatedAt = "2024-01-01T00:00:00Z",
-        )
+        val response =
+            ModelVersionResponse(
+                id = "v1",
+                modelId = "m1",
+                version = "1.0.0",
+                status = "published",
+                storagePath = "s3://bucket/model.tflite",
+                format = "tensorflow_lite",
+                checksum = "abc123",
+                sizeBytes = 1_000_000,
+                metrics = mapOf("accuracy" to 0.95, "f1" to 0.92),
+                createdAt = "2024-01-01T00:00:00Z",
+                updatedAt = "2024-01-01T00:00:00Z",
+            )
 
         val serialized = json.encodeToString(response)
         val deserialized = json.decodeFromString<ModelVersionResponse>(serialized)
@@ -340,12 +357,13 @@ class ApiDtoSerializationTest {
 
     @Test
     fun `ModelDownloadResponse roundtrips correctly`() {
-        val response = ModelDownloadResponse(
-            downloadUrl = "https://cdn.example.com/model.tflite",
-            expiresAt = "2024-01-01T01:00:00Z",
-            checksum = "sha256:abc123",
-            sizeBytes = 5_000_000,
-        )
+        val response =
+            ModelDownloadResponse(
+                downloadUrl = "https://cdn.example.com/model.tflite",
+                expiresAt = "2024-01-01T01:00:00Z",
+                checksum = "sha256:abc123",
+                sizeBytes = 5_000_000,
+            )
 
         val serialized = json.encodeToString(response)
         val deserialized = json.decodeFromString<ModelDownloadResponse>(serialized)
@@ -360,15 +378,16 @@ class ApiDtoSerializationTest {
 
     @Test
     fun `TrainingEventRequest roundtrips correctly`() {
-        val request = TrainingEventRequest(
-            deviceId = "d1",
-            modelId = "m1",
-            version = "1.0",
-            eventType = "training_completed",
-            timestamp = "2024-01-01T00:00:00Z",
-            metrics = mapOf("loss" to 0.1),
-            metadata = mapOf("tag" to "experiment-1"),
-        )
+        val request =
+            TrainingEventRequest(
+                deviceId = "d1",
+                modelId = "m1",
+                version = "1.0",
+                eventType = "training_completed",
+                timestamp = "2024-01-01T00:00:00Z",
+                metrics = mapOf("loss" to 0.1),
+                metadata = mapOf("tag" to "experiment-1"),
+            )
 
         val serialized = json.encodeToString(request)
         val deserialized = json.decodeFromString<TrainingEventRequest>(serialized)
@@ -380,20 +399,22 @@ class ApiDtoSerializationTest {
 
     @Test
     fun `GradientUpdateRequest roundtrips correctly`() {
-        val request = GradientUpdateRequest(
-            deviceId = "d1",
-            modelId = "m1",
-            version = "1.0",
-            roundId = "round-1",
-            numSamples = 100,
-            trainingTimeMs = 5000,
-            metrics = TrainingMetrics(
-                loss = 0.05,
-                accuracy = 0.98,
-                numBatches = 4,
-                learningRate = 0.001,
-            ),
-        )
+        val request =
+            GradientUpdateRequest(
+                deviceId = "d1",
+                modelId = "m1",
+                version = "1.0",
+                roundId = "round-1",
+                numSamples = 100,
+                trainingTimeMs = 5000,
+                metrics =
+                    TrainingMetrics(
+                        loss = 0.05,
+                        accuracy = 0.98,
+                        numBatches = 4,
+                        learningRate = 0.001,
+                    ),
+            )
 
         val serialized = json.encodeToString(request)
         val deserialized = json.decodeFromString<GradientUpdateRequest>(serialized)
@@ -406,11 +427,12 @@ class ApiDtoSerializationTest {
 
     @Test
     fun `GradientUpdateResponse roundtrips correctly`() {
-        val response = GradientUpdateResponse(
-            accepted = true,
-            roundId = "round-1",
-            message = "Weights accepted",
-        )
+        val response =
+            GradientUpdateResponse(
+                accepted = true,
+                roundId = "round-1",
+                message = "Weights accepted",
+            )
 
         val serialized = json.encodeToString(response)
         val deserialized = json.decodeFromString<GradientUpdateResponse>(serialized)
@@ -425,13 +447,14 @@ class ApiDtoSerializationTest {
 
     @Test
     fun `TrainingMetrics roundtrips with custom metrics`() {
-        val metrics = TrainingMetrics(
-            loss = 0.1,
-            accuracy = 0.95,
-            numBatches = 10,
-            learningRate = 0.001,
-            customMetrics = mapOf("precision" to 0.93, "recall" to 0.91),
-        )
+        val metrics =
+            TrainingMetrics(
+                loss = 0.1,
+                accuracy = 0.95,
+                numBatches = 10,
+                learningRate = 0.001,
+                customMetrics = mapOf("precision" to 0.93, "recall" to 0.91),
+            )
 
         val serialized = json.encodeToString(metrics)
         val deserialized = json.decodeFromString<TrainingMetrics>(serialized)
@@ -447,16 +470,17 @@ class ApiDtoSerializationTest {
 
     @Test
     fun `InferenceEventRequest roundtrips correctly`() {
-        val request = InferenceEventRequest(
-            deviceId = "d1",
-            modelId = "m1",
-            version = "1.0",
-            modality = "text",
-            sessionId = "session-1",
-            eventType = "generation_started",
-            timestampMs = 1706745600000,
-            orgId = "org-1",
-        )
+        val request =
+            InferenceEventRequest(
+                deviceId = "d1",
+                modelId = "m1",
+                version = "1.0",
+                modality = "text",
+                sessionId = "session-1",
+                eventType = "generation_started",
+                timestampMs = 1706745600000,
+                orgId = "org-1",
+            )
 
         val serialized = json.encodeToString(request)
         val deserialized = json.decodeFromString<InferenceEventRequest>(serialized)
@@ -468,14 +492,15 @@ class ApiDtoSerializationTest {
 
     @Test
     fun `InferenceEventMetrics roundtrips correctly`() {
-        val metrics = InferenceEventMetrics(
-            ttfcMs = 50.0,
-            chunkIndex = 5,
-            chunkLatencyMs = 10.0,
-            totalChunks = 100,
-            totalDurationMs = 1000.0,
-            throughput = 100.0,
-        )
+        val metrics =
+            InferenceEventMetrics(
+                ttfcMs = 50.0,
+                chunkIndex = 5,
+                chunkLatencyMs = 10.0,
+                totalChunks = 100,
+                totalDurationMs = 1000.0,
+                throughput = 100.0,
+            )
 
         val serialized = json.encodeToString(metrics)
         val deserialized = json.decodeFromString<InferenceEventMetrics>(serialized)
@@ -487,10 +512,11 @@ class ApiDtoSerializationTest {
 
     @Test
     fun `InferenceEventResponse roundtrips correctly`() {
-        val response = InferenceEventResponse(
-            status = "accepted",
-            sessionId = "session-1",
-        )
+        val response =
+            InferenceEventResponse(
+                status = "accepted",
+                sessionId = "session-1",
+            )
 
         val serialized = json.encodeToString(response)
         val deserialized = json.decodeFromString<InferenceEventResponse>(serialized)
@@ -505,12 +531,13 @@ class ApiDtoSerializationTest {
 
     @Test
     fun `DevicePolicyResponse roundtrips correctly`() {
-        val policy = DevicePolicyResponse(
-            batteryThreshold = 30,
-            networkPolicy = "wifi_only",
-            samplingPolicy = "random_10_percent",
-            trainingWindow = "02:00-06:00",
-        )
+        val policy =
+            DevicePolicyResponse(
+                batteryThreshold = 30,
+                networkPolicy = "wifi_only",
+                samplingPolicy = "random_10_percent",
+                trainingWindow = "02:00-06:00",
+            )
 
         val serialized = json.encodeToString(policy)
         val deserialized = json.decodeFromString<DevicePolicyResponse>(serialized)
@@ -549,11 +576,12 @@ class ApiDtoSerializationTest {
 
     @Test
     fun `HealthResponse roundtrips correctly`() {
-        val response = HealthResponse(
-            status = "healthy",
-            version = "1.0.0",
-            timestamp = "2024-01-01T00:00:00Z",
-        )
+        val response =
+            HealthResponse(
+                status = "healthy",
+                version = "1.0.0",
+                timestamp = "2024-01-01T00:00:00Z",
+            )
 
         val serialized = json.encodeToString(response)
         val deserialized = json.decodeFromString<HealthResponse>(serialized)
@@ -577,12 +605,13 @@ class ApiDtoSerializationTest {
 
     @Test
     fun `AssignmentRequest roundtrips with custom values`() {
-        val request = AssignmentRequest(
-            version = "2.0.0",
-            experimentId = "exp-1",
-            variant = "treatment",
-            assignmentReason = "manual_override",
-        )
+        val request =
+            AssignmentRequest(
+                version = "2.0.0",
+                experimentId = "exp-1",
+                variant = "treatment",
+                assignmentReason = "manual_override",
+            )
 
         val serialized = json.encodeToString(request)
         val deserialized = json.decodeFromString<AssignmentRequest>(serialized)
@@ -598,13 +627,14 @@ class ApiDtoSerializationTest {
 
     @Test
     fun `deserialization ignores unknown fields`() {
-        val jsonStr = """
+        val jsonStr =
+            """
             {
                 "acknowledged": true,
                 "server_time": "2024-01-01T00:00:00Z",
                 "extra_field": "should_be_ignored"
             }
-        """.trimIndent()
+            """.trimIndent()
 
         val response = json.decodeFromString<HeartbeatResponse>(jsonStr)
         assertTrue(response.acknowledged)

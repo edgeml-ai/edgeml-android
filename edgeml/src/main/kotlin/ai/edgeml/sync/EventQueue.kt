@@ -32,22 +32,22 @@ class EventQueue private constructor(
         @Volatile
         private var instance: EventQueue? = null
 
-        fun getInstance(context: Context): EventQueue {
-            return instance ?: synchronized(this) {
+        fun getInstance(context: Context): EventQueue =
+            instance ?: synchronized(this) {
                 instance ?: createInstance(context.applicationContext).also {
                     instance = it
                 }
             }
-        }
 
         private fun createInstance(context: Context): EventQueue {
             val queueDir = File(context.filesDir, QUEUE_DIR_NAME)
             queueDir.mkdirs()
 
-            val json = Json {
-                ignoreUnknownKeys = true
-                encodeDefaults = true
-            }
+            val json =
+                Json {
+                    ignoreUnknownKeys = true
+                    encodeDefaults = true
+                }
 
             return EventQueue(queueDir, json, Dispatchers.IO)
         }
@@ -59,33 +59,36 @@ class EventQueue private constructor(
      * @param event The queued event to add
      * @return True if added successfully
      */
-    suspend fun addEvent(event: QueuedEvent): Boolean = withContext(ioDispatcher) {
-        mutex.withLock {
-            try {
-                // Check queue size
-                val existingEvents = queueDir.listFiles()?.size ?: 0
-                if (existingEvents >= maxQueueSize) {
-                    // Remove oldest event
-                    val oldest = queueDir.listFiles()
-                        ?.minByOrNull { it.lastModified() }
-                    if (oldest?.delete() == false) {
-                        Timber.w("Failed to delete oldest event file: ${oldest.name}")
+    suspend fun addEvent(event: QueuedEvent): Boolean =
+        withContext(ioDispatcher) {
+            mutex.withLock {
+                try {
+                    // Check queue size
+                    val existingEvents = queueDir.listFiles()?.size ?: 0
+                    if (existingEvents >= maxQueueSize) {
+                        // Remove oldest event
+                        val oldest =
+                            queueDir
+                                .listFiles()
+                                ?.minByOrNull { it.lastModified() }
+                        if (oldest?.delete() == false) {
+                            Timber.w("Failed to delete oldest event file: ${oldest.name}")
+                        }
                     }
+
+                    // Write event to file
+                    val eventFile = File(queueDir, "${event.id}.json")
+                    val jsonString = json.encodeToString(event)
+                    eventFile.writeText(jsonString)
+
+                    Timber.d("Event queued: ${event.id}")
+                    true
+                } catch (e: Exception) {
+                    Timber.e(e, "Failed to queue event")
+                    false
                 }
-
-                // Write event to file
-                val eventFile = File(queueDir, "${event.id}.json")
-                val jsonString = json.encodeToString(event)
-                eventFile.writeText(jsonString)
-
-                Timber.d("Event queued: ${event.id}")
-                true
-            } catch (e: Exception) {
-                Timber.e(e, "Failed to queue event")
-                false
             }
         }
-    }
 
     /**
      * Add a simple training event.
@@ -95,82 +98,87 @@ class EventQueue private constructor(
         metrics: Map<String, Double>? = null,
         metadata: Map<String, String>? = null,
     ): Boolean {
-        val event = QueuedEvent(
-            id = UUID.randomUUID().toString(),
-            type = type,
-            timestamp = System.currentTimeMillis(),
-            metrics = metrics,
-            metadata = metadata,
-        )
+        val event =
+            QueuedEvent(
+                id = UUID.randomUUID().toString(),
+                type = type,
+                timestamp = System.currentTimeMillis(),
+                metrics = metrics,
+                metadata = metadata,
+            )
         return addEvent(event)
     }
 
     /**
      * Get all pending events.
      */
-    suspend fun getPendingEvents(): List<QueuedEvent> = withContext(ioDispatcher) {
-        mutex.withLock {
-            try {
-                queueDir.listFiles()
-                    ?.filter { it.extension == "json" }
-                    ?.mapNotNull { file ->
-                        try {
-                            json.decodeFromString<QueuedEvent>(file.readText())
-                        } catch (e: Exception) {
-                            Timber.w(e, "Failed to parse event file: ${file.name}")
-                            null
-                        }
-                    }
-                    ?.sortedBy { it.timestamp }
-                    ?: emptyList()
-            } catch (e: Exception) {
-                Timber.e(e, "Failed to read event queue")
-                emptyList()
+    suspend fun getPendingEvents(): List<QueuedEvent> =
+        withContext(ioDispatcher) {
+            mutex.withLock {
+                try {
+                    queueDir
+                        .listFiles()
+                        ?.filter { it.extension == "json" }
+                        ?.mapNotNull { file ->
+                            try {
+                                json.decodeFromString<QueuedEvent>(file.readText())
+                            } catch (e: Exception) {
+                                Timber.w(e, "Failed to parse event file: ${file.name}")
+                                null
+                            }
+                        }?.sortedBy { it.timestamp }
+                        ?: emptyList()
+                } catch (e: Exception) {
+                    Timber.e(e, "Failed to read event queue")
+                    emptyList()
+                }
             }
         }
-    }
 
     /**
      * Remove an event from the queue.
      */
-    suspend fun removeEvent(eventId: String): Boolean = withContext(ioDispatcher) {
-        mutex.withLock {
-            try {
-                val eventFile = File(queueDir, "$eventId.json")
-                val deleted = eventFile.delete()
-                if (deleted) {
-                    Timber.d("Event removed: $eventId")
+    suspend fun removeEvent(eventId: String): Boolean =
+        withContext(ioDispatcher) {
+            mutex.withLock {
+                try {
+                    val eventFile = File(queueDir, "$eventId.json")
+                    val deleted = eventFile.delete()
+                    if (deleted) {
+                        Timber.d("Event removed: $eventId")
+                    }
+                    deleted
+                } catch (e: Exception) {
+                    Timber.e(e, "Failed to remove event $eventId")
+                    false
                 }
-                deleted
-            } catch (e: Exception) {
-                Timber.e(e, "Failed to remove event $eventId")
-                false
             }
         }
-    }
 
     /**
      * Get queue size.
      */
-    suspend fun getQueueSize(): Int = withContext(ioDispatcher) {
-        mutex.withLock {
-            queueDir.listFiles()?.count { it.extension == "json" } ?: 0
+    suspend fun getQueueSize(): Int =
+        withContext(ioDispatcher) {
+            mutex.withLock {
+                queueDir.listFiles()?.count { it.extension == "json" } ?: 0
+            }
         }
-    }
 
     /**
      * Clear all events from the queue.
      */
-    suspend fun clear() = withContext(ioDispatcher) {
-        mutex.withLock {
-            queueDir.listFiles()?.forEach { file ->
-                if (!file.delete()) {
-                    Timber.w("Failed to delete event file: ${file.name}")
+    suspend fun clear() =
+        withContext(ioDispatcher) {
+            mutex.withLock {
+                queueDir.listFiles()?.forEach { file ->
+                    if (!file.delete()) {
+                        Timber.w("Failed to delete event file: ${file.name}")
+                    }
                 }
+                Timber.d("Event queue cleared")
             }
-            Timber.d("Event queue cleared")
         }
-    }
 }
 
 /**
@@ -180,16 +188,12 @@ class EventQueue private constructor(
 data class QueuedEvent(
     /** Unique event ID */
     val id: String,
-
     /** Event type (e.g., "inference", "training_started", "training_completed") */
     val type: String,
-
     /** Event timestamp */
     val timestamp: Long,
-
     /** Numeric metrics */
     val metrics: Map<String, Double>? = null,
-
     /** String metadata */
     val metadata: Map<String, String>? = null,
 )

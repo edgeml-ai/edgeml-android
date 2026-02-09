@@ -9,7 +9,6 @@ import timber.log.Timber
  * Sample application demonstrating EdgeML SDK initialization.
  */
 class SampleApplication : Application() {
-
     override fun onCreate() {
         super.onCreate()
 
@@ -23,19 +22,22 @@ class SampleApplication : Application() {
     private fun initializeEdgeML() {
         // Build configuration
         // In production, these would come from secure storage or a config file
-        val config = EdgeMLConfig.Builder()
-            .serverUrl(SampleConfig.EDGEML_SERVER_URL)
-            .deviceAccessToken(SampleConfig.EDGEML_DEVICE_ACCESS_TOKEN)
-            .orgId(SampleConfig.EDGEML_ORG_ID)
-            .modelId(SampleConfig.EDGEML_MODEL_ID)
-            .debugMode(SampleConfig.DEBUG)
-            .enableGpuAcceleration(true)
-            .enableBackgroundSync(true)
-            .syncIntervalMinutes(60)
-            .build()
+        val config =
+            EdgeMLConfig
+                .Builder()
+                .serverUrl(SampleConfig.EDGEML_SERVER_URL)
+                .deviceAccessToken(SampleConfig.EDGEML_DEVICE_ACCESS_TOKEN)
+                .orgId(SampleConfig.EDGEML_ORG_ID)
+                .modelId(SampleConfig.EDGEML_MODEL_ID)
+                .debugMode(SampleConfig.DEBUG)
+                .enableGpuAcceleration(true)
+                .enableBackgroundSync(true)
+                .syncIntervalMinutes(60)
+                .build()
 
         // Create EdgeML client
-        EdgeMLClient.Builder(this)
+        EdgeMLClient
+            .Builder(this)
             .config(config)
             .build()
 

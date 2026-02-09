@@ -18,14 +18,14 @@ import java.util.concurrent.TimeUnit
  * and JSON serialization setup.
  */
 object EdgeMLApiFactory {
-
-    private val json = Json {
-        ignoreUnknownKeys = true
-        isLenient = true
-        encodeDefaults = true
-        explicitNulls = false
-        coerceInputValues = true
-    }
+    private val json =
+        Json {
+            ignoreUnknownKeys = true
+            isLenient = true
+            encodeDefaults = true
+            explicitNulls = false
+            coerceInputValues = true
+        }
 
     /**
      * Create a configured EdgeML API instance.
@@ -42,8 +42,9 @@ object EdgeMLApiFactory {
     /**
      * Create OkHttp client with interceptors and timeouts.
      */
-    private fun createOkHttpClient(config: EdgeMLConfig): OkHttpClient {
-        return OkHttpClient.Builder()
+    private fun createOkHttpClient(config: EdgeMLConfig): OkHttpClient =
+        OkHttpClient
+            .Builder()
             .connectTimeout(config.connectionTimeoutMs, TimeUnit.MILLISECONDS)
             .readTimeout(config.readTimeoutMs, TimeUnit.MILLISECONDS)
             .writeTimeout(config.writeTimeoutMs, TimeUnit.MILLISECONDS)
@@ -53,17 +54,19 @@ object EdgeMLApiFactory {
                 if (config.debugMode) {
                     addInterceptor(createLoggingInterceptor())
                 }
-            }
-            .retryOnConnectionFailure(true)
+            }.retryOnConnectionFailure(true)
             .build()
-    }
 
     /**
      * Create Retrofit instance with JSON converter.
      */
-    private fun createRetrofit(config: EdgeMLConfig, okHttpClient: OkHttpClient): Retrofit {
+    private fun createRetrofit(
+        config: EdgeMLConfig,
+        okHttpClient: OkHttpClient,
+    ): Retrofit {
         val contentType = "application/json".toMediaType()
-        return Retrofit.Builder()
+        return Retrofit
+            .Builder()
             .baseUrl(config.serverUrl + "/")
             .client(okHttpClient)
             .addConverterFactory(json.asConverterFactory(contentType))
@@ -73,40 +76,42 @@ object EdgeMLApiFactory {
     /**
      * Interceptor to add device access token authentication header.
      */
-    private fun createAuthInterceptor(config: EdgeMLConfig): Interceptor {
-        return Interceptor { chain ->
-            val request = chain.request().newBuilder()
-                .addHeader("Authorization", "Bearer ${config.deviceAccessToken}")
-                .addHeader("X-Org-Id", config.orgId)
-                .build()
+    private fun createAuthInterceptor(config: EdgeMLConfig): Interceptor =
+        Interceptor { chain ->
+            val request =
+                chain
+                    .request()
+                    .newBuilder()
+                    .addHeader("Authorization", "Bearer ${config.deviceAccessToken}")
+                    .addHeader("X-Org-Id", config.orgId)
+                    .build()
             chain.proceed(request)
         }
-    }
 
     /**
      * Interceptor to add User-Agent header.
      */
-    private fun createUserAgentInterceptor(): Interceptor {
-        return Interceptor { chain ->
-            val request = chain.request().newBuilder()
-                .addHeader(
-                    "User-Agent",
-                    "EdgeML-Android-SDK/${ai.edgeml.BuildConfig.EDGEML_VERSION} " +
-                        "(Android ${android.os.Build.VERSION.SDK_INT})"
-                )
-                .build()
+    private fun createUserAgentInterceptor(): Interceptor =
+        Interceptor { chain ->
+            val request =
+                chain
+                    .request()
+                    .newBuilder()
+                    .addHeader(
+                        "User-Agent",
+                        "EdgeML-Android-SDK/${ai.edgeml.BuildConfig.EDGEML_VERSION} " +
+                            "(Android ${android.os.Build.VERSION.SDK_INT})",
+                    ).build()
             chain.proceed(request)
         }
-    }
 
     /**
      * Logging interceptor for debug mode.
      */
-    private fun createLoggingInterceptor(): HttpLoggingInterceptor {
-        return HttpLoggingInterceptor { message ->
+    private fun createLoggingInterceptor(): HttpLoggingInterceptor =
+        HttpLoggingInterceptor { message ->
             Timber.tag("EdgeML-HTTP").d(message)
         }.apply {
             level = HttpLoggingInterceptor.Level.BODY
         }
-    }
 }

@@ -53,33 +53,42 @@ class SecureStorage private constructor(
          * @param useEncryption Whether to use EncryptedSharedPreferences (default: true)
          * @return SecureStorage instance
          */
-        fun getInstance(context: Context, useEncryption: Boolean = true): SecureStorage {
-            return instance ?: synchronized(this) {
+        fun getInstance(
+            context: Context,
+            useEncryption: Boolean = true,
+        ): SecureStorage =
+            instance ?: synchronized(this) {
                 instance ?: createInstance(context.applicationContext, useEncryption).also {
                     instance = it
                 }
             }
-        }
 
-        private fun createInstance(context: Context, useEncryption: Boolean): SecureStorage {
-            val prefs = if (useEncryption) {
-                createEncryptedPrefs(context)
-            } else {
-                context.getSharedPreferences(PREFS_FILE_NAME, Context.MODE_PRIVATE)
-            }
+        private fun createInstance(
+            context: Context,
+            useEncryption: Boolean,
+        ): SecureStorage {
+            val prefs =
+                if (useEncryption) {
+                    createEncryptedPrefs(context)
+                } else {
+                    context.getSharedPreferences(PREFS_FILE_NAME, Context.MODE_PRIVATE)
+                }
 
-            val json = Json {
-                ignoreUnknownKeys = true
-                encodeDefaults = true
-            }
+            val json =
+                Json {
+                    ignoreUnknownKeys = true
+                    encodeDefaults = true
+                }
 
             return SecureStorage(prefs, json, Dispatchers.IO)
         }
 
         private fun createEncryptedPrefs(context: Context): SharedPreferences {
-            val masterKey = MasterKey.Builder(context)
-                .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
-                .build()
+            val masterKey =
+                MasterKey
+                    .Builder(context)
+                    .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
+                    .build()
 
             return EncryptedSharedPreferences.create(
                 context,
@@ -105,7 +114,10 @@ class SecureStorage private constructor(
     /**
      * Store a string value securely.
      */
-    suspend fun putString(key: String, value: String) = withContext(ioDispatcher) {
+    suspend fun putString(
+        key: String,
+        value: String,
+    ) = withContext(ioDispatcher) {
         mutex.withLock {
             prefs.edit().putString(key, value).apply()
         }
@@ -114,16 +126,20 @@ class SecureStorage private constructor(
     /**
      * Retrieve a string value.
      */
-    suspend fun getString(key: String): String? = withContext(ioDispatcher) {
-        mutex.withLock {
-            prefs.getString(key, null)
+    suspend fun getString(key: String): String? =
+        withContext(ioDispatcher) {
+            mutex.withLock {
+                prefs.getString(key, null)
+            }
         }
-    }
 
     /**
      * Store a long value.
      */
-    suspend fun putLong(key: String, value: Long) = withContext(ioDispatcher) {
+    suspend fun putLong(
+        key: String,
+        value: Long,
+    ) = withContext(ioDispatcher) {
         mutex.withLock {
             prefs.edit().putLong(key, value).apply()
         }
@@ -132,16 +148,23 @@ class SecureStorage private constructor(
     /**
      * Retrieve a long value.
      */
-    suspend fun getLong(key: String, defaultValue: Long = 0L): Long = withContext(ioDispatcher) {
-        mutex.withLock {
-            prefs.getLong(key, defaultValue)
+    suspend fun getLong(
+        key: String,
+        defaultValue: Long = 0L,
+    ): Long =
+        withContext(ioDispatcher) {
+            mutex.withLock {
+                prefs.getLong(key, defaultValue)
+            }
         }
-    }
 
     /**
      * Store a boolean value.
      */
-    suspend fun putBoolean(key: String, value: Boolean) = withContext(ioDispatcher) {
+    suspend fun putBoolean(
+        key: String,
+        value: Boolean,
+    ) = withContext(ioDispatcher) {
         mutex.withLock {
             prefs.edit().putBoolean(key, value).apply()
         }
@@ -150,24 +173,35 @@ class SecureStorage private constructor(
     /**
      * Retrieve a boolean value.
      */
-    suspend fun getBoolean(key: String, defaultValue: Boolean = false): Boolean = withContext(ioDispatcher) {
-        mutex.withLock {
-            prefs.getBoolean(key, defaultValue)
+    suspend fun getBoolean(
+        key: String,
+        defaultValue: Boolean = false,
+    ): Boolean =
+        withContext(ioDispatcher) {
+            mutex.withLock {
+                prefs.getBoolean(key, defaultValue)
+            }
         }
-    }
 
     /**
      * Store a serializable object as JSON.
      */
     @PublishedApi
-    internal suspend fun <T> putObjectInternal(key: String, value: T, serializer: kotlinx.serialization.KSerializer<T>) = withContext(ioDispatcher) {
+    internal suspend fun <T> putObjectInternal(
+        key: String,
+        value: T,
+        serializer: kotlinx.serialization.KSerializer<T>,
+    ) = withContext(ioDispatcher) {
         mutex.withLock {
             val jsonString = json.encodeToString(serializer, value)
             prefs.edit().putString(key, jsonString).apply()
         }
     }
 
-    suspend inline fun <reified T> putObject(key: String, value: T) {
+    suspend inline fun <reified T> putObject(
+        key: String,
+        value: T,
+    ) {
         putObjectInternal(key, value, kotlinx.serialization.serializer())
     }
 
@@ -175,49 +209,54 @@ class SecureStorage private constructor(
      * Retrieve and deserialize an object from JSON.
      */
     @PublishedApi
-    internal suspend fun <T> getObjectInternal(key: String, serializer: kotlinx.serialization.KSerializer<T>): T? = withContext(ioDispatcher) {
-        mutex.withLock {
-            prefs.getString(key, null)?.let { jsonString ->
-                try {
-                    json.decodeFromString(serializer, jsonString)
-                } catch (e: Exception) {
-                    Timber.w(e, "Failed to deserialize object for key: $key")
-                    null
+    internal suspend fun <T> getObjectInternal(
+        key: String,
+        serializer: kotlinx.serialization.KSerializer<T>,
+    ): T? =
+        withContext(ioDispatcher) {
+            mutex.withLock {
+                prefs.getString(key, null)?.let { jsonString ->
+                    try {
+                        json.decodeFromString(serializer, jsonString)
+                    } catch (e: Exception) {
+                        Timber.w(e, "Failed to deserialize object for key: $key")
+                        null
+                    }
                 }
             }
         }
-    }
 
-    suspend inline fun <reified T> getObject(key: String): T? {
-        return getObjectInternal(key, kotlinx.serialization.serializer())
-    }
+    suspend inline fun <reified T> getObject(key: String): T? = getObjectInternal(key, kotlinx.serialization.serializer())
 
     /**
      * Remove a key from storage.
      */
-    suspend fun remove(key: String) = withContext(ioDispatcher) {
-        mutex.withLock {
-            prefs.edit().remove(key).apply()
+    suspend fun remove(key: String) =
+        withContext(ioDispatcher) {
+            mutex.withLock {
+                prefs.edit().remove(key).apply()
+            }
         }
-    }
 
     /**
      * Check if a key exists.
      */
-    suspend fun contains(key: String): Boolean = withContext(ioDispatcher) {
-        mutex.withLock {
-            prefs.contains(key)
+    suspend fun contains(key: String): Boolean =
+        withContext(ioDispatcher) {
+            mutex.withLock {
+                prefs.contains(key)
+            }
         }
-    }
 
     /**
      * Clear all stored data.
      */
-    suspend fun clear() = withContext(ioDispatcher) {
-        mutex.withLock {
-            prefs.edit().clear().apply()
+    suspend fun clear() =
+        withContext(ioDispatcher) {
+            mutex.withLock {
+                prefs.edit().clear().apply()
+            }
         }
-    }
 
     // =========================================================================
     // Device-Specific Convenience Methods

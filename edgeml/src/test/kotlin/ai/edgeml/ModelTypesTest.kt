@@ -1,8 +1,8 @@
 package ai.edgeml.models
 
+import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
-import org.junit.Rule
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNotEquals
@@ -12,28 +12,29 @@ import kotlin.test.assertTrue
  * Unit tests for model types.
  */
 class ModelTypesTest {
-
     @get:Rule
     val tempFolder = TemporaryFolder()
 
     @Test
     fun `InferenceOutput argmax returns correct index`() {
-        val output = InferenceOutput(
-            data = floatArrayOf(0.1f, 0.3f, 0.6f, 0.0f),
-            shape = intArrayOf(4),
-            inferenceTimeMs = 10,
-        )
+        val output =
+            InferenceOutput(
+                data = floatArrayOf(0.1f, 0.3f, 0.6f, 0.0f),
+                shape = intArrayOf(4),
+                inferenceTimeMs = 10,
+            )
 
         assertEquals(2, output.argmax())
     }
 
     @Test
     fun `InferenceOutput topK returns correct results`() {
-        val output = InferenceOutput(
-            data = floatArrayOf(0.1f, 0.6f, 0.2f, 0.1f),
-            shape = intArrayOf(4),
-            inferenceTimeMs = 10,
-        )
+        val output =
+            InferenceOutput(
+                data = floatArrayOf(0.1f, 0.6f, 0.2f, 0.1f),
+                shape = intArrayOf(4),
+                inferenceTimeMs = 10,
+            )
 
         val topK = output.topK(2)
         assertEquals(2, topK.size)
@@ -45,37 +46,40 @@ class ModelTypesTest {
 
     @Test
     fun `DownloadProgress calculates percentage correctly`() {
-        val progress = DownloadProgress(
-            modelId = "model-1",
-            version = "1.0.0",
-            bytesDownloaded = 500,
-            totalBytes = 1000,
-        )
+        val progress =
+            DownloadProgress(
+                modelId = "model-1",
+                version = "1.0.0",
+                bytesDownloaded = 500,
+                totalBytes = 1000,
+            )
 
         assertEquals(50, progress.progress)
     }
 
     @Test
     fun `DownloadProgress handles zero total bytes`() {
-        val progress = DownloadProgress(
-            modelId = "model-1",
-            version = "1.0.0",
-            bytesDownloaded = 500,
-            totalBytes = 0,
-        )
+        val progress =
+            DownloadProgress(
+                modelId = "model-1",
+                version = "1.0.0",
+                bytesDownloaded = 500,
+                totalBytes = 0,
+            )
 
         assertEquals(0, progress.progress)
     }
 
     @Test
     fun `CacheStats calculates usage correctly`() {
-        val stats = CacheStats(
-            modelCount = 2,
-            totalSizeBytes = 50 * 1024 * 1024L,
-            cacheSizeLimitBytes = 100 * 1024 * 1024L,
-            mostRecentModel = null,
-            models = emptyList(),
-        )
+        val stats =
+            CacheStats(
+                modelCount = 2,
+                totalSizeBytes = 50 * 1024 * 1024L,
+                cacheSizeLimitBytes = 100 * 1024 * 1024L,
+                mostRecentModel = null,
+                models = emptyList(),
+            )
 
         assertEquals(50, stats.usagePercent)
         assertEquals(50 * 1024 * 1024L, stats.availableBytes)
@@ -87,31 +91,34 @@ class ModelTypesTest {
 
     @Test
     fun `InferenceOutput argmax returns -1 for empty data`() {
-        val output = InferenceOutput(
-            data = floatArrayOf(),
-            shape = intArrayOf(0),
-            inferenceTimeMs = 0,
-        )
+        val output =
+            InferenceOutput(
+                data = floatArrayOf(),
+                shape = intArrayOf(0),
+                inferenceTimeMs = 0,
+            )
         assertEquals(-1, output.argmax())
     }
 
     @Test
     fun `InferenceOutput argmax returns 0 for single element`() {
-        val output = InferenceOutput(
-            data = floatArrayOf(0.5f),
-            shape = intArrayOf(1),
-            inferenceTimeMs = 1,
-        )
+        val output =
+            InferenceOutput(
+                data = floatArrayOf(0.5f),
+                shape = intArrayOf(1),
+                inferenceTimeMs = 1,
+            )
         assertEquals(0, output.argmax())
     }
 
     @Test
     fun `InferenceOutput topK with k greater than size returns all elements`() {
-        val output = InferenceOutput(
-            data = floatArrayOf(0.3f, 0.7f),
-            shape = intArrayOf(2),
-            inferenceTimeMs = 1,
-        )
+        val output =
+            InferenceOutput(
+                data = floatArrayOf(0.3f, 0.7f),
+                shape = intArrayOf(2),
+                inferenceTimeMs = 1,
+            )
         val topK = output.topK(10)
         assertEquals(2, topK.size)
     }
@@ -221,25 +228,27 @@ class ModelTypesTest {
 
     @Test
     fun `CacheStats availableBytes does not go negative`() {
-        val stats = CacheStats(
-            modelCount = 1,
-            totalSizeBytes = 200,
-            cacheSizeLimitBytes = 100,
-            mostRecentModel = null,
-            models = emptyList(),
-        )
+        val stats =
+            CacheStats(
+                modelCount = 1,
+                totalSizeBytes = 200,
+                cacheSizeLimitBytes = 100,
+                mostRecentModel = null,
+                models = emptyList(),
+            )
         assertEquals(0, stats.availableBytes)
     }
 
     @Test
     fun `CacheStats with 100 percent usage`() {
-        val stats = CacheStats(
-            modelCount = 1,
-            totalSizeBytes = 100 * 1024 * 1024L,
-            cacheSizeLimitBytes = 100 * 1024 * 1024L,
-            mostRecentModel = null,
-            models = emptyList(),
-        )
+        val stats =
+            CacheStats(
+                modelCount = 1,
+                totalSizeBytes = 100 * 1024 * 1024L,
+                cacheSizeLimitBytes = 100 * 1024 * 1024L,
+                mostRecentModel = null,
+                models = emptyList(),
+            )
         assertEquals(100, stats.usagePercent)
         assertEquals(0, stats.availableBytes)
     }
@@ -251,31 +260,33 @@ class ModelTypesTest {
     @Test
     fun `CachedModel exists returns true when file exists`() {
         val file = tempFolder.newFile("model.tflite")
-        val model = CachedModel(
-            modelId = "m1",
-            version = "1.0",
-            filePath = file.absolutePath,
-            checksum = "abc",
-            sizeBytes = 100,
-            format = "tensorflow_lite",
-            downloadedAt = 1000L,
-            verified = true,
-        )
+        val model =
+            CachedModel(
+                modelId = "m1",
+                version = "1.0",
+                filePath = file.absolutePath,
+                checksum = "abc",
+                sizeBytes = 100,
+                format = "tensorflow_lite",
+                downloadedAt = 1000L,
+                verified = true,
+            )
 
         assertTrue(model.exists())
     }
 
     @Test
     fun `CachedModel exists returns false when file missing`() {
-        val model = CachedModel(
-            modelId = "m1",
-            version = "1.0",
-            filePath = "/nonexistent/model.tflite",
-            checksum = "abc",
-            sizeBytes = 100,
-            format = "tensorflow_lite",
-            downloadedAt = 1000L,
-        )
+        val model =
+            CachedModel(
+                modelId = "m1",
+                version = "1.0",
+                filePath = "/nonexistent/model.tflite",
+                checksum = "abc",
+                sizeBytes = 100,
+                format = "tensorflow_lite",
+                downloadedAt = 1000L,
+            )
 
         assertFalse(model.exists())
     }
@@ -346,10 +357,11 @@ class ModelTypesTest {
 
     @Test
     fun `ModelDownloadException carries error code`() {
-        val exception = ModelDownloadException(
-            "Checksum mismatch",
-            errorCode = ModelDownloadException.ErrorCode.CHECKSUM_MISMATCH,
-        )
+        val exception =
+            ModelDownloadException(
+                "Checksum mismatch",
+                errorCode = ModelDownloadException.ErrorCode.CHECKSUM_MISMATCH,
+            )
         assertEquals("Checksum mismatch", exception.message)
         assertEquals(ModelDownloadException.ErrorCode.CHECKSUM_MISMATCH, exception.errorCode)
     }

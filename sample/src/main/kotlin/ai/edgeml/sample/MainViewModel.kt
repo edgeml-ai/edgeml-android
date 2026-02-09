@@ -16,7 +16,6 @@ import timber.log.Timber
  * ViewModel for the main activity.
  */
 class MainViewModel : ViewModel() {
-
     private val _clientState = MutableStateFlow(ClientState.UNINITIALIZED)
     val clientState: StateFlow<ClientState> = _clientState.asStateFlow()
 
@@ -54,12 +53,13 @@ class MainViewModel : ViewModel() {
                 observeClient()
 
                 val result = client?.initialize()
-                result?.onSuccess {
-                    Timber.i("SDK initialized successfully")
-                    _modelInfo.value = client?.getModelInfo()
-                }?.onFailure { error ->
-                    Timber.e(error, "SDK initialization failed")
-                }
+                result
+                    ?.onSuccess {
+                        Timber.i("SDK initialized successfully")
+                        _modelInfo.value = client?.getModelInfo()
+                    }?.onFailure { error ->
+                        Timber.e(error, "SDK initialization failed")
+                    }
             } catch (e: Exception) {
                 Timber.e(e, "Failed to get EdgeML client")
             }
@@ -112,17 +112,19 @@ class MainViewModel : ViewModel() {
             // Run inference
             val result = edgemlClient.runInference(sampleInput)
 
-            result.onSuccess { output ->
-                val topK = output.topK(1).firstOrNull()
-                _inferenceResult.value = InferenceResultUI(
-                    topClass = topK?.first ?: -1,
-                    confidence = topK?.second ?: 0f,
-                    inferenceTimeMs = output.inferenceTimeMs,
-                )
-                Timber.i("Inference completed in ${output.inferenceTimeMs}ms")
-            }.onFailure { error ->
-                Timber.e(error, "Inference failed")
-            }
+            result
+                .onSuccess { output ->
+                    val topK = output.topK(1).firstOrNull()
+                    _inferenceResult.value =
+                        InferenceResultUI(
+                            topClass = topK?.first ?: -1,
+                            confidence = topK?.second ?: 0f,
+                            inferenceTimeMs = output.inferenceTimeMs,
+                        )
+                    Timber.i("Inference completed in ${output.inferenceTimeMs}ms")
+                }.onFailure { error ->
+                    Timber.e(error, "Inference failed")
+                }
         }
     }
 
@@ -134,12 +136,13 @@ class MainViewModel : ViewModel() {
             val edgemlClient = client ?: return@launch
 
             val result = edgemlClient.updateModel()
-            result.onSuccess { model ->
-                Timber.i("Model updated: ${model.modelId} v${model.version}")
-                _modelInfo.value = edgemlClient.getModelInfo()
-            }.onFailure { error ->
-                Timber.e(error, "Model update failed")
-            }
+            result
+                .onSuccess { model ->
+                    Timber.i("Model updated: ${model.modelId} v${model.version}")
+                    _modelInfo.value = edgemlClient.getModelInfo()
+                }.onFailure { error ->
+                    Timber.e(error, "Model update failed")
+                }
         }
     }
 

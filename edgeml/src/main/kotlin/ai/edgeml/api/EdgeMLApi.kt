@@ -1,9 +1,30 @@
 package ai.edgeml.api
 
-import ai.edgeml.api.dto.*
+import ai.edgeml.api.dto.AssignmentRequest
+import ai.edgeml.api.dto.DevicePolicyResponse
+import ai.edgeml.api.dto.DeviceRegistrationRequest
+import ai.edgeml.api.dto.DeviceRegistrationResponse
+import ai.edgeml.api.dto.GradientUpdateRequest
+import ai.edgeml.api.dto.GradientUpdateResponse
+import ai.edgeml.api.dto.GroupMembershipsResponse
+import ai.edgeml.api.dto.HealthResponse
+import ai.edgeml.api.dto.HeartbeatRequest
+import ai.edgeml.api.dto.HeartbeatResponse
+import ai.edgeml.api.dto.InferenceEventRequest
+import ai.edgeml.api.dto.InferenceEventResponse
+import ai.edgeml.api.dto.ModelDownloadResponse
+import ai.edgeml.api.dto.ModelResponse
+import ai.edgeml.api.dto.ModelVersionResponse
+import ai.edgeml.api.dto.TrainingEventRequest
 import okhttp3.ResponseBody
 import retrofit2.Response
-import retrofit2.http.*
+import retrofit2.http.Body
+import retrofit2.http.GET
+import retrofit2.http.POST
+import retrofit2.http.Path
+import retrofit2.http.Query
+import retrofit2.http.Streaming
+import retrofit2.http.Url
 
 /**
  * Retrofit API interface for EdgeML server communication.
@@ -11,7 +32,6 @@ import retrofit2.http.*
  * All endpoints require authentication via API key in the header.
  */
 interface EdgeMLApi {
-
     // =========================================================================
     // Health Check
     // =========================================================================

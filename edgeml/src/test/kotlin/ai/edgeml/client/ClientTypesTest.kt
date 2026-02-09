@@ -6,7 +6,6 @@ import kotlin.test.assertNotEquals
 import kotlin.test.assertTrue
 
 class ClientTypesTest {
-
     // =========================================================================
     // ClientState
     // =========================================================================
@@ -35,15 +34,16 @@ class ClientTypesTest {
 
     @Test
     fun `ModelInfo stores all fields`() {
-        val info = ModelInfo(
-            modelId = "model-1",
-            version = "2.0.0",
-            format = "tensorflow_lite",
-            sizeBytes = 5_000_000,
-            inputShape = intArrayOf(1, 224, 224, 3),
-            outputShape = intArrayOf(1, 1000),
-            usingGpu = true,
-        )
+        val info =
+            ModelInfo(
+                modelId = "model-1",
+                version = "2.0.0",
+                format = "tensorflow_lite",
+                sizeBytes = 5_000_000,
+                inputShape = intArrayOf(1, 224, 224, 3),
+                outputShape = intArrayOf(1, 1000),
+                usingGpu = true,
+            )
 
         assertEquals("model-1", info.modelId)
         assertEquals("2.0.0", info.version)

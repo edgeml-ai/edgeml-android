@@ -12,35 +12,27 @@ data class CachedModel(
     /** Model identifier */
     @SerialName("model_id")
     val modelId: String,
-
     /** Model version string (semantic versioning) */
     @SerialName("version")
     val version: String,
-
     /** Path to the model file on disk */
     @SerialName("file_path")
     val filePath: String,
-
     /** SHA-256 checksum for integrity verification */
     @SerialName("checksum")
     val checksum: String,
-
     /** Size of the model file in bytes */
     @SerialName("size_bytes")
     val sizeBytes: Long,
-
     /** Model format (e.g., tensorflow_lite, onnx) */
     @SerialName("format")
     val format: String,
-
     /** Timestamp when the model was downloaded */
     @SerialName("downloaded_at")
     val downloadedAt: Long,
-
     /** Last time the model was used for inference */
     @SerialName("last_used_at")
     val lastUsedAt: Long = downloadedAt,
-
     /** Whether the model has been verified */
     @SerialName("verified")
     val verified: Boolean = false,
@@ -67,16 +59,12 @@ data class CachedModel(
 data class DownloadProgress(
     /** Model ID being downloaded */
     val modelId: String,
-
     /** Version being downloaded */
     val version: String,
-
     /** Bytes downloaded so far */
     val bytesDownloaded: Long,
-
     /** Total bytes to download */
     val totalBytes: Long,
-
     /** Progress percentage (0-100) */
     val progress: Int = if (totalBytes > 0) ((bytesDownloaded * 100) / totalBytes).toInt() else 0,
 )
@@ -92,19 +80,27 @@ sealed class DownloadState {
     data object CheckingForUpdates : DownloadState()
 
     /** Download in progress */
-    data class Downloading(val progress: DownloadProgress) : DownloadState()
+    data class Downloading(
+        val progress: DownloadProgress,
+    ) : DownloadState()
 
     /** Verifying downloaded model */
     data object Verifying : DownloadState()
 
     /** Download completed successfully */
-    data class Completed(val model: CachedModel) : DownloadState()
+    data class Completed(
+        val model: CachedModel,
+    ) : DownloadState()
 
     /** Download failed */
-    data class Failed(val error: ModelDownloadException) : DownloadState()
+    data class Failed(
+        val error: ModelDownloadException,
+    ) : DownloadState()
 
     /** Model is up to date (no download needed) */
-    data class UpToDate(val model: CachedModel) : DownloadState()
+    data class UpToDate(
+        val model: CachedModel,
+    ) : DownloadState()
 }
 
 /**
@@ -115,7 +111,6 @@ class ModelDownloadException(
     cause: Throwable? = null,
     val errorCode: ErrorCode = ErrorCode.UNKNOWN,
 ) : Exception(message, cause) {
-
     enum class ErrorCode {
         NETWORK_ERROR,
         NOT_FOUND,
@@ -134,10 +129,8 @@ class ModelDownloadException(
 data class InferenceInput(
     /** Input tensor data as float array */
     val data: FloatArray,
-
     /** Input tensor shape */
     val shape: IntArray,
-
     /** Optional input name (for multi-input models) */
     val name: String? = null,
 ) {
@@ -168,13 +161,10 @@ data class InferenceInput(
 data class InferenceOutput(
     /** Output tensor data as float array */
     val data: FloatArray,
-
     /** Output tensor shape */
     val shape: IntArray,
-
     /** Inference time in milliseconds */
     val inferenceTimeMs: Long,
-
     /** Optional output name (for multi-output models) */
     val name: String? = null,
 ) {
@@ -187,7 +177,8 @@ data class InferenceOutput(
      * Get top-k indices sorted by confidence.
      */
     fun topK(k: Int): List<Pair<Int, Float>> =
-        data.withIndex()
+        data
+            .withIndex()
             .sortedByDescending { it.value }
             .take(k)
             .map { it.index to it.value }
@@ -221,23 +212,22 @@ data class InferenceOutput(
 data class CacheStats(
     /** Total number of cached models */
     val modelCount: Int,
-
     /** Total size of cached models in bytes */
     val totalSizeBytes: Long,
-
     /** Cache size limit in bytes */
     val cacheSizeLimitBytes: Long,
-
     /** Most recently used model */
     val mostRecentModel: CachedModel?,
-
     /** List of all cached models */
     val models: List<CachedModel>,
 ) {
     /** Usage percentage (0-100) */
-    val usagePercent: Int = if (cacheSizeLimitBytes > 0) {
-        ((totalSizeBytes * 100) / cacheSizeLimitBytes).toInt()
-    } else 0
+    val usagePercent: Int =
+        if (cacheSizeLimitBytes > 0) {
+            ((totalSizeBytes * 100) / cacheSizeLimitBytes).toInt()
+        } else {
+            0
+        }
 
     /** Available space in bytes */
     val availableBytes: Long = (cacheSizeLimitBytes - totalSizeBytes).coerceAtLeast(0)

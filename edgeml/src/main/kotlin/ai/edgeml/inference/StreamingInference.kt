@@ -9,7 +9,8 @@ enum class Modality {
     TEXT,
     IMAGE,
     AUDIO,
-    VIDEO;
+    VIDEO,
+    ;
 
     /** Wire-format value for the server API. */
     val value: String get() = name.lowercase()
@@ -83,5 +84,8 @@ fun interface StreamingInferenceEngine {
      * @param input Modality-specific input (prompt, conditioning image, etc.).
      * @param modality Output modality.
      */
-    fun generate(input: Any, modality: Modality): Flow<InferenceChunk>
+    fun generate(
+        input: Any,
+        modality: Modality,
+    ): Flow<InferenceChunk>
 }

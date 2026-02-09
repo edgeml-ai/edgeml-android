@@ -1,5 +1,6 @@
 package ai.edgeml.utils
 
+import ai.edgeml.api.dto.DeviceCapabilities
 import android.annotation.SuppressLint
 import android.app.ActivityManager
 import android.content.Context
@@ -7,7 +8,6 @@ import android.os.Build
 import android.os.Environment
 import android.os.StatFs
 import android.provider.Settings
-import ai.edgeml.api.dto.DeviceCapabilities
 import timber.log.Timber
 import java.security.MessageDigest
 import java.util.Locale
@@ -18,7 +18,6 @@ import java.util.UUID
  * Utility functions for device information and identification.
  */
 object DeviceUtils {
-
     /**
      * Generate a unique device identifier.
      *
@@ -27,10 +26,11 @@ object DeviceUtils {
      */
     @SuppressLint("HardwareIds")
     fun generateDeviceIdentifier(context: Context): String {
-        val androidId = Settings.Secure.getString(
-            context.contentResolver,
-            Settings.Secure.ANDROID_ID
-        ) ?: UUID.randomUUID().toString()
+        val androidId =
+            Settings.Secure.getString(
+                context.contentResolver,
+                Settings.Secure.ANDROID_ID,
+            ) ?: UUID.randomUUID().toString()
 
         // Add package name as salt for app-specific ID
         val salt = context.packageName
@@ -43,15 +43,14 @@ object DeviceUtils {
     /**
      * Get device capabilities for registration.
      */
-    fun getDeviceCapabilities(context: Context): DeviceCapabilities {
-        return DeviceCapabilities(
+    fun getDeviceCapabilities(context: Context): DeviceCapabilities =
+        DeviceCapabilities(
             cpuArchitecture = getCpuArchitecture(),
             gpuAvailable = isGpuAvailable(),
             nnapiAvailable = isNnapiAvailable(),
             totalMemoryMb = getTotalMemoryMb(context),
             availableStorageMb = getAvailableStorageMb(),
         )
-    }
 
     /**
      * Get the device manufacturer.
@@ -87,22 +86,18 @@ object DeviceUtils {
     /**
      * Get the Android OS version string.
      */
-    fun getOsVersion(): String {
-        return "Android ${Build.VERSION.RELEASE} (API ${Build.VERSION.SDK_INT})"
-    }
+    fun getOsVersion(): String = "Android ${Build.VERSION.RELEASE} (API ${Build.VERSION.SDK_INT})"
 
     /**
      * Get the CPU architecture.
      */
-    fun getCpuArchitecture(): String {
-        return Build.SUPPORTED_ABIS.firstOrNull() ?: "unknown"
-    }
+    fun getCpuArchitecture(): String = Build.SUPPORTED_ABIS.firstOrNull() ?: "unknown"
 
     /**
      * Check if GPU is likely available for ML operations.
      */
-    fun isGpuAvailable(): Boolean {
-        return try {
+    fun isGpuAvailable(): Boolean =
+        try {
             val compatListClass = Class.forName("org.tensorflow.lite.gpu.CompatibilityList")
             val instance = compatListClass.getDeclaredConstructor().newInstance()
             val method = compatListClass.getMethod("isDelegateSupportedOnThisDevice")
@@ -111,20 +106,17 @@ object DeviceUtils {
             // TFLite GPU not available
             false
         }
-    }
 
     /**
      * Check if NNAPI is available.
      */
-    fun isNnapiAvailable(): Boolean {
-        return Build.VERSION.SDK_INT >= Build.VERSION_CODES.P
-    }
+    fun isNnapiAvailable(): Boolean = Build.VERSION.SDK_INT >= Build.VERSION_CODES.P
 
     /**
      * Get total device RAM in MB.
      */
-    fun getTotalMemoryMb(context: Context): Long {
-        return try {
+    fun getTotalMemoryMb(context: Context): Long =
+        try {
             val activityManager = context.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
             val memInfo = ActivityManager.MemoryInfo()
             activityManager.getMemoryInfo(memInfo)
@@ -133,26 +125,24 @@ object DeviceUtils {
             Timber.w(e, "Failed to get total memory")
             0
         }
-    }
 
     /**
      * Get available internal storage in MB.
      */
-    fun getAvailableStorageMb(): Long {
-        return try {
+    fun getAvailableStorageMb(): Long =
+        try {
             val stat = StatFs(Environment.getDataDirectory().path)
             (stat.availableBlocksLong * stat.blockSizeLong) / (1024 * 1024)
         } catch (e: Exception) {
             Timber.w(e, "Failed to get available storage")
             0
         }
-    }
 
     /**
      * Get available RAM in MB.
      */
-    fun getAvailableMemoryMb(context: Context): Long {
-        return try {
+    fun getAvailableMemoryMb(context: Context): Long =
+        try {
             val activityManager = context.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
             val memInfo = ActivityManager.MemoryInfo()
             activityManager.getMemoryInfo(memInfo)
@@ -160,13 +150,12 @@ object DeviceUtils {
         } catch (e: Exception) {
             0
         }
-    }
 
     /**
      * Check if device is in low memory state.
      */
-    fun isLowMemory(context: Context): Boolean {
-        return try {
+    fun isLowMemory(context: Context): Boolean =
+        try {
             val activityManager = context.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
             val memInfo = ActivityManager.MemoryInfo()
             activityManager.getMemoryInfo(memInfo)
@@ -174,7 +163,6 @@ object DeviceUtils {
         } catch (e: Exception) {
             false
         }
-    }
 
     /**
      * Hash a string using SHA-256.
@@ -193,8 +181,9 @@ object NetworkUtils {
      * Check if network is available.
      */
     fun isNetworkAvailable(context: Context): Boolean {
-        val connectivityManager = context.getSystemService(Context.CONNECTIVITY_SERVICE)
-            as android.net.ConnectivityManager
+        val connectivityManager =
+            context.getSystemService(Context.CONNECTIVITY_SERVICE)
+                as android.net.ConnectivityManager
 
         return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
             val network = connectivityManager.activeNetwork
@@ -210,8 +199,9 @@ object NetworkUtils {
      * Check if connected to WiFi.
      */
     fun isWifiConnected(context: Context): Boolean {
-        val connectivityManager = context.getSystemService(Context.CONNECTIVITY_SERVICE)
-            as android.net.ConnectivityManager
+        val connectivityManager =
+            context.getSystemService(Context.CONNECTIVITY_SERVICE)
+                as android.net.ConnectivityManager
 
         return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
             val network = connectivityManager.activeNetwork
@@ -227,8 +217,9 @@ object NetworkUtils {
      * Check if connected to unmetered network.
      */
     fun isUnmeteredConnection(context: Context): Boolean {
-        val connectivityManager = context.getSystemService(Context.CONNECTIVITY_SERVICE)
-            as android.net.ConnectivityManager
+        val connectivityManager =
+            context.getSystemService(Context.CONNECTIVITY_SERVICE)
+                as android.net.ConnectivityManager
 
         return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
             val network = connectivityManager.activeNetwork
@@ -248,11 +239,12 @@ object BatteryUtils {
      * Get current battery level (0-100).
      */
     fun getBatteryLevel(context: Context): Int {
-        val batteryManager = context.getSystemService(Context.BATTERY_SERVICE)
-            as android.os.BatteryManager
+        val batteryManager =
+            context.getSystemService(Context.BATTERY_SERVICE)
+                as android.os.BatteryManager
 
         return batteryManager.getIntProperty(
-            android.os.BatteryManager.BATTERY_PROPERTY_CAPACITY
+            android.os.BatteryManager.BATTERY_PROPERTY_CAPACITY,
         )
     }
 
@@ -260,8 +252,9 @@ object BatteryUtils {
      * Check if device is charging.
      */
     fun isCharging(context: Context): Boolean {
-        val batteryManager = context.getSystemService(Context.BATTERY_SERVICE)
-            as android.os.BatteryManager
+        val batteryManager =
+            context.getSystemService(Context.BATTERY_SERVICE)
+                as android.os.BatteryManager
 
         return batteryManager.isCharging
     }
