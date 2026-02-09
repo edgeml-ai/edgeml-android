@@ -85,9 +85,7 @@ class TFLiteTrainer(
                 // Try to use GPU delegate if enabled
                 if (config.enableGpuAcceleration && isGpuSupported()) {
                     try {
-                        val delegateOptions = GpuDelegate.Options().apply {
-                            setPrecisionLossAllowed(true)
-                        }
+                        val delegateOptions = GpuDelegate.Options()
                         gpuDelegate = GpuDelegate(delegateOptions)
                         options.addDelegate(gpuDelegate)
                         Timber.d("GPU delegate enabled")

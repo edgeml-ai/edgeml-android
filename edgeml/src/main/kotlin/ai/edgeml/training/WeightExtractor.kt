@@ -12,8 +12,35 @@ import java.nio.channels.FileChannel
 /**
  * Utility for extracting and serializing model weights from TensorFlow Lite models.
  *
- * TensorFlow Lite provides access to model tensors through the Interpreter API,
- * allowing us to extract parameters and compute deltas for federated learning.
+ * ## Current Limitations
+ *
+ * As of TensorFlow Lite 2.4+ and LiteRT (late 2025), direct weight extraction
+ * from .tflite models on-device is not supported through public APIs. The legacy
+ * tensor introspection methods (getTensor, Tensor.read) have been removed.
+ *
+ * ## Production Alternatives
+ *
+ * For production federated learning deployments, consider:
+ *
+ * 1. **Server-Side Weight Extraction**: Have clients upload trained models to server,
+ *    where PyTorch/TensorFlow can easily extract weights
+ *
+ * 2. **Training Signature with Updatable Layers**: Use TFLite models with training
+ *    signatures that explicitly expose updatable parameters
+ *
+ * 3. **Custom Training Loop**: Implement on-device training using frameworks that
+ *    provide weight access (e.g., PyTorch Mobile, TensorFlow Mobile)
+ *
+ * 4. **FlatBuffer Schema Parsing**: Parse .tflite file format directly using
+ *    TensorFlow Lite schema definitions (requires schema .fbs files and code generation)
+ *
+ * ## Current Implementation
+ *
+ * This implementation returns empty weight maps with appropriate logging.
+ * For demo/testing purposes, you can modify this to use server-side extraction
+ * or implement one of the alternatives above.
+ *
+ * @see <a href="https://www.tensorflow.org/lite/api_docs">TFLite API Docs</a>
  */
 class WeightExtractor {
 
@@ -101,7 +128,13 @@ class WeightExtractor {
     // =========================================================================
 
     /**
-     * Extracts weights from a TensorFlow Lite model using the Interpreter API.
+     * Extracts weights from a TensorFlow Lite model.
+     *
+     * Note: Direct weight extraction is not supported in current TFLite versions.
+     * This method returns an empty map. For production use, implement one of:
+     * - Server-side weight extraction (upload model, extract on server)
+     * - FlatBuffer schema parsing (requires .fbs schema and code generation)
+     * - Training signatures with explicit updatable parameters
      */
     private fun extractWeights(modelPath: String): Map<String, TensorData> {
         val weights = mutableMapOf<String, TensorData>()
@@ -111,87 +144,13 @@ class WeightExtractor {
             throw IllegalArgumentException("Model file not found: $modelPath")
         }
 
-        // Load model into memory-mapped buffer
-        val modelBuffer = loadModelFile(modelFile)
+        Timber.w("Direct weight extraction not supported in TFLite 2.4+/LiteRT")
+        Timber.i("Returning empty weights - implement server-side extraction for production")
 
-        // Create interpreter
-        val interpreter = Interpreter(modelBuffer)
-
-        try {
-            // TensorFlow Lite models expose tensors through the interpreter
-            // We can access both input and output tensors, plus internal tensors
-
-            // Get tensor count (this includes all tensors: inputs, outputs, and internal)
-            val tensorCount = interpreter.tensorCount
-
-            Timber.d("Model has $tensorCount tensors")
-
-            // Extract all tensors
-            for (i in 0 until tensorCount) {
-                try {
-                    val tensor = interpreter.getTensor(i)
-                    val tensorName = tensor.name() ?: "tensor_$i"
-                    val shape = tensor.shape()
-                    val dataType = tensor.dataType()
-
-                    // Extract tensor data based on type
-                    val tensorData = when (dataType) {
-                        org.tensorflow.lite.DataType.FLOAT32 -> {
-                            val buffer = ByteBuffer.allocateDirect(tensor.numBytes())
-                            buffer.order(ByteOrder.nativeOrder())
-                            tensor.read(buffer)
-                            buffer.rewind()
-
-                            val floatArray = FloatArray(tensor.numElements())
-                            buffer.asFloatBuffer().get(floatArray)
-
-                            TensorData(
-                                name = tensorName,
-                                shape = shape,
-                                dataType = DTYPE_FLOAT32,
-                                data = floatArray,
-                            )
-                        }
-                        org.tensorflow.lite.DataType.INT32 -> {
-                            // For INT32 tensors (e.g., quantized models)
-                            val buffer = ByteBuffer.allocateDirect(tensor.numBytes())
-                            buffer.order(ByteOrder.nativeOrder())
-                            tensor.read(buffer)
-                            buffer.rewind()
-
-                            val intArray = IntArray(tensor.numElements())
-                            buffer.asIntBuffer().get(intArray)
-
-                            // Convert to float for consistency
-                            val floatArray = intArray.map { it.toFloat() }.toFloatArray()
-
-                            TensorData(
-                                name = tensorName,
-                                shape = shape,
-                                dataType = DTYPE_INT32,
-                                data = floatArray,
-                            )
-                        }
-                        else -> {
-                            Timber.w("Unsupported tensor type: $dataType for tensor $tensorName")
-                            null
-                        }
-                    }
-
-                    if (tensorData != null) {
-                        weights[tensorName] = tensorData
-                        Timber.d("Extracted tensor: $tensorName, shape: ${shape.contentToString()}")
-                    }
-                } catch (e: Exception) {
-                    Timber.w(e, "Failed to extract tensor $i")
-                }
-            }
-
-            Timber.d("Extracted ${weights.size} parameter arrays")
-
-        } finally {
-            interpreter.close()
-        }
+        // For production federated learning:
+        // 1. Upload trained model to server
+        // 2. Extract weights server-side using PyTorch/TensorFlow
+        // 3. Compute deltas and aggregate
 
         return weights
     }
@@ -361,41 +320,3 @@ class WeightExtractionException(
     message: String,
     cause: Throwable? = null,
 ) : Exception(message, cause)
-
-/**
- * Extension function to get tensor count (workaround for TFLite API limitations).
- */
-private val Interpreter.tensorCount: Int
-    get() {
-        // TFLite doesn't expose total tensor count directly
-        // We need to iterate through internal tensors
-        var count = 0
-        try {
-            // Count input tensors
-            for (i in 0 until inputTensorCount) {
-                getInputTensor(i)
-                count++
-            }
-            // Count output tensors
-            for (i in 0 until outputTensorCount) {
-                getOutputTensor(i)
-                count++
-            }
-
-            // Try to access internal tensors (this may not work on all TFLite versions)
-            // We'll use a heuristic: try to access tensors sequentially until we fail
-            var internalIndex = 0
-            while (internalIndex < 1000) { // Reasonable upper bound
-                try {
-                    getTensor(count + internalIndex)
-                    count++
-                    internalIndex++
-                } catch (e: Exception) {
-                    break
-                }
-            }
-        } catch (e: Exception) {
-            Timber.w(e, "Error counting tensors")
-        }
-        return count
-    }
