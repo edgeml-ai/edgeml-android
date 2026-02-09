@@ -31,6 +31,7 @@ jobs:
         with:
           language: jvm
           sanitizer: ${{ matrix.sanitizer }}
+          keep-unaffected-fuzz-targets: true
 
       - name: Run fuzzers
         id: run
