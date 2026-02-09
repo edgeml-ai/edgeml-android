@@ -41,13 +41,6 @@ object DeviceUtils {
     }
 
     /**
-     * @deprecated Use generateDeviceIdentifier instead
-     */
-    @Deprecated("Use generateDeviceIdentifier", ReplaceWith("generateDeviceIdentifier(context)"))
-    @SuppressLint("HardwareIds")
-    fun generateDeviceId(context: Context): String = generateDeviceIdentifier(context)
-
-    /**
      * Get device capabilities for registration.
      */
     fun getDeviceCapabilities(context: Context): DeviceCapabilities {

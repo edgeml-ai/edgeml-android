@@ -8,9 +8,7 @@ import ai.edgeml.models.ModelManager
 import ai.edgeml.storage.SecureStorage
 import android.content.Context
 import androidx.work.*
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
-import kotlinx.coroutines.withContext
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import timber.log.Timber
@@ -50,16 +48,15 @@ class EdgeMLSyncWorker(
         encodeDefaults = true
     }
 
-    @Suppress("InjectDispatcher") // Dispatcher is managed by WorkManager's CoroutineWorker
-    override suspend fun doWork(): Result = withContext(Dispatchers.IO) {
-        try {
+    override suspend fun doWork(): Result {
+        return try {
             Timber.d("Starting EdgeML sync work")
 
             // Get configuration from input data
             val configJson = inputData.getString(KEY_CONFIG_JSON)
             if (configJson.isNullOrBlank()) {
                 Timber.e("No configuration provided to worker")
-                return@withContext Result.failure()
+                return Result.failure()
             }
 
             val config = json.decodeFromString<EdgeMLConfig>(configJson)

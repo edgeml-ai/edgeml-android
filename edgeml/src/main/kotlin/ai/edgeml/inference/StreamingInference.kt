@@ -76,7 +76,7 @@ data class StreamingInferenceResult(
  * Engines emit raw [InferenceChunk] values via a [Flow]. Timing
  * instrumentation is added by the SDK wrapper in [EdgeMLClient].
  */
-interface StreamingInferenceEngine {
+fun interface StreamingInferenceEngine {
     /**
      * Generate output for the given input, emitting chunks via a cold [Flow].
      *
