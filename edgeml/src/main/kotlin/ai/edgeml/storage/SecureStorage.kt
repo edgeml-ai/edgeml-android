@@ -224,18 +224,6 @@ class SecureStorage private constructor(
     // =========================================================================
 
     /**
-     * Get the stored device ID (legacy, use getServerDeviceId instead).
-     */
-    @Deprecated("Use getServerDeviceId instead", ReplaceWith("getServerDeviceId()"))
-    suspend fun getDeviceId(): String? = getString(KEY_DEVICE_ID)
-
-    /**
-     * Store the device ID (legacy, use setServerDeviceId instead).
-     */
-    @Deprecated("Use setServerDeviceId instead", ReplaceWith("setServerDeviceId(deviceId)"))
-    suspend fun setDeviceId(deviceId: String) = putString(KEY_DEVICE_ID, deviceId)
-
-    /**
      * Get the server-assigned device UUID.
      */
     suspend fun getServerDeviceId(): String? = getString(KEY_SERVER_DEVICE_ID)

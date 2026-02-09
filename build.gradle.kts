@@ -11,6 +11,30 @@ plugins {
     id("com.android.library") version "8.7.3" apply false
     id("org.jetbrains.kotlin.android") version "1.9.21" apply false
     id("org.jetbrains.kotlin.plugin.serialization") version "1.9.21" apply false
+    id("org.sonarqube") version "4.4.1.3373"
+}
+
+sonarqube {
+    properties {
+        property("sonar.host.url", "https://sonarcloud.io")
+        property("sonar.organization", "edgeml-ai")
+        property("sonar.projectKey", "edgeml-ai_edgeml-android")
+        property("sonar.projectName", "EdgeML Android SDK")
+        property("sonar.sourceEncoding", "UTF-8")
+        property("sonar.exclusions", "**/R.java,**/*.xml,**/BuildConfig.java,**/Manifest*.*,**/*Test*.*")
+        property("sonar.coverage.exclusions", "**/*Test*.*,**/test/**")
+    }
+}
+
+subprojects {
+    sonarqube {
+        properties {
+            if (project.name == "edgeml") {
+                property("sonar.coverage.jacoco.xmlReportPaths",
+                    "${project.layout.buildDirectory.get()}/reports/jacoco/jacocoTestReport/jacocoTestReport.xml")
+            }
+        }
+    }
 }
 
 tasks.register("clean", Delete::class) {

@@ -1,7 +1,6 @@
 package ai.edgeml.sample
 
 import ai.edgeml.client.ClientState
-import ai.edgeml.client.EdgeMLClient
 import ai.edgeml.models.DownloadState
 import android.os.Bundle
 import android.widget.Toast

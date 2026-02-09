@@ -8,13 +8,14 @@ import ai.edgeml.models.ModelManager
 import ai.edgeml.storage.SecureStorage
 import android.content.Context
 import androidx.work.*
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
-import kotlinx.coroutines.withContext
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import timber.log.Timber
-import java.time.Instant
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+import java.util.TimeZone
 import java.util.concurrent.TimeUnit
 
 /**
@@ -50,16 +51,15 @@ class EdgeMLSyncWorker(
         encodeDefaults = true
     }
 
-    @Suppress("InjectDispatcher") // Dispatcher is managed by WorkManager's CoroutineWorker
-    override suspend fun doWork(): Result = withContext(Dispatchers.IO) {
-        try {
+    override suspend fun doWork(): Result {
+        return try {
             Timber.d("Starting EdgeML sync work")
 
             // Get configuration from input data
             val configJson = inputData.getString(KEY_CONFIG_JSON)
             if (configJson.isNullOrBlank()) {
                 Timber.e("No configuration provided to worker")
-                return@withContext Result.failure()
+                return Result.failure()
             }
 
             val config = json.decodeFromString<EdgeMLConfig>(configJson)
@@ -102,6 +102,12 @@ class EdgeMLSyncWorker(
         }
     }
 
+    private fun formatIso8601(epochMillis: Long): String {
+        val sdf = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US)
+        sdf.timeZone = TimeZone.getTimeZone("UTC")
+        return sdf.format(Date(epochMillis))
+    }
+
     private suspend fun syncModels(modelManager: ModelManager) {
         Timber.d("Checking for model updates")
         val result = modelManager.ensureModelAvailable()
@@ -139,7 +145,7 @@ class EdgeMLSyncWorker(
                     modelId = config.modelId,
                     version = storage.getCurrentModelVersion() ?: "unknown",
                     eventType = event.type,
-                    timestamp = Instant.ofEpochMilli(event.timestamp).toString(),
+                    timestamp = formatIso8601(event.timestamp),
                     metrics = event.metrics,
                     metadata = event.metadata,
                 )

@@ -36,6 +36,7 @@ class PersonalizationManager(
     private val trainingIntervalMs: Long = 300_000, // 5 minutes
     private val trainingMode: TrainingMode = TrainingMode.LOCAL_ONLY,
     private val uploadThreshold: Int = 10,
+    private val onUploadNeeded: (suspend () -> Unit)? = null,
 ) {
 
     private val mutex = Mutex()
@@ -255,7 +256,7 @@ class PersonalizationManager(
             // Check if we should upload updates (only in FEDERATED mode)
             if (trainingMode.uploadsToServer && trainingHistory.size >= uploadThreshold) {
                 Timber.i("Upload threshold reached (${trainingHistory.size} sessions) - mode: $trainingMode")
-                // TODO: Trigger upload of aggregated updates
+                onUploadNeeded?.invoke()
             }
 
             Result.success(result)

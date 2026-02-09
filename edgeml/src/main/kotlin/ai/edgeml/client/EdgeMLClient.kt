@@ -484,12 +484,7 @@ class EdgeMLClient private constructor(
     ): Flow<ai.edgeml.inference.InferenceChunk> {
         checkReady()
 
-        val resolvedEngine = engine ?: when (modality) {
-            ai.edgeml.inference.Modality.TEXT -> ai.edgeml.inference.LLMEngine(context)
-            ai.edgeml.inference.Modality.IMAGE -> ai.edgeml.inference.ImageEngine(context)
-            ai.edgeml.inference.Modality.AUDIO -> ai.edgeml.inference.AudioEngine(context)
-            ai.edgeml.inference.Modality.VIDEO -> ai.edgeml.inference.VideoEngine(context)
-        }
+        val resolvedEngine = resolveStreamingEngine(engine, modality)
 
         val sessionId = java.util.UUID.randomUUID().toString()
         val deviceId = _serverDeviceId.value
@@ -503,22 +498,19 @@ class EdgeMLClient private constructor(
             val latencies = mutableListOf<Double>()
             var chunkCount = 0
 
-            // Report generation_started
-            if (deviceId != null) {
-                try {
-                    api.reportInferenceEvent(
-                        ai.edgeml.api.dto.InferenceEventRequest(
-                            deviceId = deviceId,
-                            modelId = resolvedModelId,
-                            version = resolvedVersion,
-                            modality = modality.value,
-                            sessionId = sessionId,
-                            eventType = "generation_started",
-                            timestampMs = sessionStart,
-                            orgId = config.orgId,
-                        )
+            deviceId?.let { id ->
+                reportStreamingEventSafely(
+                    ai.edgeml.api.dto.InferenceEventRequest(
+                        deviceId = id,
+                        modelId = resolvedModelId,
+                        version = resolvedVersion,
+                        modality = modality.value,
+                        sessionId = sessionId,
+                        eventType = "generation_started",
+                        timestampMs = sessionStart,
+                        orgId = config.orgId,
                     )
-                } catch (_: Exception) { }
+                )
             }
 
             eventQueue.addTrainingEvent(
@@ -573,29 +565,48 @@ class EdgeMLClient private constructor(
                 metadata = mapOf("session_id" to sessionId),
             )
 
-            // Report to server
-            if (deviceId != null) {
-                try {
-                    api.reportInferenceEvent(
-                        ai.edgeml.api.dto.InferenceEventRequest(
-                            deviceId = deviceId,
-                            modelId = resolvedModelId,
-                            version = resolvedVersion,
-                            modality = modality.value,
-                            sessionId = sessionId,
-                            eventType = "generation_completed",
-                            timestampMs = sessionEnd,
-                            metrics = ai.edgeml.api.dto.InferenceEventMetrics(
-                                ttfcMs = ttfcMs,
-                                totalChunks = chunkCount,
-                                totalDurationMs = totalDurationMs,
-                                throughput = throughput,
-                            ),
-                            orgId = config.orgId,
-                        )
+            deviceId?.let { id ->
+                reportStreamingEventSafely(
+                    ai.edgeml.api.dto.InferenceEventRequest(
+                        deviceId = id,
+                        modelId = resolvedModelId,
+                        version = resolvedVersion,
+                        modality = modality.value,
+                        sessionId = sessionId,
+                        eventType = "generation_completed",
+                        timestampMs = sessionEnd,
+                        metrics = ai.edgeml.api.dto.InferenceEventMetrics(
+                            ttfcMs = ttfcMs,
+                            totalChunks = chunkCount,
+                            totalDurationMs = totalDurationMs,
+                            throughput = throughput,
+                        ),
+                        orgId = config.orgId,
                     )
-                } catch (_: Exception) { }
+                )
             }
+        }
+    }
+
+    private fun resolveStreamingEngine(
+        engine: ai.edgeml.inference.StreamingInferenceEngine?,
+        modality: ai.edgeml.inference.Modality,
+    ): ai.edgeml.inference.StreamingInferenceEngine {
+        return engine ?: when (modality) {
+            ai.edgeml.inference.Modality.TEXT -> ai.edgeml.inference.LLMEngine(context)
+            ai.edgeml.inference.Modality.IMAGE -> ai.edgeml.inference.ImageEngine(context)
+            ai.edgeml.inference.Modality.AUDIO -> ai.edgeml.inference.AudioEngine(context)
+            ai.edgeml.inference.Modality.VIDEO -> ai.edgeml.inference.VideoEngine(context)
+        }
+    }
+
+    private suspend fun reportStreamingEventSafely(
+        request: ai.edgeml.api.dto.InferenceEventRequest,
+    ) {
+        try {
+            api.reportInferenceEvent(request)
+        } catch (e: Exception) {
+            Timber.w(e, "Failed to report ${request.eventType} event")
         }
     }
 
