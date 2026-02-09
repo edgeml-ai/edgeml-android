@@ -454,5 +454,6 @@ class EdgeMLClientTest {
         coEvery { trainer.loadModel(any()) } returns Result.success(true)
 
         client.initialize()
+        advanceUntilIdle()
     }
 }

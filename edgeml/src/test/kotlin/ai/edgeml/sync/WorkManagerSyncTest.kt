@@ -3,10 +3,11 @@ package ai.edgeml.sync
 import ai.edgeml.config.EdgeMLConfig
 import ai.edgeml.testConfig
 import android.content.Context
+import androidx.work.WorkManager
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.mockkStatic
-import io.mockk.unmockkStatic
+import io.mockk.unmockkAll
 import io.mockk.verify
 import org.junit.After
 import org.junit.Before
@@ -19,8 +20,8 @@ import kotlin.test.assertTrue
  *
  * [WorkManager.getInstance] is a static method — we use [mockkStatic] to
  * intercept it and return a relaxed mock, avoiding the
- * [AbstractMethodError] that occurs when WorkManager tries to call real
- * abstract methods on a plain `mockk<WorkManager>()`.
+ * [AbstractMethodError] / [ClassCastException] that occurs when
+ * WorkManager tries to call real abstract methods on a plain mock.
  */
 class WorkManagerSyncTest {
     private lateinit var context: Context
@@ -31,20 +32,14 @@ class WorkManagerSyncTest {
         every { context.applicationContext } returns context
 
         // Mock the static WorkManager.getInstance call
-        mockkStatic(
-            "androidx.work.WorkManager",
-            "androidx.work.impl.WorkManagerImpl",
-        )
-        val workManager = mockk<androidx.work.WorkManager>(relaxed = true)
-        every { androidx.work.WorkManager.getInstance(any()) } returns workManager
+        mockkStatic(WorkManager::class)
+        val workManager = mockk<WorkManager>(relaxed = true)
+        every { WorkManager.getInstance(any()) } returns workManager
     }
 
     @After
     fun tearDown() {
-        unmockkStatic(
-            "androidx.work.WorkManager",
-            "androidx.work.impl.WorkManagerImpl",
-        )
+        unmockkAll()
     }
 
     // =========================================================================
@@ -60,7 +55,7 @@ class WorkManagerSyncTest {
 
         // Should not enqueue any work — verify via WorkManager mock
         verify(exactly = 0) {
-            androidx.work.WorkManager.getInstance(any()).enqueueUniquePeriodicWork(
+            WorkManager.getInstance(any()).enqueueUniquePeriodicWork(
                 any(), any(), any()
             )
         }
@@ -74,7 +69,7 @@ class WorkManagerSyncTest {
         syncManager.schedulePeriodicSync()
 
         verify {
-            androidx.work.WorkManager.getInstance(any()).enqueueUniquePeriodicWork(
+            WorkManager.getInstance(any()).enqueueUniquePeriodicWork(
                 EdgeMLSyncWorker.WORK_NAME_PERIODIC,
                 any(),
                 any(),
@@ -94,7 +89,7 @@ class WorkManagerSyncTest {
         syncManager.triggerImmediateSync()
 
         verify {
-            androidx.work.WorkManager.getInstance(any()).enqueueUniqueWork(
+            WorkManager.getInstance(any()).enqueueUniqueWork(
                 EdgeMLSyncWorker.WORK_NAME_ONE_TIME,
                 any(),
                 any<androidx.work.OneTimeWorkRequest>(),
@@ -110,7 +105,7 @@ class WorkManagerSyncTest {
         syncManager.triggerImmediateSync(syncType = EdgeMLSyncWorker.SYNC_TYPE_EVENTS)
 
         verify {
-            androidx.work.WorkManager.getInstance(any()).enqueueUniqueWork(
+            WorkManager.getInstance(any()).enqueueUniqueWork(
                 EdgeMLSyncWorker.WORK_NAME_ONE_TIME,
                 any(),
                 any<androidx.work.OneTimeWorkRequest>(),
@@ -130,7 +125,7 @@ class WorkManagerSyncTest {
         syncManager.cancelPeriodicSync()
 
         verify {
-            androidx.work.WorkManager.getInstance(any())
+            WorkManager.getInstance(any())
                 .cancelUniqueWork(EdgeMLSyncWorker.WORK_NAME_PERIODIC)
         }
     }
@@ -147,7 +142,7 @@ class WorkManagerSyncTest {
         syncManager.cancelAllSync()
 
         verify {
-            androidx.work.WorkManager.getInstance(any())
+            WorkManager.getInstance(any())
                 .cancelAllWorkByTag(EdgeMLSyncWorker.TAG)
         }
     }
