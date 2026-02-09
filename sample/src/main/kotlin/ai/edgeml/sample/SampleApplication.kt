@@ -25,7 +25,7 @@ class SampleApplication : Application() {
         // In production, these would come from secure storage or a config file
         val config = EdgeMLConfig.Builder()
             .serverUrl(SampleConfig.EDGEML_SERVER_URL)
-            .apiKey(SampleConfig.EDGEML_API_KEY)
+            .deviceAccessToken(SampleConfig.EDGEML_DEVICE_ACCESS_TOKEN)
             .orgId(SampleConfig.EDGEML_ORG_ID)
             .modelId(SampleConfig.EDGEML_MODEL_ID)
             .debugMode(SampleConfig.DEBUG)
@@ -52,7 +52,7 @@ class SampleApplication : Application() {
 object SampleConfig {
     const val DEBUG = true
     const val EDGEML_SERVER_URL = "https://api.edgeml.ai"
-    const val EDGEML_API_KEY = "your-api-key-here"
+    const val EDGEML_DEVICE_ACCESS_TOKEN = "your-device-token-here"
     const val EDGEML_ORG_ID = "your-org-id-here"
     const val EDGEML_MODEL_ID = "your-model-id-here"
 }
