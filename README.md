@@ -4,6 +4,8 @@
 [![codecov](https://codecov.io/gh/edgeml-ai/edgeml-android/branch/main/graph/badge.svg)](https://codecov.io/gh/edgeml-ai/edgeml-android)
 [![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=edgeml-ai_edgeml-android&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=edgeml-ai_edgeml-android)
 [![Security Rating](https://sonarcloud.io/api/project_badges/measure?project=edgeml-ai_edgeml-android&metric=security_rating)](https://sonarcloud.io/summary/new_code?id=edgeml-ai_edgeml-android)
+[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/edgeml-ai/edgeml-android/badge)](https://scorecard.dev/viewer/?uri=github.com/edgeml-ai/edgeml-android)
+[![CodeQL](https://github.com/edgeml-ai/edgeml-android/actions/workflows/codeql.yml/badge.svg)](https://github.com/edgeml-ai/edgeml-android/actions/workflows/codeql.yml)
 [![Kotlin](https://img.shields.io/badge/Kotlin-1.9%2B-blue.svg)](https://kotlinlang.org)
 [![Platform](https://img.shields.io/badge/platform-Android%205.0%2B-green.svg)](https://github.com/edgeml-ai/edgeml-android)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
