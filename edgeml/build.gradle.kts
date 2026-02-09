@@ -7,7 +7,7 @@ plugins {
 
 android {
     namespace = "ai.edgeml"
-    compileSdk = 34
+    compileSdk = 35
 
     defaultConfig {
         minSdk = 24
@@ -75,7 +75,7 @@ dependencies {
     implementation("org.jetbrains.kotlin:kotlin-stdlib:2.3.10")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.10.2")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2")
-    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.2")
+    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.8.0")
 
     // AndroidX
     implementation("androidx.core:core-ktx:1.17.0")
@@ -87,10 +87,10 @@ dependencies {
     implementation("androidx.security:security-crypto:1.1.0-alpha06")
 
     // Networking - Retrofit + OkHttp
-    implementation("com.squareup.retrofit2:retrofit:2.9.0")
+    implementation("com.squareup.retrofit2:retrofit:2.11.0")
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
     implementation("com.squareup.okhttp3:logging-interceptor:4.12.0")
-    implementation("com.jakewharton.retrofit:retrofit2-kotlinx-serialization-converter:1.0.0")
+    implementation("com.squareup.retrofit2:converter-kotlinx-serialization:2.11.0")
 
     // TensorFlow Lite
     implementation("org.tensorflow:tensorflow-lite:2.14.0")
@@ -106,7 +106,7 @@ dependencies {
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.jetbrains.kotlin:kotlin-test:2.3.10")
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.10.2")
-    testImplementation("io.mockk:mockk:1.13.8")
+    testImplementation("io.mockk:mockk:1.14.9")
     testImplementation("com.squareup.okhttp3:mockwebserver:4.12.0")
 
     androidTestImplementation("androidx.test.ext:junit:1.1.5")

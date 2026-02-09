@@ -5,12 +5,12 @@ plugins {
 
 android {
     namespace = "ai.edgeml.sample"
-    compileSdk = 34
+    compileSdk = 35
 
     defaultConfig {
         applicationId = "ai.edgeml.sample"
         minSdk = 24
-        targetSdk = 34
+        targetSdk = 35
         versionCode = 1
         versionName = "1.0.0"
 
@@ -45,7 +45,7 @@ dependencies {
     implementation(project(":edgeml"))
 
     implementation("org.jetbrains.kotlin:kotlin-stdlib:2.3.10")
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2")
 
     implementation("androidx.core:core-ktx:1.17.0")
     implementation("androidx.appcompat:appcompat:1.6.1")
