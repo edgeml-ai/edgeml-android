@@ -1,12 +1,11 @@
 package ai.edgeml.client
 
 import ai.edgeml.api.EdgeMLApi
+import ai.edgeml.api.dto.DeviceCapabilities
 import ai.edgeml.api.dto.DevicePolicyResponse
 import ai.edgeml.api.dto.DeviceRegistrationResponse
 import ai.edgeml.api.dto.GroupMembership
 import ai.edgeml.api.dto.GroupMembershipsResponse
-import ai.edgeml.api.dto.HeartbeatResponse
-import ai.edgeml.models.CachedModel
 import ai.edgeml.models.InferenceOutput
 import ai.edgeml.models.ModelManager
 import ai.edgeml.storage.SecureStorage
@@ -15,13 +14,15 @@ import ai.edgeml.sync.WorkManagerSync
 import ai.edgeml.testCachedModel
 import ai.edgeml.testConfig
 import ai.edgeml.training.TFLiteTrainer
+import ai.edgeml.utils.DeviceUtils
 import android.content.Context
 import io.mockk.coEvery
 import io.mockk.coVerify
+import io.mockk.eq
 import io.mockk.every
-import io.mockk.just
 import io.mockk.mockk
-import io.mockk.runs
+import io.mockk.mockkObject
+import io.mockk.unmockkObject
 import io.mockk.verify
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -63,6 +64,23 @@ class EdgeMLClientTest {
     fun setUp() {
         Dispatchers.setMain(testDispatcher)
 
+        // Mock DeviceUtils to avoid NPE from null Build fields on CI JVM
+        mockkObject(DeviceUtils)
+        every { DeviceUtils.getManufacturer() } returns "TestManufacturer"
+        every { DeviceUtils.getModel() } returns "TestModel"
+        every { DeviceUtils.getOsVersion() } returns "Android 14 (API 34)"
+        every { DeviceUtils.getLocale() } returns "en_US"
+        every { DeviceUtils.getRegion() } returns "us"
+        every { DeviceUtils.getCpuArchitecture() } returns "arm64-v8a"
+        every { DeviceUtils.generateDeviceIdentifier(any()) } returns "abcd1234abcd1234abcd1234abcd1234"
+        every { DeviceUtils.getDeviceCapabilities(any()) } returns DeviceCapabilities(
+            cpuArchitecture = "arm64-v8a",
+            gpuAvailable = false,
+            nnapiAvailable = false,
+            totalMemoryMb = 4096,
+            availableStorageMb = 2048,
+        )
+
         context = mockk<Context>(relaxed = true)
         every { context.applicationContext } returns context
 
@@ -94,6 +112,7 @@ class EdgeMLClientTest {
     @After
     fun tearDown() {
         Dispatchers.resetMain()
+        unmockkObject(DeviceUtils)
     }
 
     // =========================================================================
@@ -109,9 +128,11 @@ class EdgeMLClientTest {
     @Test
     fun `initialize transitions to READY on success`() = runTest(testDispatcher) {
         stubSuccessfulRegistration()
-        // ensureModelAvailable() and getCachedModel() use default params
-        coEvery { modelManager.ensureModelAvailable(any(), any()) } returns Result.success(testCachedModel())
-        coEvery { modelManager.getCachedModel(any(), any()) } returns testCachedModel()
+        val model = testCachedModel()
+        coEvery { modelManager.ensureModelAvailable() } returns Result.success(model)
+        coEvery { modelManager.ensureModelAvailable(any(), any()) } returns Result.success(model)
+        coEvery { modelManager.getCachedModel() } returns model
+        coEvery { modelManager.getCachedModel(any(), any()) } returns model
         coEvery { trainer.loadModel(any()) } returns Result.success(true)
 
         val result = client.initialize()
@@ -154,8 +175,11 @@ class EdgeMLClientTest {
     @Test
     fun `initialize registers device when not registered`() = runTest(testDispatcher) {
         stubSuccessfulRegistration()
-        coEvery { modelManager.ensureModelAvailable(any(), any()) } returns Result.success(testCachedModel())
-        coEvery { modelManager.getCachedModel(any(), any()) } returns testCachedModel()
+        val model = testCachedModel()
+        coEvery { modelManager.ensureModelAvailable() } returns Result.success(model)
+        coEvery { modelManager.ensureModelAvailable(any(), any()) } returns Result.success(model)
+        coEvery { modelManager.getCachedModel() } returns model
+        coEvery { modelManager.getCachedModel(any(), any()) } returns model
         coEvery { trainer.loadModel(any()) } returns Result.success(true)
 
         client.initialize()
@@ -172,8 +196,11 @@ class EdgeMLClientTest {
         coEvery { api.getDeviceGroups(any()) } returns Response.success(
             GroupMembershipsResponse(memberships = emptyList(), count = 0),
         )
-        coEvery { modelManager.ensureModelAvailable(any(), any()) } returns Result.success(testCachedModel())
-        coEvery { modelManager.getCachedModel(any(), any()) } returns testCachedModel()
+        val model = testCachedModel()
+        coEvery { modelManager.ensureModelAvailable() } returns Result.success(model)
+        coEvery { modelManager.ensureModelAvailable(any(), any()) } returns Result.success(model)
+        coEvery { modelManager.getCachedModel() } returns model
+        coEvery { modelManager.getCachedModel(any(), any()) } returns model
         coEvery { trainer.loadModel(any()) } returns Result.success(true)
 
         client.initialize()
@@ -214,8 +241,11 @@ class EdgeMLClientTest {
         coEvery { api.getDeviceGroups("server-id") } returns Response.success(
             GroupMembershipsResponse(memberships = memberships, count = 1),
         )
-        coEvery { modelManager.ensureModelAvailable(any(), any()) } returns Result.success(testCachedModel())
-        coEvery { modelManager.getCachedModel(any(), any()) } returns testCachedModel()
+        val model = testCachedModel()
+        coEvery { modelManager.ensureModelAvailable() } returns Result.success(model)
+        coEvery { modelManager.ensureModelAvailable(any(), any()) } returns Result.success(model)
+        coEvery { modelManager.getCachedModel() } returns model
+        coEvery { modelManager.getCachedModel(any(), any()) } returns model
         coEvery { trainer.loadModel(any()) } returns Result.success(true)
 
         client.initialize()
@@ -286,7 +316,9 @@ class EdgeMLClientTest {
         advanceUntilIdle()
 
         val newModel = testCachedModel(version = "2.0.0")
-        coEvery { modelManager.ensureModelAvailable(any(), forceDownload = true) } returns
+        coEvery { modelManager.ensureModelAvailable(forceDownload = true) } returns
+            Result.success(newModel)
+        coEvery { modelManager.ensureModelAvailable(any(), eq(true)) } returns
             Result.success(newModel)
         coEvery { trainer.loadModel(newModel) } returns Result.success(true)
 
@@ -453,14 +485,24 @@ class EdgeMLClientTest {
         )
     }
 
+    /**
+     * Stub all dependencies for a successful initialization that skips registration.
+     *
+     * Uses both no-arg and parameterized stubs for ModelManager methods to handle
+     * MockK's default parameter matching with value class Result.
+     */
     private fun stubInitialization() {
         coEvery { storage.getClientDeviceIdentifier() } returns "device-id"
         coEvery { storage.getServerDeviceId() } returns "server-id"
         coEvery { api.getDeviceGroups(any()) } returns Response.success(
             GroupMembershipsResponse(memberships = emptyList(), count = 0),
         )
-        coEvery { modelManager.ensureModelAvailable(any(), any()) } returns Result.success(testCachedModel())
-        coEvery { modelManager.getCachedModel(any(), any()) } returns testCachedModel()
+        // Stub both no-arg and parameterized forms for MockK 1.14.9 compatibility
+        val model = testCachedModel()
+        coEvery { modelManager.ensureModelAvailable() } returns Result.success(model)
+        coEvery { modelManager.ensureModelAvailable(any(), any()) } returns Result.success(model)
+        coEvery { modelManager.getCachedModel() } returns model
+        coEvery { modelManager.getCachedModel(any(), any()) } returns model
         coEvery { trainer.loadModel(any()) } returns Result.success(true)
     }
 }
