@@ -105,6 +105,22 @@ class SecureStorage private constructor(
         internal fun clearInstance() {
             instance = null
         }
+
+        /**
+         * Create a SecureStorage instance for testing with injected dependencies.
+         */
+        @androidx.annotation.VisibleForTesting
+        internal fun createForTesting(
+            prefs: SharedPreferences,
+            ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
+        ): SecureStorage {
+            val json =
+                Json {
+                    ignoreUnknownKeys = true
+                    encodeDefaults = true
+                }
+            return SecureStorage(prefs, json, ioDispatcher)
+        }
     }
 
     // =========================================================================

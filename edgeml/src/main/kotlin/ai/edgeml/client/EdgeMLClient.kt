@@ -72,14 +72,13 @@ class EdgeMLClient private constructor(
     private val config: EdgeMLConfig,
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
     private val mainDispatcher: CoroutineDispatcher = Dispatchers.Main,
+    private val api: EdgeMLApi = EdgeMLApiFactory.create(config),
+    private val storage: SecureStorage = SecureStorage.getInstance(context, config.enableEncryptedStorage),
+    private val modelManager: ModelManager = ModelManager(context, config, api, storage),
+    private val trainer: TFLiteTrainer = TFLiteTrainer(context, config),
+    private val syncManager: WorkManagerSync = WorkManagerSync(context, config),
+    private val eventQueue: EventQueue = EventQueue.getInstance(context),
 ) {
-    // Internal components
-    private val api: EdgeMLApi = EdgeMLApiFactory.create(config)
-    private val storage: SecureStorage = SecureStorage.getInstance(context, config.enableEncryptedStorage)
-    private val modelManager: ModelManager = ModelManager(context, config, api, storage)
-    private val trainer: TFLiteTrainer = TFLiteTrainer(context, config)
-    private val syncManager: WorkManagerSync = WorkManagerSync(context, config)
-    private val eventQueue: EventQueue = EventQueue.getInstance(context)
 
     // Coroutine scope for background operations
     private val scope = CoroutineScope(SupervisorJob() + mainDispatcher)
@@ -745,6 +744,12 @@ class EdgeMLClient private constructor(
         private var config: EdgeMLConfig? = null
         private var ioDispatcher: CoroutineDispatcher = Dispatchers.IO
         private var mainDispatcher: CoroutineDispatcher = Dispatchers.Main
+        private var api: EdgeMLApi? = null
+        private var storage: SecureStorage? = null
+        private var modelManager: ModelManager? = null
+        private var trainer: TFLiteTrainer? = null
+        private var syncManager: WorkManagerSync? = null
+        private var eventQueue: EventQueue? = null
 
         /**
          * Set the configuration.
@@ -770,6 +775,24 @@ class EdgeMLClient private constructor(
                 this.mainDispatcher = dispatcher
             }
 
+        /** @hide */
+        internal fun api(api: EdgeMLApi) = apply { this.api = api }
+
+        /** @hide */
+        internal fun storage(storage: SecureStorage) = apply { this.storage = storage }
+
+        /** @hide */
+        internal fun modelManager(modelManager: ModelManager) = apply { this.modelManager = modelManager }
+
+        /** @hide */
+        internal fun trainer(trainer: TFLiteTrainer) = apply { this.trainer = trainer }
+
+        /** @hide */
+        internal fun syncManager(syncManager: WorkManagerSync) = apply { this.syncManager = syncManager }
+
+        /** @hide */
+        internal fun eventQueue(eventQueue: EventQueue) = apply { this.eventQueue = eventQueue }
+
         /**
          * Build and return the EdgeMLClient instance.
          */
@@ -783,12 +806,22 @@ class EdgeMLClient private constructor(
                 Timber.plant(Timber.DebugTree())
             }
 
+            val appContext = context.applicationContext
+            val resolvedApi = api ?: EdgeMLApiFactory.create(cfg)
+            val resolvedStorage = storage ?: SecureStorage.getInstance(appContext, cfg.enableEncryptedStorage)
+
             val client =
                 EdgeMLClient(
-                    context = context.applicationContext,
+                    context = appContext,
                     config = cfg,
                     ioDispatcher = ioDispatcher,
                     mainDispatcher = mainDispatcher,
+                    api = resolvedApi,
+                    storage = resolvedStorage,
+                    modelManager = modelManager ?: ModelManager(appContext, cfg, resolvedApi, resolvedStorage),
+                    trainer = trainer ?: TFLiteTrainer(appContext, cfg),
+                    syncManager = syncManager ?: WorkManagerSync(appContext, cfg),
+                    eventQueue = eventQueue ?: EventQueue.getInstance(appContext),
                 )
             instance = client
             return client

@@ -51,6 +51,23 @@ class EventQueue private constructor(
 
             return EventQueue(queueDir, json, Dispatchers.IO)
         }
+
+        /**
+         * Create an EventQueue instance for testing with injected dependencies.
+         */
+        @androidx.annotation.VisibleForTesting
+        internal fun createForTesting(
+            queueDir: File,
+            ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
+        ): EventQueue {
+            queueDir.mkdirs()
+            val json =
+                Json {
+                    ignoreUnknownKeys = true
+                    encodeDefaults = true
+                }
+            return EventQueue(queueDir, json, ioDispatcher)
+        }
     }
 
     /**
