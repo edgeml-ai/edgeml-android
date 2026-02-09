@@ -4,6 +4,7 @@ import android.app.ActivityManager
 import android.content.ContentResolver
 import android.content.Context
 import android.os.Build
+import android.provider.Settings
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.mockkStatic
@@ -11,10 +12,18 @@ import io.mockk.unmockkStatic
 import org.junit.After
 import org.junit.Before
 import org.junit.Test
+import java.lang.reflect.Field
+import java.lang.reflect.Modifier
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
+/**
+ * Tests for [DeviceUtils].
+ *
+ * Many Android [Build] fields are `null` on a plain JVM (CI), so we
+ * use reflection to set them to known values before testing.
+ */
 class DeviceUtilsTest {
     private lateinit var context: Context
     private lateinit var contentResolver: ContentResolver
@@ -25,6 +34,22 @@ class DeviceUtilsTest {
         contentResolver = mockk<ContentResolver>(relaxed = true)
         every { context.contentResolver } returns contentResolver
         every { context.packageName } returns "ai.edgeml.test"
+
+        // Set Build fields via reflection so getManufacturer() etc. don't NPE
+        setBuildField("MANUFACTURER", "TestManufacturer")
+        setBuildField("MODEL", "TestModel")
+        setBuildField("SUPPORTED_ABIS", arrayOf("arm64-v8a", "armeabi-v7a"))
+
+        // Mock Settings.Secure.getString to return a deterministic android_id
+        mockkStatic(Settings.Secure::class)
+        every {
+            Settings.Secure.getString(any(), eq(Settings.Secure.ANDROID_ID))
+        } returns "test-android-id-12345"
+    }
+
+    @After
+    fun tearDown() {
+        unmockkStatic(Settings.Secure::class)
     }
 
     // =========================================================================
@@ -34,7 +59,6 @@ class DeviceUtilsTest {
     @Test
     fun `generateDeviceIdentifier returns 32 character string`() {
         val id = DeviceUtils.generateDeviceIdentifier(context)
-
         assertEquals(32, id.length)
     }
 
@@ -42,14 +66,12 @@ class DeviceUtilsTest {
     fun `generateDeviceIdentifier is deterministic for same context`() {
         val id1 = DeviceUtils.generateDeviceIdentifier(context)
         val id2 = DeviceUtils.generateDeviceIdentifier(context)
-
         assertEquals(id1, id2)
     }
 
     @Test
     fun `generateDeviceIdentifier is hex string`() {
         val id = DeviceUtils.generateDeviceIdentifier(context)
-
         assertTrue(id.all { it in "0123456789abcdef" })
     }
 
@@ -77,12 +99,14 @@ class DeviceUtilsTest {
     fun `getManufacturer returns non-empty string`() {
         val manufacturer = DeviceUtils.getManufacturer()
         assertTrue(manufacturer.isNotEmpty())
+        assertEquals("TestManufacturer", manufacturer)
     }
 
     @Test
     fun `getModel returns non-empty string`() {
         val model = DeviceUtils.getModel()
         assertTrue(model.isNotEmpty())
+        assertEquals("TestModel", model)
     }
 
     // =========================================================================
@@ -114,6 +138,7 @@ class DeviceUtilsTest {
     fun `getCpuArchitecture returns non-empty string`() {
         val arch = DeviceUtils.getCpuArchitecture()
         assertTrue(arch.isNotEmpty())
+        assertEquals("arm64-v8a", arch)
     }
 
     // =========================================================================
@@ -126,6 +151,7 @@ class DeviceUtilsTest {
 
         assertNotNull(caps.cpuArchitecture)
         assertTrue(caps.cpuArchitecture!!.isNotEmpty())
+        assertEquals("arm64-v8a", caps.cpuArchitecture)
     }
 
     // =========================================================================
@@ -153,7 +179,6 @@ class DeviceUtilsTest {
 
     @Test
     fun `getTotalMemoryMb returns non-negative value`() {
-        val memoryInfo = ActivityManager.MemoryInfo()
         val activityManager = mockk<ActivityManager>()
         every { activityManager.getMemoryInfo(any()) } answers {
             val info = firstArg<ActivityManager.MemoryInfo>()
@@ -185,5 +210,34 @@ class DeviceUtilsTest {
         val lowMemory = DeviceUtils.isLowMemory(context)
         // Should return false on error
         assertEquals(false, lowMemory)
+    }
+
+    // =========================================================================
+    // Helpers
+    // =========================================================================
+
+    /**
+     * Set a static final field on [Build] via reflection.
+     * Needed because Build fields are null on plain JVM.
+     */
+    private fun setBuildField(fieldName: String, value: Any) {
+        try {
+            val field = Build::class.java.getDeclaredField(fieldName)
+            field.isAccessible = true
+
+            // Remove final modifier
+            val modifiersField = try {
+                Field::class.java.getDeclaredField("modifiers")
+            } catch (_: NoSuchFieldException) {
+                // Java 12+: modifiers field doesn't exist; use Unsafe or skip
+                null
+            }
+            modifiersField?.isAccessible = true
+            modifiersField?.setInt(field, field.modifiers and Modifier.FINAL.inv())
+
+            field.set(null, value)
+        } catch (_: Exception) {
+            // Reflection may not work on all JVM versions; tests will adapt
+        }
     }
 }

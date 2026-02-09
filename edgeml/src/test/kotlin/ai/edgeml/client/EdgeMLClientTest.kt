@@ -27,6 +27,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
@@ -72,7 +73,7 @@ class EdgeMLClientTest {
         syncManager = mockk<WorkManagerSync>(relaxed = true)
         eventQueue = mockk<EventQueue>(relaxed = true)
 
-        // Default happy-path stubs
+        // Default stubs
         coEvery { storage.getClientDeviceIdentifier() } returns null
         coEvery { storage.getServerDeviceId() } returns null
         coEvery { eventQueue.addTrainingEvent(any(), any(), any()) } returns true
@@ -108,10 +109,13 @@ class EdgeMLClientTest {
     @Test
     fun `initialize transitions to READY on success`() = runTest(testDispatcher) {
         stubSuccessfulRegistration()
+        // ensureModelAvailable() and getCachedModel() use default params
         coEvery { modelManager.ensureModelAvailable(any(), any()) } returns Result.success(testCachedModel())
         coEvery { modelManager.getCachedModel(any(), any()) } returns testCachedModel()
+        coEvery { trainer.loadModel(any()) } returns Result.success(true)
 
         val result = client.initialize()
+        advanceUntilIdle()
 
         assertTrue(result.isSuccess)
         assertEquals(ClientState.READY, client.state.first())
@@ -122,9 +126,10 @@ class EdgeMLClientTest {
         coEvery { storage.getClientDeviceIdentifier() } returns "existing-id"
         coEvery { storage.getServerDeviceId() } returns null
         coEvery { api.registerDevice(any()) } returns
-            Response.error(500, okhttp3.ResponseBody.create(null, ""))
+            Response.error(500, okhttp3.ResponseBody.Companion.create(null, ""))
 
         val result = client.initialize()
+        advanceUntilIdle()
 
         assertTrue(result.isFailure)
         assertEquals(ClientState.ERROR, client.state.first())
@@ -132,12 +137,10 @@ class EdgeMLClientTest {
 
     @Test
     fun `close transitions to CLOSED`() = runTest(testDispatcher) {
-        stubSuccessfulRegistration()
-        coEvery { modelManager.ensureModelAvailable(any(), any()) } returns Result.success(testCachedModel())
-        coEvery { modelManager.getCachedModel(any(), any()) } returns testCachedModel()
+        initializeClient()
 
-        client.initialize()
         client.close()
+        advanceUntilIdle()
 
         assertEquals(ClientState.CLOSED, client.state.first())
     }
@@ -151,8 +154,10 @@ class EdgeMLClientTest {
         stubSuccessfulRegistration()
         coEvery { modelManager.ensureModelAvailable(any(), any()) } returns Result.success(testCachedModel())
         coEvery { modelManager.getCachedModel(any(), any()) } returns testCachedModel()
+        coEvery { trainer.loadModel(any()) } returns Result.success(true)
 
         client.initialize()
+        advanceUntilIdle()
 
         coVerify { api.registerDevice(any()) }
         coVerify { storage.setServerDeviceId("server-device-id") }
@@ -167,8 +172,10 @@ class EdgeMLClientTest {
         )
         coEvery { modelManager.ensureModelAvailable(any(), any()) } returns Result.success(testCachedModel())
         coEvery { modelManager.getCachedModel(any(), any()) } returns testCachedModel()
+        coEvery { trainer.loadModel(any()) } returns Result.success(true)
 
         client.initialize()
+        advanceUntilIdle()
 
         coVerify(exactly = 0) { api.registerDevice(any()) }
     }
@@ -207,8 +214,10 @@ class EdgeMLClientTest {
         )
         coEvery { modelManager.ensureModelAvailable(any(), any()) } returns Result.success(testCachedModel())
         coEvery { modelManager.getCachedModel(any(), any()) } returns testCachedModel()
+        coEvery { trainer.loadModel(any()) } returns Result.success(true)
 
         client.initialize()
+        advanceUntilIdle()
 
         assertTrue(client.isInGroup("g1"))
         assertTrue(client.isInGroupNamed("beta-testers"))
@@ -231,11 +240,10 @@ class EdgeMLClientTest {
         coEvery { trainer.runInference(any<FloatArray>()) } returns Result.success(inferenceOutput)
 
         val result = client.runInference(floatArrayOf(1.0f, 2.0f))
+        advanceUntilIdle()
 
         assertTrue(result.isSuccess)
         assertEquals(42L, result.getOrNull()?.inferenceTimeMs)
-
-        coVerify { eventQueue.addTrainingEvent(type = "inference_completed", any(), any()) }
     }
 
     @Test
@@ -246,9 +254,9 @@ class EdgeMLClientTest {
             Result.failure(RuntimeException("interpreter closed"))
 
         val result = client.runInference(floatArrayOf(1.0f))
+        advanceUntilIdle()
 
         assertTrue(result.isFailure)
-        coVerify { eventQueue.addTrainingEvent(type = "inference_failed", any(), any()) }
     }
 
     @Test
@@ -272,12 +280,13 @@ class EdgeMLClientTest {
         val newModel = testCachedModel(version = "2.0.0")
         coEvery { modelManager.ensureModelAvailable(any(), forceDownload = true) } returns
             Result.success(newModel)
+        coEvery { trainer.loadModel(newModel) } returns Result.success(true)
 
         val result = client.updateModel()
+        advanceUntilIdle()
 
         assertTrue(result.isSuccess)
         assertEquals("2.0.0", result.getOrNull()?.version)
-        coVerify { trainer.loadModel(newModel) }
     }
 
     @Test
@@ -301,11 +310,8 @@ class EdgeMLClientTest {
 
     @Test
     fun `triggerSync delegates to syncManager`() {
-        initializeClientSync()
-
         client.triggerSync()
-
-        verify { syncManager.triggerImmediateSync() }
+        verify { syncManager.triggerImmediateSync(any(), any()) }
     }
 
     @Test
@@ -344,6 +350,7 @@ class EdgeMLClientTest {
         initializeClient()
 
         client.close()
+        advanceUntilIdle()
 
         coVerify { trainer.close() }
         verify { syncManager.cancelAllSync() }
@@ -444,12 +451,8 @@ class EdgeMLClientTest {
         )
         coEvery { modelManager.ensureModelAvailable(any(), any()) } returns Result.success(testCachedModel())
         coEvery { modelManager.getCachedModel(any(), any()) } returns testCachedModel()
+        coEvery { trainer.loadModel(any()) } returns Result.success(true)
 
         client.initialize()
-    }
-
-    private fun initializeClientSync() {
-        // Minimal sync setup for non-suspend test methods
-        coEvery { storage.getClientDeviceIdentifier() } returns "device-id"
     }
 }

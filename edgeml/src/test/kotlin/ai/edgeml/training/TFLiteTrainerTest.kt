@@ -1,6 +1,5 @@
 package ai.edgeml.training
 
-import ai.edgeml.models.CachedModel
 import ai.edgeml.testCachedModel
 import ai.edgeml.testConfig
 import android.content.Context
@@ -18,6 +17,14 @@ import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
+/**
+ * Tests for [TFLiteTrainer].
+ *
+ * TensorFlow Lite's native library is not available on the CI JVM, so we
+ * cannot test paths that create an [org.tensorflow.lite.Interpreter].
+ * Instead we focus on guard clauses, state management, and error paths
+ * that execute *before* any native call is made.
+ */
 @OptIn(ExperimentalCoroutinesApi::class)
 class TFLiteTrainerTest {
     private val testDispatcher = StandardTestDispatcher()
@@ -43,7 +50,7 @@ class TFLiteTrainerTest {
     }
 
     // =========================================================================
-    // loadModel
+    // loadModel — missing file path
     // =========================================================================
 
     @Test
@@ -54,19 +61,6 @@ class TFLiteTrainerTest {
 
         assertTrue(result.isFailure)
         assertTrue(result.exceptionOrNull()?.message?.contains("not found") == true)
-    }
-
-    @Test
-    fun `loadModel fails for invalid tflite file`() = runTest(testDispatcher) {
-        val modelFile = File(tmpDir, "bad-model.tflite")
-        modelFile.writeText("not a valid tflite model")
-
-        val model = testCachedModel(filePath = modelFile.absolutePath)
-
-        val result = trainer.loadModel(model)
-
-        // TFLite will throw when trying to interpret invalid data
-        assertTrue(result.isFailure)
     }
 
     // =========================================================================

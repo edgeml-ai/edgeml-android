@@ -107,7 +107,7 @@ class ModelManagerTest {
     @Test
     fun `ensureModelAvailable fails with UNAUTHORIZED on 401`() = runTest(testDispatcher) {
         coEvery { api.getDeviceVersion(any(), any(), any()) } returns
-            Response.error(401, okhttp3.ResponseBody.create(null, ""))
+            Response.error(401, okhttp3.ResponseBody.Companion.create(null, ""))
 
         val result = modelManager.ensureModelAvailable()
 
@@ -119,7 +119,7 @@ class ModelManagerTest {
     @Test
     fun `ensureModelAvailable fails with NOT_FOUND on 404`() = runTest(testDispatcher) {
         coEvery { api.getDeviceVersion(any(), any(), any()) } returns
-            Response.error(404, okhttp3.ResponseBody.create(null, ""))
+            Response.error(404, okhttp3.ResponseBody.Companion.create(null, ""))
 
         val result = modelManager.ensureModelAvailable()
 
@@ -131,7 +131,7 @@ class ModelManagerTest {
     @Test
     fun `ensureModelAvailable fails with SERVER_ERROR on 500`() = runTest(testDispatcher) {
         coEvery { api.getDeviceVersion(any(), any(), any()) } returns
-            Response.error(500, okhttp3.ResponseBody.create(null, ""))
+            Response.error(500, okhttp3.ResponseBody.Companion.create(null, ""))
 
         val result = modelManager.ensureModelAvailable()
 
@@ -428,7 +428,7 @@ class ModelManagerTest {
             Response.success(VersionResolutionResponse(version = "1.0.0", source = "direct"))
 
         coEvery { api.getModelDownloadUrl(any(), any(), any()) } returns
-            Response.error(500, okhttp3.ResponseBody.create(null, ""))
+            Response.error(500, okhttp3.ResponseBody.Companion.create(null, ""))
 
         val result = modelManager.ensureModelAvailable()
 

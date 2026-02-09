@@ -240,7 +240,7 @@ class EventQueueTest {
         val newDir = File(System.getProperty("java.io.tmpdir"), "edgeml_test_new_${System.nanoTime()}")
         assertFalse(newDir.exists())
 
-        val queue = EventQueue.createForTesting(newDir, testDispatcher)
+        EventQueue.createForTesting(newDir, testDispatcher)
         assertTrue(newDir.exists())
 
         // cleanup

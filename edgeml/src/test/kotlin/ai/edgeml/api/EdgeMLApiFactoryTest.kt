@@ -40,7 +40,7 @@ class EdgeMLApiFactoryTest {
         val api = EdgeMLApiFactory.create(config)
 
         // Make a blocking call using a simple retrofit call
-        val call = kotlinx.coroutines.runBlocking { api.healthCheck() }
+        kotlinx.coroutines.runBlocking { api.healthCheck() }
 
         val recorded = server.takeRequest()
         assertEquals("Bearer my-secret-token", recorded.getHeader("Authorization"))
