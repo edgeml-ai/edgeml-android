@@ -1,11 +1,11 @@
 # EdgeML Android SDK
 
-[![CI](https://github.com/edgeml/edgeml-android/actions/workflows/ci.yml/badge.svg)](https://github.com/edgeml/edgeml-android/actions/workflows/ci.yml)
-[![codecov](https://codecov.io/gh/edgeml/edgeml-android/branch/main/graph/badge.svg)](https://codecov.io/gh/edgeml/edgeml-android)
-[![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=edgeml_edgeml-android&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=edgeml_edgeml-android)
-[![Security Rating](https://sonarcloud.io/api/project_badges/measure?project=edgeml_edgeml-android&metric=security_rating)](https://sonarcloud.io/summary/new_code?id=edgeml_edgeml-android)
+[![CI](https://github.com/edgeml-ai/edgeml-android/actions/workflows/ci.yml/badge.svg)](https://github.com/edgeml-ai/edgeml-android/actions/workflows/ci.yml)
+[![codecov](https://codecov.io/gh/edgeml-ai/edgeml-android/branch/main/graph/badge.svg)](https://codecov.io/gh/edgeml-ai/edgeml-android)
+[![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=edgeml-ai_edgeml-android&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=edgeml-ai_edgeml-android)
+[![Security Rating](https://sonarcloud.io/api/project_badges/measure?project=edgeml-ai_edgeml-android&metric=security_rating)](https://sonarcloud.io/summary/new_code?id=edgeml-ai_edgeml-android)
 [![Kotlin](https://img.shields.io/badge/Kotlin-1.9%2B-blue.svg)](https://kotlinlang.org)
-[![Platform](https://img.shields.io/badge/platform-Android%205.0%2B-green.svg)](https://github.com/edgeml/edgeml-android)
+[![Platform](https://img.shields.io/badge/platform-Android%205.0%2B-green.svg)](https://github.com/edgeml-ai/edgeml-android)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 > Enterprise-grade Android SDK for privacy-preserving federated learning on mobile devices.
@@ -423,7 +423,7 @@ We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) f
 
 ```bash
 # Clone repository
-git clone https://github.com/edgeml/edgeml-android.git
+git clone https://github.com/edgeml-ai/edgeml-android.git
 cd edgeml-android
 
 # Open in Android Studio
@@ -503,7 +503,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## Support
 
-For issues and feature requests, please use the [GitHub issue tracker](https://github.com/edgeml/edgeml-android/issues).
+For issues and feature requests, please use the [GitHub issue tracker](https://github.com/edgeml-ai/edgeml-android/issues).
 
 For questions: support@edgeml.io
 
