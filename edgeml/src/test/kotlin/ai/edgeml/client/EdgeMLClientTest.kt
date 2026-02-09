@@ -25,6 +25,7 @@ import io.mockk.unmockkObject
 import io.mockk.verify
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
@@ -79,6 +80,8 @@ class EdgeMLClientTest {
             totalMemoryMb = 4096,
             availableStorageMb = 2048,
         )
+        every { DeviceUtils.getAvailableStorageMb() } returns 2048L
+        every { DeviceUtils.getAvailableMemoryMb(any()) } returns 1024L
 
         context = mockk<Context>(relaxed = true)
         every { context.applicationContext } returns context
@@ -94,6 +97,16 @@ class EdgeMLClientTest {
         coEvery { storage.getClientDeviceIdentifier() } returns null
         coEvery { storage.getServerDeviceId() } returns null
         coEvery { eventQueue.addTrainingEvent(any(), any(), any()) } returns true
+
+        // Default model stubs — uses any() matchers for parameterized forms.
+        // Note: no-arg coEvery on ModelManager methods NPEs because MockK evaluates
+        // default params (config.modelId) on the mock. These stubs may not match
+        // default-param calls in MockK 1.14.9 — use setClientReady() for tests
+        // that just need READY state.
+        val defaultModel = testCachedModel()
+        coEvery { modelManager.ensureModelAvailable(any(), any()) } returns Result.success(defaultModel)
+        coEvery { modelManager.getCachedModel(any(), any()) } returns defaultModel
+        coEvery { trainer.loadModel(any()) } returns Result.success(true)
 
         client = EdgeMLClient.Builder(context)
             .config(config)
@@ -114,6 +127,31 @@ class EdgeMLClientTest {
         unmockkObject(DeviceUtils)
     }
 
+    /**
+     * Force the client into READY state via reflection.
+     *
+     * MockK 1.14.9 cannot reliably stub ModelManager methods that use default
+     * parameters and return Result<T> (value class). This helper bypasses the
+     * full initialization for tests that just need the client in READY state.
+     */
+    private fun setClientReady() {
+        val field = EdgeMLClient::class.java.getDeclaredField("_state")
+        field.isAccessible = true
+        @Suppress("UNCHECKED_CAST")
+        (field.get(client) as MutableStateFlow<ClientState>).value = ClientState.READY
+    }
+
+    /**
+     * Set the server device ID via reflection (needed for tests that check
+     * registered-device behavior without full initialization).
+     */
+    private fun setServerDeviceId(id: String) {
+        val field = EdgeMLClient::class.java.getDeclaredField("_serverDeviceId")
+        field.isAccessible = true
+        @Suppress("UNCHECKED_CAST")
+        (field.get(client) as MutableStateFlow<String?>).value = id
+    }
+
     // =========================================================================
     // State machine
     // =========================================================================
@@ -127,12 +165,6 @@ class EdgeMLClientTest {
     @Test
     fun `initialize transitions to READY on success`() = runTest(testDispatcher) {
         stubSuccessfulRegistration()
-        val model = testCachedModel()
-        coEvery { modelManager.ensureModelAvailable() } returns Result.success(model)
-        coEvery { modelManager.ensureModelAvailable(any(), any()) } returns Result.success(model)
-        coEvery { modelManager.getCachedModel() } returns model
-        coEvery { modelManager.getCachedModel(any(), any()) } returns model
-        coEvery { trainer.loadModel(any()) } returns Result.success(true)
 
         val result = client.initialize()
         advanceUntilIdle()
@@ -157,9 +189,7 @@ class EdgeMLClientTest {
 
     @Test
     fun `close transitions to CLOSED`() = runTest(testDispatcher) {
-        stubInitialization()
-        client.initialize()
-        advanceUntilIdle()
+        setClientReady()
 
         client.close()
         advanceUntilIdle()
@@ -174,12 +204,6 @@ class EdgeMLClientTest {
     @Test
     fun `initialize registers device when not registered`() = runTest(testDispatcher) {
         stubSuccessfulRegistration()
-        val model = testCachedModel()
-        coEvery { modelManager.ensureModelAvailable() } returns Result.success(model)
-        coEvery { modelManager.ensureModelAvailable(any(), any()) } returns Result.success(model)
-        coEvery { modelManager.getCachedModel() } returns model
-        coEvery { modelManager.getCachedModel(any(), any()) } returns model
-        coEvery { trainer.loadModel(any()) } returns Result.success(true)
 
         client.initialize()
         advanceUntilIdle()
@@ -195,12 +219,6 @@ class EdgeMLClientTest {
         coEvery { api.getDeviceGroups(any()) } returns Response.success(
             GroupMembershipsResponse(memberships = emptyList(), count = 0),
         )
-        val model = testCachedModel()
-        coEvery { modelManager.ensureModelAvailable() } returns Result.success(model)
-        coEvery { modelManager.ensureModelAvailable(any(), any()) } returns Result.success(model)
-        coEvery { modelManager.getCachedModel() } returns model
-        coEvery { modelManager.getCachedModel(any(), any()) } returns model
-        coEvery { trainer.loadModel(any()) } returns Result.success(true)
 
         client.initialize()
         advanceUntilIdle()
@@ -240,12 +258,6 @@ class EdgeMLClientTest {
         coEvery { api.getDeviceGroups("server-id") } returns Response.success(
             GroupMembershipsResponse(memberships = memberships, count = 1),
         )
-        val model = testCachedModel()
-        coEvery { modelManager.ensureModelAvailable() } returns Result.success(model)
-        coEvery { modelManager.ensureModelAvailable(any(), any()) } returns Result.success(model)
-        coEvery { modelManager.getCachedModel() } returns model
-        coEvery { modelManager.getCachedModel(any(), any()) } returns model
-        coEvery { trainer.loadModel(any()) } returns Result.success(true)
 
         client.initialize()
         advanceUntilIdle()
@@ -261,9 +273,7 @@ class EdgeMLClientTest {
 
     @Test
     fun `runInference delegates to trainer and tracks events`() = runTest(testDispatcher) {
-        stubInitialization()
-        client.initialize()
-        advanceUntilIdle()
+        setClientReady()
 
         val inferenceOutput = InferenceOutput(
             data = floatArrayOf(0.1f, 0.9f),
@@ -281,9 +291,7 @@ class EdgeMLClientTest {
 
     @Test
     fun `runInference tracks failure event`() = runTest(testDispatcher) {
-        stubInitialization()
-        client.initialize()
-        advanceUntilIdle()
+        setClientReady()
 
         coEvery { trainer.runInference(any<FloatArray>()) } returns
             Result.failure(RuntimeException("interpreter closed"))
@@ -310,13 +318,9 @@ class EdgeMLClientTest {
 
     @Test
     fun `updateModel forces download and reloads trainer`() = runTest(testDispatcher) {
-        stubInitialization()
-        client.initialize()
-        advanceUntilIdle()
+        setClientReady()
 
         val newModel = testCachedModel(version = "2.0.0")
-        coEvery { modelManager.ensureModelAvailable(forceDownload = true) } returns
-            Result.success(newModel)
         coEvery { modelManager.ensureModelAvailable(any(), eq(true)) } returns
             Result.success(newModel)
         coEvery { trainer.loadModel(newModel) } returns Result.success(true)
@@ -386,9 +390,7 @@ class EdgeMLClientTest {
 
     @Test
     fun `close cleans up all resources`() = runTest(testDispatcher) {
-        stubInitialization()
-        client.initialize()
-        advanceUntilIdle()
+        setClientReady()
 
         client.close()
         advanceUntilIdle()
@@ -482,26 +484,5 @@ class EdgeMLClientTest {
         coEvery { api.getDeviceGroups(any()) } returns Response.success(
             GroupMembershipsResponse(memberships = emptyList(), count = 0),
         )
-    }
-
-    /**
-     * Stub all dependencies for a successful initialization that skips registration.
-     *
-     * Uses both no-arg and parameterized stubs for ModelManager methods to handle
-     * MockK's default parameter matching with value class Result.
-     */
-    private fun stubInitialization() {
-        coEvery { storage.getClientDeviceIdentifier() } returns "device-id"
-        coEvery { storage.getServerDeviceId() } returns "server-id"
-        coEvery { api.getDeviceGroups(any()) } returns Response.success(
-            GroupMembershipsResponse(memberships = emptyList(), count = 0),
-        )
-        // Stub both no-arg and parameterized forms for MockK 1.14.9 compatibility
-        val model = testCachedModel()
-        coEvery { modelManager.ensureModelAvailable() } returns Result.success(model)
-        coEvery { modelManager.ensureModelAvailable(any(), any()) } returns Result.success(model)
-        coEvery { modelManager.getCachedModel() } returns model
-        coEvery { modelManager.getCachedModel(any(), any()) } returns model
-        coEvery { trainer.loadModel(any()) } returns Result.success(true)
     }
 }
