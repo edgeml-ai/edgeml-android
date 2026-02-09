@@ -468,6 +468,148 @@ class EdgeMLClient private constructor(
     }
 
     // =========================================================================
+    // Streaming Inference
+    // =========================================================================
+
+    /**
+     * Stream generative inference with automatic timing instrumentation.
+     *
+     * Each emitted [ai.edgeml.inference.InferenceChunk] carries per-chunk
+     * latency. On stream completion a [ai.edgeml.inference.StreamingInferenceResult]
+     * is automatically reported to the server.
+     *
+     * @param input Modality-specific input (e.g. prompt string for text).
+     * @param modality Output modality.
+     * @param engine Optional custom engine; defaults to modality-appropriate engine.
+     * @return A [Flow] of [ai.edgeml.inference.InferenceChunk].
+     */
+    fun generateStream(
+        input: Any,
+        modality: ai.edgeml.inference.Modality,
+        engine: ai.edgeml.inference.StreamingInferenceEngine? = null,
+        modelId: String? = null,
+        version: String? = null,
+    ): Flow<ai.edgeml.inference.InferenceChunk> {
+        checkReady()
+
+        val resolvedEngine = engine ?: when (modality) {
+            ai.edgeml.inference.Modality.TEXT -> ai.edgeml.inference.LLMEngine(context)
+            ai.edgeml.inference.Modality.IMAGE -> ai.edgeml.inference.ImageEngine(context)
+            ai.edgeml.inference.Modality.AUDIO -> ai.edgeml.inference.AudioEngine(context)
+            ai.edgeml.inference.Modality.VIDEO -> ai.edgeml.inference.VideoEngine(context)
+        }
+
+        val sessionId = java.util.UUID.randomUUID().toString()
+        val deviceId = _serverDeviceId.value
+        val resolvedModelId = modelId ?: config.modelId
+        val resolvedVersion = version ?: "latest"
+
+        return kotlinx.coroutines.flow.flow {
+            val sessionStart = System.currentTimeMillis()
+            var previousTime = sessionStart
+            var firstChunkTime: Long? = null
+            val latencies = mutableListOf<Double>()
+            var chunkCount = 0
+
+            // Report generation_started
+            if (deviceId != null) {
+                try {
+                    api.reportInferenceEvent(
+                        ai.edgeml.api.dto.InferenceEventRequest(
+                            deviceId = deviceId,
+                            modelId = resolvedModelId,
+                            version = resolvedVersion,
+                            modality = modality.value,
+                            sessionId = sessionId,
+                            eventType = "generation_started",
+                            timestampMs = sessionStart,
+                            orgId = config.orgId,
+                        )
+                    )
+                } catch (_: Exception) { }
+            }
+
+            eventQueue.addTrainingEvent(
+                type = ai.edgeml.sync.EventTypes.GENERATION_STARTED,
+                metadata = mapOf("session_id" to sessionId, "modality" to modality.value),
+            )
+
+            var failed = false
+            try {
+                resolvedEngine.generate(input, modality).collect { rawChunk ->
+                    val now = System.currentTimeMillis()
+                    if (firstChunkTime == null) firstChunkTime = now
+
+                    val latencyMs = (now - previousTime).toDouble()
+                    previousTime = now
+                    latencies.add(latencyMs)
+                    chunkCount++
+
+                    emit(
+                        ai.edgeml.inference.InferenceChunk(
+                            index = chunkCount - 1,
+                            data = rawChunk.data,
+                            modality = modality,
+                            timestamp = now,
+                            latencyMs = latencyMs,
+                        )
+                    )
+                }
+            } catch (e: Exception) {
+                failed = true
+                eventQueue.addTrainingEvent(
+                    type = ai.edgeml.sync.EventTypes.GENERATION_FAILED,
+                    metadata = mapOf("session_id" to sessionId, "error" to (e.message ?: "unknown")),
+                )
+                throw e
+            }
+
+            // Compute and report result
+            val sessionEnd = System.currentTimeMillis()
+            val totalDurationMs = (sessionEnd - sessionStart).toDouble()
+            val ttfcMs = ((firstChunkTime ?: sessionEnd) - sessionStart).toDouble()
+            val avgLatency = if (latencies.isEmpty()) 0.0 else latencies.sum() / latencies.size
+            val throughput = if (totalDurationMs > 0) chunkCount.toDouble() / (totalDurationMs / 1000) else 0.0
+
+            eventQueue.addTrainingEvent(
+                type = ai.edgeml.sync.EventTypes.GENERATION_COMPLETED,
+                metrics = mapOf(
+                    "ttfc_ms" to ttfcMs,
+                    "avg_chunk_latency_ms" to avgLatency,
+                    "total_chunks" to chunkCount.toDouble(),
+                    "total_duration_ms" to totalDurationMs,
+                    "throughput" to throughput,
+                ),
+                metadata = mapOf("session_id" to sessionId),
+            )
+
+            // Report to server
+            if (deviceId != null) {
+                try {
+                    api.reportInferenceEvent(
+                        ai.edgeml.api.dto.InferenceEventRequest(
+                            deviceId = deviceId,
+                            modelId = resolvedModelId,
+                            version = resolvedVersion,
+                            modality = modality.value,
+                            sessionId = sessionId,
+                            eventType = if (failed) "generation_failed" else "generation_completed",
+                            timestampMs = sessionEnd,
+                            metrics = ai.edgeml.api.dto.InferenceEventMetrics(
+                                ttfcMs = ttfcMs,
+                                totalChunks = chunkCount,
+                                totalDurationMs = totalDurationMs,
+                                throughput = throughput,
+                            ),
+                            orgId = config.orgId,
+                        )
+                    )
+                } catch (_: Exception) { }
+            }
+        }
+    }
+
+    // =========================================================================
     // Model Management
     // =========================================================================
 
