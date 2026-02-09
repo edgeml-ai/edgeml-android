@@ -591,7 +591,7 @@ class EdgeMLClient private constructor(
                             version = resolvedVersion,
                             modality = modality.value,
                             sessionId = sessionId,
-                            eventType = if (failed) "generation_failed" else "generation_completed",
+                            eventType = "generation_completed",
                             timestampMs = sessionEnd,
                             metrics = ai.edgeml.api.dto.InferenceEventMetrics(
                                 ttfcMs = ttfcMs,
