@@ -25,9 +25,12 @@ jobs:
     steps:
       - name: Determine version
         id: version
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          INPUT_VERSION: ${{ inputs.version }}
         run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            VERSION="${{ inputs.version }}"
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            VERSION="$INPUT_VERSION"
           else
             VERSION="${GITHUB_REF#refs/tags/}"
           fi
@@ -41,8 +44,9 @@ jobs:
 
       - name: Create tag (workflow_dispatch only)
         if: github.event_name == 'workflow_dispatch'
+        env:
+          TAG: ${{ steps.version.outputs.version }}
         run: |
-          TAG="${{ steps.version.outputs.version }}"
           if ! git rev-parse "refs/tags/${TAG}" >/dev/null 2>&1; then
             git tag "${TAG}"
             git push origin "${TAG}"
@@ -78,8 +82,8 @@ jobs:
       - name: Create GitHub Release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ steps.version.outputs.version }}
         run: |
-          VERSION="${{ steps.version.outputs.version }}"
           gh release create "${VERSION}" \
             edgeml/build/outputs/aar/edgeml-release.aar \
             --title "EdgeML Android SDK ${VERSION}" \
