@@ -137,7 +137,9 @@ class EdgeMLClientTest {
 
     @Test
     fun `close transitions to CLOSED`() = runTest(testDispatcher) {
-        initializeClient()
+        stubInitialization()
+        client.initialize()
+        advanceUntilIdle()
 
         client.close()
         advanceUntilIdle()
@@ -230,7 +232,9 @@ class EdgeMLClientTest {
 
     @Test
     fun `runInference delegates to trainer and tracks events`() = runTest(testDispatcher) {
-        initializeClient()
+        stubInitialization()
+        client.initialize()
+        advanceUntilIdle()
 
         val inferenceOutput = InferenceOutput(
             data = floatArrayOf(0.1f, 0.9f),
@@ -248,7 +252,9 @@ class EdgeMLClientTest {
 
     @Test
     fun `runInference tracks failure event`() = runTest(testDispatcher) {
-        initializeClient()
+        stubInitialization()
+        client.initialize()
+        advanceUntilIdle()
 
         coEvery { trainer.runInference(any<FloatArray>()) } returns
             Result.failure(RuntimeException("interpreter closed"))
@@ -275,7 +281,9 @@ class EdgeMLClientTest {
 
     @Test
     fun `updateModel forces download and reloads trainer`() = runTest(testDispatcher) {
-        initializeClient()
+        stubInitialization()
+        client.initialize()
+        advanceUntilIdle()
 
         val newModel = testCachedModel(version = "2.0.0")
         coEvery { modelManager.ensureModelAvailable(any(), forceDownload = true) } returns
@@ -347,7 +355,9 @@ class EdgeMLClientTest {
 
     @Test
     fun `close cleans up all resources`() = runTest(testDispatcher) {
-        initializeClient()
+        stubInitialization()
+        client.initialize()
+        advanceUntilIdle()
 
         client.close()
         advanceUntilIdle()
@@ -443,7 +453,7 @@ class EdgeMLClientTest {
         )
     }
 
-    private suspend fun initializeClient() {
+    private fun stubInitialization() {
         coEvery { storage.getClientDeviceIdentifier() } returns "device-id"
         coEvery { storage.getServerDeviceId() } returns "server-id"
         coEvery { api.getDeviceGroups(any()) } returns Response.success(
@@ -452,8 +462,5 @@ class EdgeMLClientTest {
         coEvery { modelManager.ensureModelAvailable(any(), any()) } returns Result.success(testCachedModel())
         coEvery { modelManager.getCachedModel(any(), any()) } returns testCachedModel()
         coEvery { trainer.loadModel(any()) } returns Result.success(true)
-
-        client.initialize()
-        advanceUntilIdle()
     }
 }
