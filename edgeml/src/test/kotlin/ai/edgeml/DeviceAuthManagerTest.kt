@@ -176,6 +176,7 @@ class DeviceAuthManagerTest {
         assertFailsWith<IllegalStateException> {
             manager.getAccessToken(refreshIfExpiringWithinSeconds = 30)
         }
+        Unit
     }
 
     @Test
@@ -231,6 +232,7 @@ class DeviceAuthManagerTest {
             manager.revoke()
         }
         assertNotNull(store.state)
+        Unit
     }
 }
 
