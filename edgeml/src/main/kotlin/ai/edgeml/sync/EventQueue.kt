@@ -204,4 +204,10 @@ object EventTypes {
     const val SYNC_STARTED = "sync_started"
     const val SYNC_COMPLETED = "sync_completed"
     const val SYNC_FAILED = "sync_failed"
+
+    // Streaming generation events
+    const val GENERATION_STARTED = "generation_started"
+    const val CHUNK_PRODUCED = "chunk_produced"
+    const val GENERATION_COMPLETED = "generation_completed"
+    const val GENERATION_FAILED = "generation_failed"
 }

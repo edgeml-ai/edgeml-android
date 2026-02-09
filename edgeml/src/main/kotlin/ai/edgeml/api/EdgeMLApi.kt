@@ -143,6 +143,18 @@ interface EdgeMLApi {
     ): Response<GradientUpdateResponse>
 
     // =========================================================================
+    // Inference Events
+    // =========================================================================
+
+    /**
+     * Report a streaming inference event to the server.
+     */
+    @POST("api/v1/inference/events")
+    suspend fun reportInferenceEvent(
+        @Body request: InferenceEventRequest,
+    ): Response<InferenceEventResponse>
+
+    // =========================================================================
     // Organization Settings
     // =========================================================================
 
