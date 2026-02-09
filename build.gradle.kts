@@ -14,6 +14,12 @@ plugins {
     id("org.sonarqube") version "4.4.1.3373"
 }
 
+sonarqube {
+    properties {
+        property("sonar.host.url", "https://sonarcloud.io")
+    }
+}
+
 tasks.register("clean", Delete::class) {
     delete(rootProject.layout.buildDirectory)
 }
