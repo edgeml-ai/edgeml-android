@@ -355,8 +355,8 @@ class TFLiteTrainer(
             Timber.i("Extracting weight updates...")
 
             // Try to extract weight delta
-            val weightsData: ByteArray
-            val updateFormat: String
+            var weightsData: ByteArray
+            var updateFormat: String
 
             if (originalModelPath != null) {
                 // Try delta extraction first
