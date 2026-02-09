@@ -393,7 +393,9 @@ class ModelManager(
         val actualChecksum = digest.digest().joinToString("") { "%02x".format(it) }
 
         if (!actualChecksum.equals(expectedChecksum, ignoreCase = true)) {
-            tempFile.delete()
+            if (!tempFile.delete()) {
+                Timber.w("Failed to delete temp file after checksum mismatch: ${tempFile.name}")
+            }
             throw ModelDownloadException(
                 "Checksum mismatch: expected $expectedChecksum, got $actualChecksum",
                 errorCode = ModelDownloadException.ErrorCode.CHECKSUM_MISMATCH
@@ -402,12 +404,14 @@ class ModelManager(
     }
 
     private fun finalizeDownload(tempFile: File, modelFile: File) {
-        if (modelFile.exists()) {
-            modelFile.delete()
+        if (modelFile.exists() && !modelFile.delete()) {
+            Timber.w("Failed to delete existing model file: ${modelFile.name}")
         }
         if (!tempFile.renameTo(modelFile)) {
             tempFile.copyTo(modelFile, overwrite = true)
-            tempFile.delete()
+            if (!tempFile.delete()) {
+                Timber.w("Failed to delete temp file after copy: ${tempFile.name}")
+            }
         }
     }
 
