@@ -18,7 +18,6 @@ import ai.edgeml.utils.DeviceUtils
 import android.content.Context
 import io.mockk.coEvery
 import io.mockk.coVerify
-import io.mockk.eq
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.mockkObject
