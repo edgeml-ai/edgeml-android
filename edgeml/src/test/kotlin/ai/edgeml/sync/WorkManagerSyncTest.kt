@@ -97,7 +97,7 @@ class WorkManagerSyncTest {
             androidx.work.WorkManager.getInstance(any()).enqueueUniqueWork(
                 EdgeMLSyncWorker.WORK_NAME_ONE_TIME,
                 any(),
-                any(),
+                any<androidx.work.OneTimeWorkRequest>(),
             )
         }
     }
@@ -113,7 +113,7 @@ class WorkManagerSyncTest {
             androidx.work.WorkManager.getInstance(any()).enqueueUniqueWork(
                 EdgeMLSyncWorker.WORK_NAME_ONE_TIME,
                 any(),
-                any(),
+                any<androidx.work.OneTimeWorkRequest>(),
             )
         }
     }
