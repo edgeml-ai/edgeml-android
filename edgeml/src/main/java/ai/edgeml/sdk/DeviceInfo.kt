@@ -7,8 +7,6 @@ import android.os.StatFs
 import android.provider.Settings
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
-import android.telephony.TelephonyManager
-import java.io.File
 import java.util.*
 
 /**

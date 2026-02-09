@@ -4,7 +4,6 @@ import ai.edgeml.BuildConfig
 import ai.edgeml.api.EdgeMLApi
 import ai.edgeml.api.EdgeMLApiFactory
 import ai.edgeml.api.dto.DeviceRegistrationRequest
-import ai.edgeml.api.dto.DeviceGroup
 import ai.edgeml.api.dto.GroupMembership
 import ai.edgeml.api.dto.HeartbeatRequest
 import ai.edgeml.config.EdgeMLConfig
@@ -22,6 +21,7 @@ import ai.edgeml.utils.BatteryUtils
 import ai.edgeml.utils.DeviceUtils
 import ai.edgeml.utils.NetworkUtils
 import android.content.Context
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -70,6 +70,8 @@ import timber.log.Timber
 class EdgeMLClient private constructor(
     private val context: Context,
     private val config: EdgeMLConfig,
+    private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
+    private val mainDispatcher: CoroutineDispatcher = Dispatchers.Main,
 ) {
     // Internal components
     private val api: EdgeMLApi = EdgeMLApiFactory.create(config)
@@ -80,7 +82,7 @@ class EdgeMLClient private constructor(
     private val eventQueue: EventQueue = EventQueue.getInstance(context)
 
     // Coroutine scope for background operations
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+    private val scope = CoroutineScope(SupervisorJob() + mainDispatcher)
 
     // Heartbeat management
     private var heartbeatJob: Job? = null
@@ -139,73 +141,23 @@ class EdgeMLClient private constructor(
      *
      * @return Result indicating success or failure
      */
-    suspend fun initialize(): Result<Unit> = withContext(Dispatchers.IO) {
+    suspend fun initialize(): Result<Unit> = withContext(ioDispatcher) {
         try {
             _state.value = ClientState.INITIALIZING
             Timber.i("Initializing EdgeML SDK v$VERSION")
 
-            // Generate or retrieve device identifier
-            var deviceIdentifier = storage.getClientDeviceIdentifier()
-            if (deviceIdentifier == null) {
-                deviceIdentifier = config.deviceId ?: DeviceUtils.generateDeviceIdentifier(context)
-                storage.setClientDeviceIdentifier(deviceIdentifier)
-            }
+            val deviceIdentifier = resolveDeviceIdentifier()
             _deviceIdentifier.value = deviceIdentifier
 
-            // Check if device is already registered (has server ID)
-            var serverId = storage.getServerDeviceId()
-            val isRegistered = serverId != null
-
-            if (!isRegistered) {
-                // Register device
-                val registrationResult = registerDevice(deviceIdentifier)
-                if (registrationResult.isFailure) {
-                    _state.value = ClientState.ERROR
-                    return@withContext Result.failure(
-                        registrationResult.exceptionOrNull()
-                            ?: Exception("Device registration failed")
-                    )
-                }
-                serverId = storage.getServerDeviceId()
-            }
-
+            val serverId = ensureDeviceRegistered(deviceIdentifier)
             _serverDeviceId.value = serverId
 
-            // Fetch group memberships
             if (serverId != null) {
                 fetchGroupMemberships(serverId)
             }
 
-            // Download/verify model
-            val modelResult = modelManager.ensureModelAvailable()
-            if (modelResult.isFailure) {
-                // Model download failed, but we can continue with cached model
-                Timber.w("Model download failed, checking for cached model")
-                val cached = modelManager.getCachedModel()
-                if (cached == null) {
-                    _state.value = ClientState.ERROR
-                    return@withContext Result.failure(
-                        modelResult.exceptionOrNull()
-                            ?: Exception("No model available")
-                    )
-                }
-            }
-
-            // Load model into trainer
-            val cachedModel = modelManager.getCachedModel()
-            if (cachedModel != null) {
-                trainer.loadModel(cachedModel)
-            }
-
-            // Setup background sync
-            if (config.enableBackgroundSync) {
-                syncManager.schedulePeriodicSync()
-            }
-
-            // Start heartbeat
-            if (config.enableHeartbeat && serverId != null) {
-                startHeartbeat(serverId)
-            }
+            ensureModelLoaded()
+            setupBackgroundServices(serverId)
 
             _state.value = ClientState.READY
             Timber.i("EdgeML SDK initialized successfully")
@@ -217,10 +169,52 @@ class EdgeMLClient private constructor(
         }
     }
 
+    private suspend fun resolveDeviceIdentifier(): String {
+        val existing = storage.getClientDeviceIdentifier()
+        if (existing != null) return existing
+        val identifier = config.deviceId ?: DeviceUtils.generateDeviceIdentifier(context)
+        storage.setClientDeviceIdentifier(identifier)
+        return identifier
+    }
+
+    private suspend fun ensureDeviceRegistered(deviceIdentifier: String): String? {
+        var serverId = storage.getServerDeviceId()
+        if (serverId == null) {
+            val result = registerDevice(deviceIdentifier)
+            if (result.isFailure) {
+                _state.value = ClientState.ERROR
+                throw result.exceptionOrNull() ?: Exception("Device registration failed")
+            }
+            serverId = storage.getServerDeviceId()
+        }
+        return serverId
+    }
+
+    private suspend fun ensureModelLoaded() {
+        val modelResult = modelManager.ensureModelAvailable()
+        if (modelResult.isFailure) {
+            Timber.w("Model download failed, checking for cached model")
+            if (modelManager.getCachedModel() == null) {
+                _state.value = ClientState.ERROR
+                throw modelResult.exceptionOrNull() ?: Exception("No model available")
+            }
+        }
+        modelManager.getCachedModel()?.let { trainer.loadModel(it) }
+    }
+
+    private fun setupBackgroundServices(serverId: String?) {
+        if (config.enableBackgroundSync) {
+            syncManager.schedulePeriodicSync()
+        }
+        if (config.enableHeartbeat && serverId != null) {
+            startHeartbeat(serverId)
+        }
+    }
+
     /**
      * Register the device with the EdgeML server.
      */
-    private suspend fun registerDevice(deviceIdentifier: String): Result<Unit> = withContext(Dispatchers.IO) {
+    private suspend fun registerDevice(deviceIdentifier: String): Result<Unit> = withContext(ioDispatcher) {
         try {
             Timber.d("Registering device: $deviceIdentifier")
 
@@ -240,52 +234,50 @@ class EdgeMLClient private constructor(
 
             val response = api.registerDevice(request)
 
-            if (response.isSuccessful) {
-                val body = response.body()
-
-                if (body != null) {
-                    // Store server-assigned device ID
-                    storage.setServerDeviceId(body.id)
-                    storage.setClientDeviceIdentifier(deviceIdentifier)
-                    body.apiToken?.let { storage.setApiToken(it) }
-
-                    // Fetch and cache device policy from server
-                    try {
-                        val policyResponse = api.getDevicePolicy(config.orgId)
-                        if (policyResponse.isSuccessful) {
-                            policyResponse.body()?.let { policy ->
-                                storage.setDevicePolicy(policy)
-                                Timber.i("Device policy fetched: battery=${policy.batteryThreshold}%, network=${policy.networkPolicy}")
-                            }
-                        } else {
-                            Timber.w("Failed to fetch device policy: ${policyResponse.code()}, using defaults")
-                        }
-                    } catch (e: Exception) {
-                        Timber.w(e, "Error fetching device policy, using defaults")
-                    }
-
-                    // Queue registration event
-                    eventQueue.addTrainingEvent(
-                        type = EventTypes.DEVICE_REGISTERED,
-                        metadata = mapOf(
-                            "device_id" to body.id,
-                            "device_identifier" to deviceIdentifier
-                        )
-                    )
-
-                    Timber.i("Device registered successfully: ${body.id}")
-                    Result.success(Unit)
-                } else {
-                    Result.failure(Exception("Empty registration response"))
-                }
-            } else {
+            if (!response.isSuccessful) {
                 val errorMsg = "Device registration failed: ${response.code()}"
                 Timber.e(errorMsg)
-                Result.failure(Exception(errorMsg))
+                return@withContext Result.failure(Exception(errorMsg))
             }
+
+            val body = response.body()
+                ?: return@withContext Result.failure(Exception("Empty registration response"))
+
+            storage.setServerDeviceId(body.id)
+            storage.setClientDeviceIdentifier(deviceIdentifier)
+            body.apiToken?.let { storage.setApiToken(it) }
+
+            fetchAndCacheDevicePolicy()
+
+            eventQueue.addTrainingEvent(
+                type = EventTypes.DEVICE_REGISTERED,
+                metadata = mapOf(
+                    "device_id" to body.id,
+                    "device_identifier" to deviceIdentifier
+                )
+            )
+
+            Timber.i("Device registered successfully: ${body.id}")
+            Result.success(Unit)
         } catch (e: Exception) {
             Timber.e(e, "Device registration error")
             Result.failure(e)
+        }
+    }
+
+    private suspend fun fetchAndCacheDevicePolicy() {
+        try {
+            val policyResponse = api.getDevicePolicy(config.orgId)
+            if (policyResponse.isSuccessful) {
+                policyResponse.body()?.let { policy ->
+                    storage.setDevicePolicy(policy)
+                    Timber.i("Device policy fetched: battery=${policy.batteryThreshold}%, network=${policy.networkPolicy}")
+                }
+            } else {
+                Timber.w("Failed to fetch device policy: ${policyResponse.code()}, using defaults")
+            }
+        } catch (e: Exception) {
+            Timber.w(e, "Error fetching device policy, using defaults")
         }
     }
 
@@ -298,7 +290,7 @@ class EdgeMLClient private constructor(
      */
     private fun startHeartbeat(deviceId: String) {
         heartbeatJob?.cancel()
-        heartbeatJob = scope.launch(Dispatchers.IO) {
+        heartbeatJob = scope.launch(ioDispatcher) {
             Timber.d("Starting heartbeat with interval ${heartbeatIntervalMs}ms")
             while (isActive) {
                 sendHeartbeat(deviceId)
@@ -347,7 +339,7 @@ class EdgeMLClient private constructor(
     /**
      * Manually trigger a heartbeat.
      */
-    suspend fun triggerHeartbeat(): Result<Unit> = withContext(Dispatchers.IO) {
+    suspend fun triggerHeartbeat(): Result<Unit> = withContext(ioDispatcher) {
         val deviceId = _serverDeviceId.value
         if (deviceId == null) {
             return@withContext Result.failure(Exception("Device not registered"))
@@ -381,7 +373,7 @@ class EdgeMLClient private constructor(
     /**
      * Refresh group memberships from the server.
      */
-    suspend fun refreshGroupMemberships(): Result<List<GroupMembership>> = withContext(Dispatchers.IO) {
+    suspend fun refreshGroupMemberships(): Result<List<GroupMembership>> = withContext(ioDispatcher) {
         val deviceId = _serverDeviceId.value
         if (deviceId == null) {
             return@withContext Result.failure(Exception("Device not registered"))
@@ -633,13 +625,13 @@ class EdgeMLClient private constructor(
     /**
      * Get the currently loaded model.
      */
-    fun getCurrentModel(): CachedModel? = trainer.getCurrentModel()
+    fun getCurrentModel(): CachedModel? = trainer.currentModel
 
     /**
      * Get information about the loaded model.
      */
     fun getModelInfo(): ModelInfo? {
-        val model = trainer.getCurrentModel() ?: return null
+        val model = trainer.currentModel ?: return null
         val tensorInfo = trainer.getTensorInfo()
 
         return ModelInfo(
@@ -730,12 +722,28 @@ class EdgeMLClient private constructor(
      */
     class Builder(private val context: Context) {
         private var config: EdgeMLConfig? = null
+        private var ioDispatcher: CoroutineDispatcher = Dispatchers.IO
+        private var mainDispatcher: CoroutineDispatcher = Dispatchers.Main
 
         /**
          * Set the configuration.
          */
         fun config(config: EdgeMLConfig) = apply {
             this.config = config
+        }
+
+        /**
+         * Set the IO dispatcher (default: Dispatchers.IO).
+         */
+        fun ioDispatcher(dispatcher: CoroutineDispatcher) = apply {
+            this.ioDispatcher = dispatcher
+        }
+
+        /**
+         * Set the Main dispatcher (default: Dispatchers.Main).
+         */
+        fun mainDispatcher(dispatcher: CoroutineDispatcher) = apply {
+            this.mainDispatcher = dispatcher
         }
 
         /**
@@ -750,7 +758,12 @@ class EdgeMLClient private constructor(
                 Timber.plant(Timber.DebugTree())
             }
 
-            val client = EdgeMLClient(context.applicationContext, cfg)
+            val client = EdgeMLClient(
+                context = context.applicationContext,
+                config = cfg,
+                ioDispatcher = ioDispatcher,
+                mainDispatcher = mainDispatcher,
+            )
             instance = client
             return client
         }

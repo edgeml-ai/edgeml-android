@@ -50,6 +50,7 @@ class EdgeMLSyncWorker(
         encodeDefaults = true
     }
 
+    @Suppress("InjectDispatcher") // Dispatcher is managed by WorkManager's CoroutineWorker
     override suspend fun doWork(): Result = withContext(Dispatchers.IO) {
         try {
             Timber.d("Starting EdgeML sync work")

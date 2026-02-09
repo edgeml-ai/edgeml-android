@@ -1,13 +1,12 @@
 package ai.edgeml.training
 
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import org.tensorflow.lite.Interpreter
 import timber.log.Timber
 import java.io.File
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
-import java.nio.channels.FileChannel
 
 /**
  * Utility for extracting and serializing model weights from TensorFlow Lite models.
@@ -42,7 +41,9 @@ import java.nio.channels.FileChannel
  *
  * @see <a href="https://www.tensorflow.org/lite/api_docs">TFLite API Docs</a>
  */
-class WeightExtractor {
+class WeightExtractor(
+    private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
+) {
 
     companion object {
         private const val TAG = "WeightExtractor"
@@ -72,7 +73,7 @@ class WeightExtractor {
     suspend fun extractWeightDelta(
         originalModelPath: String,
         updatedModelPath: String,
-    ): ByteArray = withContext(Dispatchers.IO) {
+    ): ByteArray = withContext(ioDispatcher) {
         Timber.i("Extracting weight delta from trained model")
 
         try {
@@ -104,7 +105,7 @@ class WeightExtractor {
      */
     suspend fun extractFullWeights(
         modelPath: String,
-    ): ByteArray = withContext(Dispatchers.IO) {
+    ): ByteArray = withContext(ioDispatcher) {
         Timber.i("Extracting full weights from trained model")
 
         try {
@@ -140,9 +141,7 @@ class WeightExtractor {
         val weights = mutableMapOf<String, TensorData>()
 
         val modelFile = File(modelPath)
-        if (!modelFile.exists()) {
-            throw IllegalArgumentException("Model file not found: $modelPath")
-        }
+        require(modelFile.exists()) { "Model file not found: $modelPath" }
 
         Timber.w("Direct weight extraction not supported in TFLite 2.4+/LiteRT")
         Timber.i("Returning empty weights - implement server-side extraction for production")
@@ -265,15 +264,6 @@ class WeightExtractor {
         }
 
         return size
-    }
-
-    /**
-     * Loads a model file into a memory-mapped buffer.
-     */
-    private fun loadModelFile(file: File): java.nio.MappedByteBuffer {
-        return file.inputStream().channel.use { channel ->
-            channel.map(FileChannel.MapMode.READ_ONLY, 0, channel.size())
-        }
     }
 
     // =========================================================================

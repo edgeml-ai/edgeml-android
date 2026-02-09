@@ -4,6 +4,7 @@ import ai.edgeml.api.EdgeMLApi
 import ai.edgeml.config.EdgeMLConfig
 import ai.edgeml.storage.SecureStorage
 import android.content.Context
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -36,6 +37,7 @@ class ModelManager(
     private val config: EdgeMLConfig,
     private val api: EdgeMLApi,
     private val storage: SecureStorage,
+    private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
 ) {
     private val cacheDir = File(context.cacheDir, "edgeml_models")
     private val metadataFile = File(cacheDir, "cache_metadata.json")
@@ -84,33 +86,12 @@ class ModelManager(
     suspend fun ensureModelAvailable(
         modelId: String = config.modelId,
         forceDownload: Boolean = false,
-    ): Result<CachedModel> = withContext(Dispatchers.IO) {
+    ): Result<CachedModel> = withContext(ioDispatcher) {
         mutex.withLock {
             try {
                 _downloadState.value = DownloadState.CheckingForUpdates
 
-                // Get the resolved version for this device
-                val versionResponse = api.getDeviceVersion(
-                    deviceId = getDeviceId(),
-                    modelId = modelId,
-                )
-
-                if (!versionResponse.isSuccessful) {
-                    throw ModelDownloadException(
-                        "Failed to get version: ${versionResponse.code()}",
-                        errorCode = when (versionResponse.code()) {
-                            401, 403 -> ModelDownloadException.ErrorCode.UNAUTHORIZED
-                            404 -> ModelDownloadException.ErrorCode.NOT_FOUND
-                            in 500..599 -> ModelDownloadException.ErrorCode.SERVER_ERROR
-                            else -> ModelDownloadException.ErrorCode.NETWORK_ERROR
-                        }
-                    )
-                }
-
-                val resolvedVersion = versionResponse.body()
-                    ?: throw ModelDownloadException("Empty version response")
-
-                val version = resolvedVersion.version
+                val version = resolveVersion(modelId)
                 val cacheKey = getCacheKey(modelId, version)
 
                 // Check if we already have this version
@@ -122,22 +103,7 @@ class ModelManager(
                     return@withContext Result.success(cachedModel)
                 }
 
-                // Get download URL
-                val downloadResponse = api.getModelDownloadUrl(
-                    modelId = modelId,
-                    version = version,
-                    format = "tensorflow_lite"
-                )
-
-                if (!downloadResponse.isSuccessful) {
-                    throw ModelDownloadException(
-                        "Failed to get download URL: ${downloadResponse.code()}",
-                        errorCode = ModelDownloadException.ErrorCode.NETWORK_ERROR
-                    )
-                }
-
-                val downloadInfo = downloadResponse.body()
-                    ?: throw ModelDownloadException("Empty download response")
+                val downloadInfo = fetchDownloadUrl(modelId, version)
 
                 // Download the model
                 val modelFile = downloadModel(
@@ -166,7 +132,6 @@ class ModelManager(
                 storage.setCurrentModelVersion(version)
                 storage.setModelChecksum(downloadInfo.checksum)
 
-                // Evict old models if necessary
                 evictOldModels()
 
                 _downloadState.value = DownloadState.Completed(newCachedModel)
@@ -188,6 +153,50 @@ class ModelManager(
         }
     }
 
+    private suspend fun resolveVersion(modelId: String): String {
+        val versionResponse = api.getDeviceVersion(
+            deviceId = getDeviceId(),
+            modelId = modelId,
+        )
+
+        if (!versionResponse.isSuccessful) {
+            throw ModelDownloadException(
+                "Failed to get version: ${versionResponse.code()}",
+                errorCode = when (versionResponse.code()) {
+                    401, 403 -> ModelDownloadException.ErrorCode.UNAUTHORIZED
+                    404 -> ModelDownloadException.ErrorCode.NOT_FOUND
+                    in 500..599 -> ModelDownloadException.ErrorCode.SERVER_ERROR
+                    else -> ModelDownloadException.ErrorCode.NETWORK_ERROR
+                }
+            )
+        }
+
+        val resolvedVersion = versionResponse.body()
+            ?: throw ModelDownloadException("Empty version response")
+        return resolvedVersion.version
+    }
+
+    private suspend fun fetchDownloadUrl(
+        modelId: String,
+        version: String,
+    ): ai.edgeml.api.dto.ModelDownloadResponse {
+        val downloadResponse = api.getModelDownloadUrl(
+            modelId = modelId,
+            version = version,
+            format = "tensorflow_lite"
+        )
+
+        if (!downloadResponse.isSuccessful) {
+            throw ModelDownloadException(
+                "Failed to get download URL: ${downloadResponse.code()}",
+                errorCode = ModelDownloadException.ErrorCode.NETWORK_ERROR
+            )
+        }
+
+        return downloadResponse.body()
+            ?: throw ModelDownloadException("Empty download response")
+    }
+
     /**
      * Get a cached model by ID and version.
      *
@@ -198,7 +207,7 @@ class ModelManager(
     suspend fun getCachedModel(
         modelId: String = config.modelId,
         version: String? = null,
-    ): CachedModel? = withContext(Dispatchers.IO) {
+    ): CachedModel? = withContext(ioDispatcher) {
         mutex.withLock {
             if (version != null) {
                 val cacheKey = getCacheKey(modelId, version)
@@ -215,7 +224,7 @@ class ModelManager(
     /**
      * Get cache statistics.
      */
-    suspend fun getCacheStats(): CacheStats = withContext(Dispatchers.IO) {
+    suspend fun getCacheStats(): CacheStats = withContext(ioDispatcher) {
         mutex.withLock {
             val models = cacheMetadata.values.toList()
             val totalSize = models.sumOf { it.sizeBytes }
@@ -234,13 +243,15 @@ class ModelManager(
     /**
      * Delete a specific cached model.
      */
-    suspend fun deleteModel(modelId: String, version: String): Boolean = withContext(Dispatchers.IO) {
+    suspend fun deleteModel(modelId: String, version: String): Boolean = withContext(ioDispatcher) {
         mutex.withLock {
             val cacheKey = getCacheKey(modelId, version)
             val cachedModel = cacheMetadata.remove(cacheKey)
 
             if (cachedModel != null) {
-                File(cachedModel.filePath).delete()
+                if (!File(cachedModel.filePath).delete()) {
+                    Timber.w("Failed to delete model file: ${cachedModel.filePath}")
+                }
                 saveCacheMetadata()
                 true
             } else {
@@ -252,10 +263,12 @@ class ModelManager(
     /**
      * Clear all cached models.
      */
-    suspend fun clearCache() = withContext(Dispatchers.IO) {
+    suspend fun clearCache() = withContext(ioDispatcher) {
         mutex.withLock {
             cacheMetadata.values.forEach { model ->
-                File(model.filePath).delete()
+                if (!File(model.filePath).delete()) {
+                    Timber.w("Failed to delete model file: ${model.filePath}")
+                }
             }
             cacheMetadata.clear()
             saveCacheMetadata()
@@ -265,7 +278,7 @@ class ModelManager(
     /**
      * Update the last used timestamp for a model.
      */
-    suspend fun touchModel(modelId: String, version: String) = withContext(Dispatchers.IO) {
+    suspend fun touchModel(modelId: String, version: String) = withContext(ioDispatcher) {
         mutex.withLock {
             val cacheKey = getCacheKey(modelId, version)
             cacheMetadata[cacheKey]?.let { model ->
@@ -295,12 +308,12 @@ class ModelManager(
         version: String,
         expectedChecksum: String,
         expectedSize: Long,
-    ): File = withContext(Dispatchers.IO) {
+    ): File = withContext(ioDispatcher) {
         val modelFile = File(cacheDir, "${modelId}_$version.tflite")
 
         // Check available storage
         val availableSpace = cacheDir.usableSpace
-        if (availableSpace < expectedSize * 2) { // 2x for safety margin
+        if (availableSpace < expectedSize * 2) {
             throw ModelDownloadException(
                 "Insufficient storage: need ${expectedSize * 2} bytes, have $availableSpace",
                 errorCode = ModelDownloadException.ErrorCode.INSUFFICIENT_STORAGE
@@ -355,26 +368,8 @@ class ModelManager(
                 }
             }
 
-            // Verify checksum
-            _downloadState.value = DownloadState.Verifying
-            val actualChecksum = digest.digest().joinToString("") { "%02x".format(it) }
-
-            if (!actualChecksum.equals(expectedChecksum, ignoreCase = true)) {
-                tempFile.delete()
-                throw ModelDownloadException(
-                    "Checksum mismatch: expected $expectedChecksum, got $actualChecksum",
-                    errorCode = ModelDownloadException.ErrorCode.CHECKSUM_MISMATCH
-                )
-            }
-
-            // Move to final location
-            if (modelFile.exists()) {
-                modelFile.delete()
-            }
-            if (!tempFile.renameTo(modelFile)) {
-                tempFile.copyTo(modelFile, overwrite = true)
-                tempFile.delete()
-            }
+            verifyChecksum(digest, expectedChecksum, tempFile)
+            finalizeDownload(tempFile, modelFile)
 
             Timber.i("Model downloaded successfully: ${modelFile.absolutePath}")
             modelFile
@@ -386,6 +381,33 @@ class ModelManager(
                 cause = e,
                 errorCode = ModelDownloadException.ErrorCode.IO_ERROR
             )
+        }
+    }
+
+    private fun verifyChecksum(
+        digest: MessageDigest,
+        expectedChecksum: String,
+        tempFile: File,
+    ) {
+        _downloadState.value = DownloadState.Verifying
+        val actualChecksum = digest.digest().joinToString("") { "%02x".format(it) }
+
+        if (!actualChecksum.equals(expectedChecksum, ignoreCase = true)) {
+            tempFile.delete()
+            throw ModelDownloadException(
+                "Checksum mismatch: expected $expectedChecksum, got $actualChecksum",
+                errorCode = ModelDownloadException.ErrorCode.CHECKSUM_MISMATCH
+            )
+        }
+    }
+
+    private fun finalizeDownload(tempFile: File, modelFile: File) {
+        if (modelFile.exists()) {
+            modelFile.delete()
+        }
+        if (!tempFile.renameTo(modelFile)) {
+            tempFile.copyTo(modelFile, overwrite = true)
+            tempFile.delete()
         }
     }
 
@@ -426,7 +448,9 @@ class ModelManager(
             if (currentSize <= limit) break
 
             val cacheKey = getCacheKey(model.modelId, model.version)
-            File(model.filePath).delete()
+            if (!File(model.filePath).delete()) {
+                Timber.w("Failed to delete evicted model file: ${model.filePath}")
+            }
             cacheMetadata.remove(cacheKey)
             currentSize -= model.sizeBytes
             Timber.d("Evicted model ${model.modelId} v${model.version}")

@@ -5,6 +5,7 @@ import ai.edgeml.models.CachedModel
 import ai.edgeml.models.InferenceInput
 import ai.edgeml.models.InferenceOutput
 import android.content.Context
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -33,15 +34,17 @@ import java.nio.channels.FileChannel
 class TFLiteTrainer(
     private val context: Context,
     private val config: EdgeMLConfig,
+    private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
+    private val defaultDispatcher: CoroutineDispatcher = Dispatchers.Default,
 ) {
     private var interpreter: Interpreter? = null
     private var gpuDelegate: GpuDelegate? = null
-    private var currentModel: CachedModel? = null
+    private var _currentModel: CachedModel? = null
     private val mutex = Mutex()
 
     // Model metadata
-    private var inputShape: IntArray = intArrayOf()
-    private var outputShape: IntArray = intArrayOf()
+    private var _inputShape: IntArray = intArrayOf()
+    private var _outputShape: IntArray = intArrayOf()
     private var inputDataType: org.tensorflow.lite.DataType? = null
     private var outputDataType: org.tensorflow.lite.DataType? = null
 
@@ -64,7 +67,7 @@ class TFLiteTrainer(
      * @param model The cached model to load
      * @return True if loaded successfully
      */
-    suspend fun loadModel(model: CachedModel): Result<Boolean> = withContext(Dispatchers.IO) {
+    suspend fun loadModel(model: CachedModel): Result<Boolean> = withContext(ioDispatcher) {
         mutex.withLock {
             try {
                 // Close existing interpreter
@@ -102,7 +105,7 @@ class TFLiteTrainer(
 
                 // Create interpreter
                 interpreter = Interpreter(modelBuffer, options)
-                currentModel = model
+                _currentModel = model
 
                 // Get input/output tensor info
                 extractTensorInfo()
@@ -125,7 +128,7 @@ class TFLiteTrainer(
     /**
      * Get the currently loaded model.
      */
-    fun getCurrentModel(): CachedModel? = currentModel
+    val currentModel: CachedModel? get() = _currentModel
 
     // =========================================================================
     // Inference
@@ -137,7 +140,7 @@ class TFLiteTrainer(
      * @param input Input data as float array
      * @return Inference output with results and timing
      */
-    suspend fun runInference(input: FloatArray): Result<InferenceOutput> = withContext(Dispatchers.Default) {
+    suspend fun runInference(input: FloatArray): Result<InferenceOutput> = withContext(defaultDispatcher) {
         mutex.withLock {
             val interp = interpreter
                 ?: return@withContext Result.failure(
@@ -184,7 +187,7 @@ class TFLiteTrainer(
      * @return List of inference outputs
      */
     suspend fun runBatchInference(inputs: List<FloatArray>): Result<List<InferenceOutput>> =
-        withContext(Dispatchers.Default) {
+        withContext(defaultDispatcher) {
             try {
                 val results = inputs.map { input ->
                     runInference(input).getOrThrow()
@@ -206,7 +209,7 @@ class TFLiteTrainer(
     suspend fun classify(
         input: FloatArray,
         topK: Int = 5,
-    ): Result<List<Pair<Int, Float>>> = withContext(Dispatchers.Default) {
+    ): Result<List<Pair<Int, Float>>> = withContext(defaultDispatcher) {
         runInference(input).map { output ->
             output.topK(topK)
         }
@@ -219,12 +222,12 @@ class TFLiteTrainer(
     /**
      * Get the expected input shape.
      */
-    fun getInputShape(): IntArray = inputShape.copyOf()
+    val inputShape: IntArray get() = _inputShape.copyOf()
 
     /**
      * Get the expected output shape.
      */
-    fun getOutputShape(): IntArray = outputShape.copyOf()
+    val outputShape: IntArray get() = _outputShape.copyOf()
 
     /**
      * Get the number of input elements required.
@@ -268,7 +271,7 @@ class TFLiteTrainer(
     suspend fun train(
         dataProvider: TrainingDataProvider,
         trainingConfig: TrainingConfig = TrainingConfig(),
-    ): Result<TrainingResult> = withContext(Dispatchers.Default) {
+    ): Result<TrainingResult> = withContext(defaultDispatcher) {
         mutex.withLock {
             val model = currentModel
                 ?: return@withContext Result.failure(
@@ -341,7 +344,7 @@ class TFLiteTrainer(
      */
     suspend fun extractWeightUpdate(
         trainingResult: TrainingResult,
-    ): Result<WeightUpdate> = withContext(Dispatchers.IO) {
+    ): Result<WeightUpdate> = withContext(ioDispatcher) {
         try {
             val model = currentModel
                 ?: return@withContext Result.failure(
@@ -451,9 +454,9 @@ class TFLiteTrainer(
         } finally {
             interpreter = null
             gpuDelegate = null
-            currentModel = null
-            inputShape = intArrayOf()
-            outputShape = intArrayOf()
+            _currentModel = null
+            _inputShape = intArrayOf()
+            _outputShape = intArrayOf()
         }
     }
 
@@ -472,16 +475,16 @@ class TFLiteTrainer(
 
         // Get input tensor info
         val inputTensor = interp.getInputTensor(0)
-        inputShape = inputTensor.shape()
+        _inputShape = inputTensor.shape()
         inputDataType = inputTensor.dataType()
 
         // Get output tensor info
         val outputTensor = interp.getOutputTensor(0)
-        outputShape = outputTensor.shape()
+        _outputShape = outputTensor.shape()
         outputDataType = outputTensor.dataType()
 
-        Timber.d("Input shape: ${inputShape.contentToString()}, type: $inputDataType")
-        Timber.d("Output shape: ${outputShape.contentToString()}, type: $outputDataType")
+        Timber.d("Input shape: ${_inputShape.contentToString()}, type: $inputDataType")
+        Timber.d("Output shape: ${_outputShape.contentToString()}, type: $outputDataType")
     }
 
     private fun createInputBuffer(input: FloatArray): ByteBuffer {
