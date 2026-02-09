@@ -1,5 +1,6 @@
 package ai.edgeml.config
 
+import kotlinx.serialization.Serializable
 import kotlin.random.Random
 
 /**
@@ -10,6 +11,7 @@ import kotlin.random.Random
  * 2. Differential privacy: Noise injection for formal guarantees
  * 3. Advanced weighting: Trust scores and staleness penalties (server-side)
  */
+@Serializable
 data class PrivacyConfiguration(
     /**
      * Whether to enable staggered updates (random delays before upload).

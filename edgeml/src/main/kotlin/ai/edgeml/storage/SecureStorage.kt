@@ -157,27 +157,37 @@ class SecureStorage private constructor(
     /**
      * Store a serializable object as JSON.
      */
-    suspend inline fun <reified T> putObject(key: String, value: T) = withContext(Dispatchers.IO) {
+    @PublishedApi
+    internal suspend fun <T> putObjectInternal(key: String, value: T, serializer: kotlinx.serialization.KSerializer<T>) = withContext(Dispatchers.IO) {
         mutex.withLock {
-            val jsonString = json.encodeToString(value)
+            val jsonString = json.encodeToString(serializer, value)
             prefs.edit().putString(key, jsonString).apply()
         }
+    }
+
+    suspend inline fun <reified T> putObject(key: String, value: T) {
+        putObjectInternal(key, value, kotlinx.serialization.serializer())
     }
 
     /**
      * Retrieve and deserialize an object from JSON.
      */
-    suspend inline fun <reified T> getObject(key: String): T? = withContext(Dispatchers.IO) {
+    @PublishedApi
+    internal suspend fun <T> getObjectInternal(key: String, serializer: kotlinx.serialization.KSerializer<T>): T? = withContext(Dispatchers.IO) {
         mutex.withLock {
             prefs.getString(key, null)?.let { jsonString ->
                 try {
-                    json.decodeFromString<T>(jsonString)
+                    json.decodeFromString(serializer, jsonString)
                 } catch (e: Exception) {
                     Timber.w(e, "Failed to deserialize object for key: $key")
                     null
                 }
             }
         }
+    }
+
+    suspend inline fun <reified T> getObject(key: String): T? {
+        return getObjectInternal(key, kotlinx.serialization.serializer())
     }
 
     /**
