@@ -20,13 +20,20 @@ sonarqube {
         property("sonar.organization", "edgeml-ai")
         property("sonar.projectKey", "edgeml-ai_edgeml-android")
         property("sonar.projectName", "EdgeML Android SDK")
-        property("sonar.sources", "edgeml/src/main/kotlin")
-        property("sonar.tests", "edgeml/src/test/kotlin")
-        property("sonar.java.binaries", "edgeml/build/intermediates/javac/debug/classes")
-        property("sonar.coverage.jacoco.xmlReportPaths", "edgeml/build/reports/jacoco/jacocoTestReport/jacocoTestReport.xml")
+        property("sonar.sourceEncoding", "UTF-8")
         property("sonar.exclusions", "**/R.java,**/*.xml,**/BuildConfig.java,**/Manifest*.*,**/*Test*.*")
         property("sonar.coverage.exclusions", "**/*Test*.*,**/test/**")
-        property("sonar.sourceEncoding", "UTF-8")
+    }
+}
+
+subprojects {
+    sonarqube {
+        properties {
+            if (project.name == "edgeml") {
+                property("sonar.coverage.jacoco.xmlReportPaths",
+                    "${project.layout.buildDirectory.get()}/reports/jacoco/jacocoTestReport/jacocoTestReport.xml")
+            }
+        }
     }
 }
 
