@@ -12,7 +12,10 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import timber.log.Timber
-import java.time.Instant
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+import java.util.TimeZone
 import java.util.concurrent.TimeUnit
 
 /**
@@ -99,6 +102,12 @@ class EdgeMLSyncWorker(
         }
     }
 
+    private fun formatIso8601(epochMillis: Long): String {
+        val sdf = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US)
+        sdf.timeZone = TimeZone.getTimeZone("UTC")
+        return sdf.format(Date(epochMillis))
+    }
+
     private suspend fun syncModels(modelManager: ModelManager) {
         Timber.d("Checking for model updates")
         val result = modelManager.ensureModelAvailable()
@@ -136,7 +145,7 @@ class EdgeMLSyncWorker(
                     modelId = config.modelId,
                     version = storage.getCurrentModelVersion() ?: "unknown",
                     eventType = event.type,
-                    timestamp = Instant.ofEpochMilli(event.timestamp).toString(),
+                    timestamp = formatIso8601(event.timestamp),
                     metrics = event.metrics,
                     metadata = event.metadata,
                 )
