@@ -141,7 +141,7 @@ tasks.register("jacocoTestReport", JacocoReport::class) {
 
     sourceDirectories.setFrom(files(mainSrc))
     classDirectories.setFrom(files(debugTree))
-    executionData.setFrom(fileTree(project.layout.buildDirectory.get()) {
-        include("**/*.exec", "**/*.ec")
+    executionData.setFrom(fileTree("${project.layout.buildDirectory.get()}/jacoco") {
+        include("**/*.exec")
     })
 }
