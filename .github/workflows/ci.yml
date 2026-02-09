@@ -32,7 +32,7 @@ jobs:
         run: gradle testDebugUnitTest jacocoTestReport
 
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v4
+        uses: codecov/codecov-action@v5
         with:
           files: ./edgeml/build/reports/jacoco/jacocoTestReport/jacocoTestReport.xml
           flags: android
