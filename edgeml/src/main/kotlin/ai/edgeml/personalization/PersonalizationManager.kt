@@ -142,38 +142,35 @@ class PersonalizationManager(
         input: FloatArray,
         target: FloatArray,
         metadata: Map<String, String>? = null,
-    ) = mutex.withLock {
-        val sample =
-            TrainingSample(
-                input = input,
-                target = target,
-                timestampMs = System.currentTimeMillis(),
-                metadata = metadata,
-            )
+    ) {
+        val shouldTrain = mutex.withLock {
+            val sample =
+                TrainingSample(
+                    input = input,
+                    target = target,
+                    timestampMs = System.currentTimeMillis(),
+                    metadata = metadata,
+                )
 
-        trainingBuffer.add(sample)
+            trainingBuffer.add(sample)
 
-        // Enforce max buffer size
-        if (trainingBuffer.size > maxBufferSize) {
-            val removeCount = trainingBuffer.size - maxBufferSize
-            repeat(removeCount) {
-                trainingBuffer.removeAt(0)
+            // Enforce max buffer size
+            if (trainingBuffer.size > maxBufferSize) {
+                val removeCount = trainingBuffer.size - maxBufferSize
+                repeat(removeCount) {
+                    trainingBuffer.removeAt(0)
+                }
+
+                Timber.w("Training buffer exceeded max size, removed $removeCount oldest samples")
             }
 
-            Timber.w("Training buffer exceeded max size, removed $removeCount oldest samples")
+            Timber.d("Added training sample, buffer size: ${trainingBuffer.size}")
+
+            shouldTriggerTraining()
         }
 
-        Timber.d("Added training sample, buffer size: ${trainingBuffer.size}")
-
-        // Check if we should trigger training
-        if (shouldTriggerTraining()) {
-            // Release lock before training
-            mutex.unlock()
-            try {
-                trainIncrementally()
-            } finally {
-                mutex.lock()
-            }
+        if (shouldTrain) {
+            trainIncrementally()
         }
     }
 
