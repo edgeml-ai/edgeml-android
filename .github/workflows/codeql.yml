@@ -28,9 +28,7 @@ jobs:
         uses: github/codeql-action/init@45cbd0c69e560cd9e7cd7f8c32362050c9b7ded2 # v4.32.2
         with:
           languages: java-kotlin
-
-      - name: Build with Gradle
-        run: ./gradlew assembleDebug --no-daemon
+          build-mode: none
 
       - name: Perform CodeQL Analysis
         uses: github/codeql-action/analyze@45cbd0c69e560cd9e7cd7f8c32362050c9b7ded2 # v4.32.2
