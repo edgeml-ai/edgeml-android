@@ -399,13 +399,12 @@ class TFLiteTrainer(
         trainingConfig: TrainingConfig,
         model: CachedModel,
     ): TrainingMetrics {
-        Timber.i("Training via signature runner")
+        Timber.i("Training via runSignature API")
 
-        val runner = interp.getSignatureRunner(TRAIN_SIGNATURE)
-        val inputNames = runner.inputNames.toList()
-        val outputNames = runner.outputNames.toList()
+        val inputNames = interp.getSignatureInputs(TRAIN_SIGNATURE)
+        val outputNames = interp.getSignatureOutputs(TRAIN_SIGNATURE)
 
-        Timber.d("Train signature inputs: $inputNames, outputs: $outputNames")
+        Timber.d("Train signature inputs: ${inputNames.toList()}, outputs: ${outputNames.toList()}")
 
         var totalLoss = 0.0
         var batchCount = 0
@@ -448,25 +447,22 @@ class TFLiteTrainer(
                     .order(ByteOrder.nativeOrder())
 
                 try {
-                    // Map inputs by name — convention: first input is features, second is labels
+                    // Build input map by name
+                    val inputs = mutableMapOf<String, Any>()
                     if (inputNames.size >= 2) {
-                        runner.resizeInput(inputNames[0], intArrayOf(batch.size, batch[0].first.size))
-                        runner.resizeInput(inputNames[1], intArrayOf(batch.size, batch[0].second.size))
-                        runner.allocateTensors()
-                        runner.setInput(inputNames[0], inputBuffer)
-                        runner.setInput(inputNames[1], labelBuffer)
+                        inputs[inputNames[0]] = inputBuffer
+                        inputs[inputNames[1]] = labelBuffer
                     } else if (inputNames.size == 1) {
-                        runner.resizeInput(inputNames[0], intArrayOf(batch.size, batch[0].first.size))
-                        runner.allocateTensors()
-                        runner.setInput(inputNames[0], inputBuffer)
+                        inputs[inputNames[0]] = inputBuffer
                     }
 
-                    // Set output buffer
+                    // Build output map by name
+                    val outputs = mutableMapOf<String, Any>()
                     if (outputNames.isNotEmpty()) {
-                        runner.setOutput(outputNames[0], lossBuffer)
+                        outputs[outputNames[0]] = lossBuffer
                     }
 
-                    runner.invoke()
+                    interp.runSignature(inputs, outputs, TRAIN_SIGNATURE)
 
                     // Read loss
                     if (outputNames.isNotEmpty()) {
@@ -493,7 +489,6 @@ class TFLiteTrainer(
         saveTrainedModel(interp, model)
 
         val avgLoss = if (batchCount > 0) totalLoss / trainingConfig.epochs else 0.0
-        // Accuracy from loss: rough estimate for classification models
         val accuracy = maxOf(0.0, 1.0 - avgLoss).coerceIn(0.0, 1.0)
 
         return TrainingMetrics(loss = avgLoss, accuracy = accuracy)
@@ -585,20 +580,32 @@ class TFLiteTrainer(
         try {
             if (interp.signatureKeys.contains(SAVE_SIGNATURE)) {
                 Timber.d("Saving model via 'save' signature")
-                val saveRunner = interp.getSignatureRunner(SAVE_SIGNATURE)
 
                 // The save signature typically takes a checkpoint path as input
                 val checkpointPath = updatedFile.absolutePath
-                val pathBuffer = ByteBuffer.allocateDirect(checkpointPath.length)
-                pathBuffer.put(checkpointPath.toByteArray())
+                val pathBytes = checkpointPath.toByteArray()
+                val pathBuffer = ByteBuffer.allocateDirect(pathBytes.size)
+                pathBuffer.put(pathBytes)
                 pathBuffer.rewind()
 
                 try {
-                    val inputNames = saveRunner.inputNames.toList()
+                    val inputNames = interp.getSignatureInputs(SAVE_SIGNATURE)
+                    val outputNames = interp.getSignatureOutputs(SAVE_SIGNATURE)
+
+                    val inputs = mutableMapOf<String, Any>()
                     if (inputNames.isNotEmpty()) {
-                        saveRunner.setInput(inputNames[0], pathBuffer)
+                        inputs[inputNames[0]] = pathBuffer
                     }
-                    saveRunner.invoke()
+
+                    val outputs = mutableMapOf<String, Any>()
+                    if (outputNames.isNotEmpty()) {
+                        // Allocate a small buffer for any output the save signature produces
+                        val outBuffer = ByteBuffer.allocateDirect(4)
+                            .order(ByteOrder.nativeOrder())
+                        outputs[outputNames[0]] = outBuffer
+                    }
+
+                    interp.runSignature(inputs, outputs, SAVE_SIGNATURE)
                 } catch (e: Exception) {
                     Timber.w(e, "Save signature failed, falling back to file copy")
                     File(model.filePath).copyTo(updatedFile, overwrite = true)
