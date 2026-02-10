@@ -61,6 +61,7 @@ class EdgeMLApiIntegrationTest {
                 orgId = "test-org",
                 modelId = "test-model",
                 debugMode = false,
+                maxRetries = 0, // No retries in integration tests -- retry logic tested separately
             )
 
         api = EdgeMLApiFactory.create(config)
