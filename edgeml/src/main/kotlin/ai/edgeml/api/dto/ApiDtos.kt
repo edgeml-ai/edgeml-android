@@ -471,3 +471,61 @@ data class DevicePolicyResponse(
     @SerialName("training_window")
     val trainingWindow: String? = null,
 )
+
+// =========================================================================
+// Secure Aggregation
+// =========================================================================
+
+/**
+ * Request to join a SecAgg session for a round.
+ */
+@Serializable
+data class SecAggKeyExchangeRequest(
+    @SerialName("device_id")
+    val deviceId: String,
+)
+
+/**
+ * Response from joining a SecAgg session.
+ */
+@Serializable
+data class SecAggSessionResponse(
+    @SerialName("session_id")
+    val sessionId: String,
+    @SerialName("round_id")
+    val roundId: String,
+    @SerialName("threshold")
+    val threshold: Int,
+    @SerialName("total_clients")
+    val totalClients: Int,
+    @SerialName("participant_ids")
+    val participantIds: List<String>,
+    @SerialName("state")
+    val state: String,
+)
+
+/**
+ * Request to submit SecAgg shares to the server.
+ */
+@Serializable
+data class SecAggShareSubmitRequest(
+    @SerialName("device_id")
+    val deviceId: String,
+    @SerialName("shares")
+    val shares: Map<String, String>,
+    @SerialName("verification_tag")
+    val verificationTag: String,
+)
+
+/**
+ * Response from submitting SecAgg shares.
+ */
+@Serializable
+data class SecAggShareSubmitResponse(
+    @SerialName("accepted")
+    val accepted: Boolean,
+    @SerialName("session_id")
+    val sessionId: String,
+    @SerialName("message")
+    val message: String? = null,
+)

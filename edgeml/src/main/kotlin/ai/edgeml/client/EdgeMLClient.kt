@@ -12,11 +12,16 @@ import ai.edgeml.models.DownloadState
 import ai.edgeml.models.InferenceInput
 import ai.edgeml.models.InferenceOutput
 import ai.edgeml.models.ModelManager
+import ai.edgeml.secagg.SecAggManager
 import ai.edgeml.storage.SecureStorage
 import ai.edgeml.sync.EventQueue
 import ai.edgeml.sync.EventTypes
 import ai.edgeml.sync.WorkManagerSync
 import ai.edgeml.training.TFLiteTrainer
+import ai.edgeml.training.TrainingConfig
+import ai.edgeml.training.TrainingDataProvider
+import ai.edgeml.training.TrainingResult
+import ai.edgeml.training.WeightUpdate
 import ai.edgeml.utils.BatteryUtils
 import ai.edgeml.utils.DeviceUtils
 import ai.edgeml.utils.NetworkUtils
@@ -78,6 +83,7 @@ class EdgeMLClient private constructor(
     private val trainer: TFLiteTrainer = TFLiteTrainer(context, config),
     private val syncManager: WorkManagerSync = WorkManagerSync(context, config),
     private val eventQueue: EventQueue = EventQueue.getInstance(context),
+    private val secAggManager: SecAggManager? = if (config.enableSecureAggregation) SecAggManager(api) else null,
 ) {
 
     // Coroutine scope for background operations
@@ -705,6 +711,148 @@ class EdgeMLClient private constructor(
     }
 
     // =========================================================================
+    // Federated Training
+    // =========================================================================
+
+    /**
+     * Run local training and upload the weight update to the server.
+     *
+     * When secure aggregation is enabled, the weight update is automatically
+     * masked using the SecAgg+ protocol before upload. The server can only
+     * reconstruct the aggregate, never individual client updates.
+     *
+     * @param dataProvider Provider for local training data.
+     * @param trainingConfig Training hyperparameters.
+     * @param roundId The federated learning round ID (required for SecAgg).
+     * @return [FederatedTrainingResult] with training metrics and upload status.
+     */
+    suspend fun trainAndUpload(
+        dataProvider: TrainingDataProvider,
+        trainingConfig: TrainingConfig = TrainingConfig(),
+        roundId: String? = null,
+    ): Result<FederatedTrainingResult> =
+        withContext(ioDispatcher) {
+            checkReady()
+
+            try {
+                val deviceId = _serverDeviceId.value
+                    ?: return@withContext Result.failure(Exception("Device not registered"))
+
+                Timber.i("Starting federated training round${roundId?.let { " $it" } ?: ""}")
+
+                // Train locally
+                val trainingResult = trainer.train(dataProvider, trainingConfig).getOrThrow()
+
+                eventQueue.addTrainingEvent(
+                    type = EventTypes.TRAINING_COMPLETED,
+                    metrics = mapOf(
+                        "loss" to (trainingResult.loss ?: 0.0),
+                        "accuracy" to (trainingResult.accuracy ?: 0.0),
+                        "training_time" to trainingResult.trainingTime,
+                        "sample_count" to trainingResult.sampleCount.toDouble(),
+                    ),
+                )
+
+                // Extract weight update
+                val weightUpdate = trainer.extractWeightUpdate(trainingResult).getOrThrow()
+
+                // Apply SecAgg if enabled and round ID is provided
+                val uploadResult = if (config.enableSecureAggregation && roundId != null && secAggManager != null) {
+                    uploadWithSecAgg(weightUpdate, roundId, deviceId)
+                } else {
+                    uploadPlaintext(weightUpdate, deviceId, roundId)
+                }
+
+                Timber.i("Federated training complete: ${trainingResult.sampleCount} samples, upload=${uploadResult.isSuccess}")
+
+                Result.success(
+                    FederatedTrainingResult(
+                        trainingResult = trainingResult,
+                        weightUpdate = weightUpdate,
+                        uploaded = uploadResult.isSuccess,
+                        secureAggregation = config.enableSecureAggregation && roundId != null,
+                    )
+                )
+            } catch (e: Exception) {
+                Timber.e(e, "Federated training failed")
+                eventQueue.addTrainingEvent(
+                    type = EventTypes.TRAINING_FAILED,
+                    metadata = mapOf("error" to (e.message ?: "unknown")),
+                )
+                Result.failure(e)
+            }
+        }
+
+    private suspend fun uploadWithSecAgg(
+        weightUpdate: WeightUpdate,
+        roundId: String,
+        deviceId: String,
+    ): Result<Unit> {
+        val secAgg = secAggManager ?: return Result.failure(Exception("SecAgg not enabled"))
+
+        Timber.d("Uploading weight update with SecAgg for round $roundId")
+
+        val secAggResult = secAgg.processWeightUpdate(weightUpdate, roundId, deviceId).getOrThrow()
+
+        // Upload the masked weights
+        val request = ai.edgeml.api.dto.GradientUpdateRequest(
+            deviceId = deviceId,
+            modelId = weightUpdate.modelId,
+            version = weightUpdate.version,
+            roundId = roundId,
+            numSamples = weightUpdate.sampleCount,
+            trainingTimeMs = 0L,
+            metrics = ai.edgeml.api.dto.TrainingMetrics(
+                loss = weightUpdate.metrics["loss"] ?: 0.0,
+                accuracy = weightUpdate.metrics["accuracy"],
+                numBatches = weightUpdate.metrics["epochs"]?.toInt() ?: 1,
+            ),
+        )
+
+        val response = api.submitGradients(roundId, request)
+        return if (response.isSuccessful) {
+            Result.success(Unit)
+        } else {
+            Result.failure(Exception("Upload failed: ${response.code()}"))
+        }
+    }
+
+    private suspend fun uploadPlaintext(
+        weightUpdate: WeightUpdate,
+        deviceId: String,
+        roundId: String?,
+    ): Result<Unit> {
+        Timber.d("Uploading weight update (plaintext)")
+
+        if (roundId != null) {
+            val request = ai.edgeml.api.dto.GradientUpdateRequest(
+                deviceId = deviceId,
+                modelId = weightUpdate.modelId,
+                version = weightUpdate.version,
+                roundId = roundId,
+                numSamples = weightUpdate.sampleCount,
+                trainingTimeMs = 0L,
+                metrics = ai.edgeml.api.dto.TrainingMetrics(
+                    loss = weightUpdate.metrics["loss"] ?: 0.0,
+                    accuracy = weightUpdate.metrics["accuracy"],
+                    numBatches = weightUpdate.metrics["epochs"]?.toInt() ?: 1,
+                ),
+            )
+
+            val response = api.submitGradients(roundId, request)
+            return if (response.isSuccessful) {
+                Result.success(Unit)
+            } else {
+                Result.failure(Exception("Upload failed: ${response.code()}"))
+            }
+        }
+
+        // No round ID - just log that we completed training
+        Timber.d("No round ID, skipping upload")
+        return Result.success(Unit)
+    }
+
+    // =========================================================================
     // Resource Management
     // =========================================================================
 
@@ -828,6 +976,20 @@ class EdgeMLClient private constructor(
         }
     }
 }
+
+/**
+ * Result of a federated training session.
+ */
+data class FederatedTrainingResult(
+    /** Local training result with metrics. */
+    val trainingResult: TrainingResult,
+    /** The extracted weight update. */
+    val weightUpdate: WeightUpdate,
+    /** Whether the update was successfully uploaded. */
+    val uploaded: Boolean,
+    /** Whether secure aggregation was used. */
+    val secureAggregation: Boolean,
+)
 
 /**
  * Client state enum.
