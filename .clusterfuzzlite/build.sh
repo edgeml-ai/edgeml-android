@@ -1,41 +1,56 @@
 #!/bin/bash -eu
 
-cd /src/edgeml-android
-
-# Build the project
-./gradlew assembleDebug --no-daemon 2>/dev/null || true
-
-# Create a simple Jazzer fuzz target
-cat > FuzzConfig.java << 'FUZZ'
+# Fuzz target using only JDK + Jazzer API (no Android SDK needed)
+cat > FuzzEdgeML.java << 'FUZZ'
 import com.code_intelligence.jazzer.api.FuzzedDataProvider;
 
-public class FuzzConfig {
+public class FuzzEdgeML {
     public static void fuzzerTestOneInput(FuzzedDataProvider data) {
         try {
             String input = data.consumeRemainingAsString();
-            // Fuzz JSON-like config parsing
-            if (input.contains("{") && input.contains("}")) {
-                org.json.JSONObject obj = new org.json.JSONObject(input);
+            if (input.isEmpty()) return;
+
+            // Fuzz URL parsing (used in API base URL config)
+            if (input.startsWith("http")) {
+                java.net.URI.create(input).toURL();
             }
-        } catch (Exception e) {
+
+            // Fuzz UUID parsing (used for device identifiers)
+            if (input.length() == 36 && input.charAt(8) == '-') {
+                java.util.UUID.fromString(input);
+            }
+
+            // Fuzz base64 decoding (used in token handling)
+            if (input.length() > 4 && input.length() < 1024) {
+                java.util.Base64.getDecoder().decode(input);
+            }
+        } catch (IllegalArgumentException | java.net.MalformedURLException e) {
             // Expected for malformed input
         }
     }
 }
 FUZZ
 
-BUILD_CLASSPATH=$(find /src/edgeml-android -name "*.jar" -type f | head -20 | tr '\n' ':')
-javac -cp "$BUILD_CLASSPATH:$JAZZER_API_PATH" FuzzConfig.java 2>/dev/null || true
-jar cf FuzzConfig.jar FuzzConfig.class 2>/dev/null || true
+# Compile and package as _deploy.jar
+javac -cp "$JAZZER_API_PATH" FuzzEdgeML.java
+jar cf "$OUT/FuzzEdgeML_deploy.jar" FuzzEdgeML.class
 
-cp FuzzConfig.jar $OUT/ 2>/dev/null || true
-cp $JAZZER_API_PATH $OUT/ 2>/dev/null || true
-
-# Create the fuzzer driver script
-cat > $OUT/FuzzConfig << 'DRIVER'
+# Create executable wrapper script (required for fuzz target detection)
+# The build check looks for executable shell scripts containing LLVMFuzzerTestOneInput
+cat > "$OUT/FuzzEdgeML" << WRAPPER
 #!/bin/bash
-this_dir=$(dirname "$0")
-CLASSPATH="$this_dir/FuzzConfig.jar:$this_dir/jazzer_api.jar"
-$this_dir/jazzer_driver --cp=$CLASSPATH --target_class=FuzzConfig "$@"
-DRIVER
-chmod +x $OUT/FuzzConfig
+# LLVMFuzzerTestOneInput for fuzzer detection.
+this_dir=\$(dirname "\$0")
+if [[ "\$@" =~ (^| )-runs=[0-9]+($| ) ]]; then
+  mem_settings='-Xmx1900m:-Xss900k'
+else
+  mem_settings='-Xmx2048m:-Xss1024k'
+fi
+LD_LIBRARY_PATH="$JVM_LD_LIBRARY_PATH":\$this_dir \\
+\$this_dir/jazzer_driver --agent_path=\$this_dir/jazzer_agent_deploy.jar \\
+--cp=\$this_dir/FuzzEdgeML_deploy.jar \\
+--target_class=FuzzEdgeML \\
+--jvm_args="\$mem_settings" \\
+\$@
+WRAPPER
+chmod +x "$OUT/FuzzEdgeML"
