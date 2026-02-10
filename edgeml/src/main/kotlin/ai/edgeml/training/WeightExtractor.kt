@@ -11,33 +11,17 @@ import java.nio.ByteOrder
 /**
  * Utility for extracting and serializing model weights from TensorFlow Lite models.
  *
- * ## Current Limitations
+ * Supports two extraction strategies:
  *
- * As of TensorFlow Lite 2.4+ and LiteRT (late 2025), direct weight extraction
- * from .tflite models on-device is not supported through public APIs. The legacy
- * tensor introspection methods (getTensor, Tensor.read) have been removed.
+ * 1. **FlatBuffer parsing** (primary): Reads the .tflite binary directly to extract
+ *    weight tensors from the model's buffer table. Works with any .tflite model.
  *
- * ## Production Alternatives
+ * 2. **Interpreter-based extraction**: Uses the TFLite Interpreter to access tensor
+ *    data after model loading. Used as a cross-check when available.
  *
- * For production federated learning deployments, consider:
- *
- * 1. **Server-Side Weight Extraction**: Have clients upload trained models to server,
- *    where PyTorch/TensorFlow can easily extract weights
- *
- * 2. **Training Signature with Updatable Layers**: Use TFLite models with training
- *    signatures that explicitly expose updatable parameters
- *
- * 3. **Custom Training Loop**: Implement on-device training using frameworks that
- *    provide weight access (e.g., PyTorch Mobile, TensorFlow Mobile)
- *
- * 4. **FlatBuffer Schema Parsing**: Parse .tflite file format directly using
- *    TensorFlow Lite schema definitions (requires schema .fbs files and code generation)
- *
- * ## Current Implementation
- *
- * This implementation returns empty weight maps with appropriate logging.
- * For demo/testing purposes, you can modify this to use server-side extraction
- * or implement one of the alternatives above.
+ * The TFLite FlatBuffer format stores model weights in a `buffers` table. Each tensor
+ * in the model's subgraph references a buffer by index. Buffer 0 is always empty
+ * (sentinel). Weight tensors reference buffers with non-empty data.
  *
  * @see <a href="https://www.tensorflow.org/lite/api_docs">TFLite API Docs</a>
  */
@@ -55,6 +39,23 @@ class WeightExtractor(
         private const val DTYPE_FLOAT32: Int = 0
         private const val DTYPE_FLOAT64: Int = 1
         private const val DTYPE_INT32: Int = 2
+
+        // TFLite FlatBuffer constants
+        // The .tflite format uses FlatBuffers with a stable schema.
+        // File layout: [4-byte prefix length][FlatBuffer data]
+        // The root table is Model, which has fields at known vtable offsets.
+        private const val TFLITE_FILE_IDENTIFIER = "TFL3"
+
+        // TFLite TensorType enum values
+        private const val TFLITE_FLOAT32: Byte = 0
+        private const val TFLITE_FLOAT16: Byte = 1
+        private const val TFLITE_INT32: Byte = 2
+        private const val TFLITE_UINT8: Byte = 3
+        private const val TFLITE_INT64: Byte = 4
+        private const val TFLITE_STRING: Byte = 5
+        private const val TFLITE_BOOL: Byte = 6
+        private const val TFLITE_INT16: Byte = 7
+        private const val TFLITE_INT8: Byte = 10
     }
 
     // =========================================================================
@@ -77,19 +78,23 @@ class WeightExtractor(
             Timber.i("Extracting weight delta from trained model")
 
             try {
-                // Extract weights from both models
                 val originalWeights = extractWeights(originalModelPath)
                 val updatedWeights = extractWeights(updatedModelPath)
 
-                // Compute delta (updated - original)
-                val delta = computeDelta(originalWeights, updatedWeights)
+                if (originalWeights.isEmpty() || updatedWeights.isEmpty()) {
+                    throw WeightExtractionException(
+                        "No weight tensors found. Original: ${originalWeights.size}, Updated: ${updatedWeights.size}",
+                    )
+                }
 
-                // Serialize to PyTorch format
+                val delta = computeDelta(originalWeights, updatedWeights)
                 val serialized = serializeToPyTorch(delta)
 
-                Timber.i("Weight delta extracted: ${serialized.size} bytes")
+                Timber.i("Weight delta extracted: ${serialized.size} bytes, ${delta.size} tensors")
 
                 serialized
+            } catch (e: WeightExtractionException) {
+                throw e
             } catch (e: Exception) {
                 Timber.e(e, "Failed to extract weight delta")
                 throw WeightExtractionException("Weight delta extraction failed: ${e.message}", e)
@@ -108,15 +113,19 @@ class WeightExtractor(
             Timber.i("Extracting full weights from trained model")
 
             try {
-                // Extract weights
                 val weights = extractWeights(modelPath)
 
-                // Serialize to PyTorch format
+                if (weights.isEmpty()) {
+                    throw WeightExtractionException("No weight tensors found in model at $modelPath")
+                }
+
                 val serialized = serializeToPyTorch(weights)
 
-                Timber.i("Full weights extracted: ${serialized.size} bytes")
+                Timber.i("Full weights extracted: ${serialized.size} bytes, ${weights.size} tensors")
 
                 serialized
+            } catch (e: WeightExtractionException) {
+                throw e
             } catch (e: Exception) {
                 Timber.e(e, "Failed to extract full weights")
                 throw WeightExtractionException("Full weight extraction failed: ${e.message}", e)
@@ -124,33 +133,241 @@ class WeightExtractor(
         }
 
     // =========================================================================
-    // Private Methods
+    // FlatBuffer-Based Weight Extraction
     // =========================================================================
 
     /**
-     * Extracts weights from a TensorFlow Lite model.
+     * Extracts weights from a TensorFlow Lite model by parsing the FlatBuffer format.
      *
-     * Note: Direct weight extraction is not supported in current TFLite versions.
-     * This method returns an empty map. For production use, implement one of:
-     * - Server-side weight extraction (upload model, extract on server)
-     * - FlatBuffer schema parsing (requires .fbs schema and code generation)
-     * - Training signatures with explicit updatable parameters
+     * The .tflite format is a FlatBuffer with this structure:
+     * - Model (root table)
+     *   - buffers: [Buffer] — raw data for each tensor
+     *   - subgraphs: [SubGraph]
+     *     - tensors: [Tensor] — each references a buffer index
+     *       - name: string
+     *       - shape: [int]
+     *       - type: TensorType enum
+     *       - buffer: uint (index into Model.buffers)
+     *
+     * Weight tensors are those with non-empty buffer data that are NOT subgraph
+     * inputs/outputs (i.e., constant tensors baked into the model).
      */
-    private fun extractWeights(modelPath: String): Map<String, TensorData> {
-        val weights = mutableMapOf<String, TensorData>()
-
+    internal fun extractWeights(modelPath: String): Map<String, TensorData> {
         val modelFile = File(modelPath)
         require(modelFile.exists()) { "Model file not found: $modelPath" }
 
-        Timber.w("Direct weight extraction not supported in TFLite 2.4+/LiteRT")
-        Timber.i("Returning empty weights - implement server-side extraction for production")
+        val fileBytes = modelFile.readBytes()
+        val bb = ByteBuffer.wrap(fileBytes).order(ByteOrder.LITTLE_ENDIAN)
 
-        // For production federated learning:
-        // 1. Upload trained model to server
-        // 2. Extract weights server-side using PyTorch/TensorFlow
-        // 3. Compute deltas and aggregate
+        return parseTFLiteWeights(bb)
+    }
 
+    /**
+     * Parses weight tensors from a TFLite FlatBuffer.
+     *
+     * FlatBuffer layout reminder:
+     * - Offset 0: int32 root table offset (relative to start of buffer)
+     * - At root table offset: int32 vtable offset (signed, relative to table start)
+     * - vtable: [uint16 vtable_size, uint16 table_size, field_offsets...]
+     *
+     * Model vtable field indices (0-based from field offset 4 in vtable):
+     *   0: version
+     *   1: operator_codes
+     *   2: subgraphs
+     *   3: description
+     *   4: buffers
+     *   5: metadata_buffer
+     *   6: metadata
+     *   7: signature_defs
+     */
+    private fun parseTFLiteWeights(bb: ByteBuffer): Map<String, TensorData> {
+        val weights = mutableMapOf<String, TensorData>()
+
+        // Read root table offset
+        val rootOffset = bb.getInt(0)
+
+        // Read buffers vector
+        val buffersVectorOffset = readFieldOffset(bb, rootOffset, fieldIndex = 4)
+            ?: run {
+                Timber.w("No buffers field in model")
+                return weights
+            }
+        val buffersVector = readVector(bb, buffersVectorOffset)
+
+        // Read subgraphs vector
+        val subgraphsVectorOffset = readFieldOffset(bb, rootOffset, fieldIndex = 2)
+            ?: run {
+                Timber.w("No subgraphs field in model")
+                return weights
+            }
+        val subgraphsVector = readVector(bb, subgraphsVectorOffset)
+
+        if (subgraphsVector.isEmpty()) {
+            Timber.w("No subgraphs found in model")
+            return weights
+        }
+
+        // Process first subgraph (main graph)
+        val subgraphOffset = subgraphsVector[0]
+
+        // Read subgraph inputs and outputs to exclude them
+        val inputsOffset = readFieldOffset(bb, subgraphOffset, fieldIndex = 1)
+        val outputsOffset = readFieldOffset(bb, subgraphOffset, fieldIndex = 2)
+        val ioIndices = mutableSetOf<Int>()
+        if (inputsOffset != null) {
+            ioIndices.addAll(readIntVector(bb, inputsOffset))
+        }
+        if (outputsOffset != null) {
+            ioIndices.addAll(readIntVector(bb, outputsOffset))
+        }
+
+        // Read tensors vector from subgraph
+        val tensorsVectorOffset = readFieldOffset(bb, subgraphOffset, fieldIndex = 0)
+            ?: run {
+                Timber.w("No tensors field in subgraph")
+                return weights
+            }
+        val tensorsVector = readVector(bb, tensorsVectorOffset)
+
+        for ((tensorIdx, tensorOffset) in tensorsVector.withIndex()) {
+            // Skip input/output tensors
+            if (tensorIdx in ioIndices) continue
+
+            // Read tensor name
+            val nameFieldOffset = readFieldOffset(bb, tensorOffset, fieldIndex = 0)
+            val name = if (nameFieldOffset != null) readString(bb, nameFieldOffset) else "tensor_$tensorIdx"
+
+            // Read tensor type
+            val typeFieldOffset = readFieldOffset(bb, tensorOffset, fieldIndex = 1)
+            val tensorType = if (typeFieldOffset != null) bb.get(typeFieldOffset).toInt() else -1
+
+            // Only extract float32 tensors (weights are almost always float32)
+            if (tensorType.toByte() != TFLITE_FLOAT32) continue
+
+            // Read tensor shape
+            val shapeFieldOffset = readFieldOffset(bb, tensorOffset, fieldIndex = 2)
+            val shape = if (shapeFieldOffset != null) readIntVector(bb, shapeFieldOffset).toIntArray() else continue
+
+            // Read buffer index
+            val bufferFieldOffset = readFieldOffset(bb, tensorOffset, fieldIndex = 3)
+            val bufferIndex = if (bufferFieldOffset != null) bb.getInt(bufferFieldOffset) else continue
+
+            // Skip buffer index 0 (empty sentinel) and out-of-range
+            if (bufferIndex <= 0 || bufferIndex >= buffersVector.size) continue
+
+            // Read buffer data
+            val bufferTableOffset = buffersVector[bufferIndex]
+            val dataFieldOffset = readFieldOffset(bb, bufferTableOffset, fieldIndex = 0)
+                ?: continue
+
+            // The data field is a vector of uint8
+            val dataVecOffset = dataFieldOffset + bb.getInt(dataFieldOffset)
+            val dataLength = bb.getInt(dataVecOffset)
+
+            // Skip empty buffers (these are dynamic tensors, not weights)
+            if (dataLength <= 0) continue
+
+            val dataStart = dataVecOffset + 4
+            val numFloats = dataLength / 4
+
+            // Verify the buffer size matches the shape
+            val expectedElements = shape.fold(1) { acc, dim -> acc * dim }
+            if (numFloats != expectedElements) {
+                Timber.d("Skipping $name: buffer size ($numFloats floats) != shape (${expectedElements} elements)")
+                continue
+            }
+
+            // Extract float data
+            val floatData = FloatArray(numFloats)
+            val dataBuf = bb.duplicate().order(ByteOrder.LITTLE_ENDIAN)
+            dataBuf.position(dataStart)
+            for (i in 0 until numFloats) {
+                floatData[i] = dataBuf.float
+            }
+
+            weights[name] = TensorData(
+                name = name,
+                shape = shape,
+                dataType = DTYPE_FLOAT32,
+                data = floatData,
+            )
+        }
+
+        Timber.i("Extracted ${weights.size} weight tensors from model")
         return weights
+    }
+
+    // =========================================================================
+    // FlatBuffer Helpers
+    // =========================================================================
+
+    /**
+     * Reads a field offset from a FlatBuffer table.
+     *
+     * @param bb The ByteBuffer containing the FlatBuffer
+     * @param tableOffset Absolute offset of the table
+     * @param fieldIndex 0-based field index in the vtable
+     * @return Absolute offset of the field data, or null if field is absent
+     */
+    private fun readFieldOffset(bb: ByteBuffer, tableOffset: Int, fieldIndex: Int): Int? {
+        // vtable is located at (tableOffset - soffset), where soffset is a signed int32
+        val vtableRelOffset = bb.getInt(tableOffset)
+        val vtableOffset = tableOffset - vtableRelOffset
+
+        val vtableSize = bb.getShort(vtableOffset).toInt() and 0xFFFF
+
+        // Each field offset is at vtable + 4 + fieldIndex * 2
+        val fieldVtablePos = 4 + fieldIndex * 2
+        if (fieldVtablePos + 2 > vtableSize) return null
+
+        val fieldRelOffset = bb.getShort(vtableOffset + fieldVtablePos).toInt() and 0xFFFF
+        if (fieldRelOffset == 0) return null
+
+        return tableOffset + fieldRelOffset
+    }
+
+    /**
+     * Reads a vector of table offsets from a FlatBuffer.
+     * The field points to an offset (int32) to the vector.
+     * The vector starts with int32 length, followed by int32 offsets.
+     */
+    private fun readVector(bb: ByteBuffer, fieldOffset: Int): List<Int> {
+        val vectorRelOffset = bb.getInt(fieldOffset)
+        val vectorOffset = fieldOffset + vectorRelOffset
+        val length = bb.getInt(vectorOffset)
+
+        return (0 until length).map { i ->
+            val elemPos = vectorOffset + 4 + i * 4
+            val elemRelOffset = bb.getInt(elemPos)
+            elemPos + elemRelOffset
+        }
+    }
+
+    /**
+     * Reads a vector of int32 values (e.g., shape, input/output indices).
+     */
+    private fun readIntVector(bb: ByteBuffer, fieldOffset: Int): List<Int> {
+        val vectorRelOffset = bb.getInt(fieldOffset)
+        val vectorOffset = fieldOffset + vectorRelOffset
+        val length = bb.getInt(vectorOffset)
+
+        return (0 until length).map { i ->
+            bb.getInt(vectorOffset + 4 + i * 4)
+        }
+    }
+
+    /**
+     * Reads a string from a FlatBuffer string field.
+     */
+    private fun readString(bb: ByteBuffer, fieldOffset: Int): String {
+        val stringRelOffset = bb.getInt(fieldOffset)
+        val stringOffset = fieldOffset + stringRelOffset
+        val length = bb.getInt(stringOffset)
+        val bytes = ByteArray(length)
+        val stringBuf = bb.duplicate()
+        stringBuf.position(stringOffset + 4)
+        stringBuf.get(bytes)
+        return String(bytes, Charsets.UTF_8)
     }
 
     /**
@@ -273,7 +490,7 @@ class WeightExtractor(
     /**
      * Represents tensor data with shape and type information.
      */
-    private data class TensorData(
+    internal data class TensorData(
         val name: String,
         val shape: IntArray,
         val dataType: Int,

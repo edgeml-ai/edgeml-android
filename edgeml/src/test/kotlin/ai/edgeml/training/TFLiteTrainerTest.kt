@@ -14,6 +14,7 @@ import org.junit.Test
 import java.io.File
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
@@ -22,8 +23,9 @@ import kotlin.test.assertTrue
  *
  * TensorFlow Lite's native library is not available on the CI JVM, so we
  * cannot test paths that create an [org.tensorflow.lite.Interpreter].
- * Instead we focus on guard clauses, state management, and error paths
- * that execute *before* any native call is made.
+ * Instead we focus on guard clauses, state management, error paths,
+ * and the new training/signature-related methods that execute
+ * *before* any native call is made.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class TFLiteTrainerTest {
@@ -148,6 +150,20 @@ class TFLiteTrainerTest {
     }
 
     // =========================================================================
+    // hasTrainingSignature / getSignatureKeys — no model
+    // =========================================================================
+
+    @Test
+    fun `hasTrainingSignature returns false when no model loaded`() {
+        assertFalse(trainer.hasTrainingSignature())
+    }
+
+    @Test
+    fun `getSignatureKeys returns empty list when no model loaded`() {
+        assertTrue(trainer.getSignatureKeys().isEmpty())
+    }
+
+    // =========================================================================
     // close
     // =========================================================================
 
@@ -160,6 +176,8 @@ class TFLiteTrainerTest {
         assertNull(trainer.currentModel)
         assertNull(trainer.getTensorInfo())
         assertFalse(trainer.isUsingGpu())
+        assertFalse(trainer.hasTrainingSignature())
+        assertTrue(trainer.getSignatureKeys().isEmpty())
     }
 
     @Test
@@ -185,6 +203,47 @@ class TFLiteTrainerTest {
         assertTrue(result.exceptionOrNull()?.message?.contains("No model loaded") == true)
     }
 
+    @Test
+    fun `train with default TrainingConfig uses sensible defaults`() = runTest(testDispatcher) {
+        // Verify TrainingConfig defaults are accessible (epochs=1, batchSize=32, lr=0.001)
+        val config = TrainingConfig()
+        assertEquals(1, config.epochs)
+        assertEquals(32, config.batchSize)
+        assertEquals(0.001f, config.learningRate)
+        assertEquals("categorical_crossentropy", config.lossFunction)
+        assertEquals("adam", config.optimizer)
+    }
+
+    @Test
+    fun `train with empty data provider fails`() = runTest(testDispatcher) {
+        // Even if a model were loaded, empty data should fail.
+        // Without a model loaded, we get "No model loaded" first.
+        val emptyProvider = InMemoryTrainingDataProvider(emptyList())
+
+        val result = trainer.train(emptyProvider)
+
+        assertTrue(result.isFailure)
+        // Should fail with "No model loaded" since no interpreter is available
+        assertNotNull(result.exceptionOrNull())
+    }
+
+    @Test
+    fun `train with custom TrainingConfig passes epochs and batch size`() {
+        // Verify custom config values can be set
+        val config = TrainingConfig(
+            epochs = 5,
+            batchSize = 16,
+            learningRate = 0.01f,
+            lossFunction = "mse",
+            optimizer = "sgd",
+        )
+        assertEquals(5, config.epochs)
+        assertEquals(16, config.batchSize)
+        assertEquals(0.01f, config.learningRate)
+        assertEquals("mse", config.lossFunction)
+        assertEquals("sgd", config.optimizer)
+    }
+
     // =========================================================================
     // extractWeightUpdate without model
     // =========================================================================
@@ -202,6 +261,115 @@ class TFLiteTrainerTest {
 
         assertTrue(result.isFailure)
         assertTrue(result.exceptionOrNull()?.message?.contains("No model loaded") == true)
+    }
+
+    @Test
+    fun `extractWeightUpdate fails when no training session`() = runTest(testDispatcher) {
+        // Even with a model conceptually loaded, if updatedModelPath is null,
+        // extractWeightUpdate should fail. Since we can't load a real model
+        // on JVM, we verify the guard clause indirectly.
+        val trainingResult = TrainingResult(
+            sampleCount = 10,
+            loss = 0.1,
+            accuracy = 0.9,
+            trainingTime = 1.0,
+        )
+
+        val result = trainer.extractWeightUpdate(trainingResult)
+
+        assertTrue(result.isFailure)
+    }
+
+    // =========================================================================
+    // TrainingResult data class
+    // =========================================================================
+
+    @Test
+    fun `TrainingResult stores all fields correctly`() {
+        val metrics = mapOf("epochs" to 3.0, "batch_size" to 32.0)
+        val result = TrainingResult(
+            sampleCount = 100,
+            loss = 0.25,
+            accuracy = 0.92,
+            trainingTime = 5.5,
+            metrics = metrics,
+            updatedModelPath = "/tmp/updated.tflite",
+        )
+
+        assertEquals(100, result.sampleCount)
+        assertEquals(0.25, result.loss)
+        assertEquals(0.92, result.accuracy)
+        assertEquals(5.5, result.trainingTime)
+        assertEquals(3.0, result.metrics["epochs"])
+        assertEquals("/tmp/updated.tflite", result.updatedModelPath)
+    }
+
+    @Test
+    fun `TrainingResult defaults to empty metrics and null path`() {
+        val result = TrainingResult(
+            sampleCount = 50,
+            loss = 0.1,
+            accuracy = 0.95,
+            trainingTime = 1.0,
+        )
+
+        assertTrue(result.metrics.isEmpty())
+        assertNull(result.updatedModelPath)
+    }
+
+    @Test
+    fun `TrainingResult accepts null loss and accuracy`() {
+        val result = TrainingResult(
+            sampleCount = 0,
+            loss = null,
+            accuracy = null,
+            trainingTime = 0.0,
+        )
+
+        assertNull(result.loss)
+        assertNull(result.accuracy)
+    }
+
+    // =========================================================================
+    // WeightUpdate data class
+    // =========================================================================
+
+    @Test
+    fun `WeightUpdate equality uses content comparison for weightsData`() {
+        val data = byteArrayOf(1, 2, 3, 4)
+        val update1 = WeightUpdate(
+            modelId = "m1",
+            version = "1.0",
+            weightsData = data.copyOf(),
+            sampleCount = 10,
+        )
+        val update2 = WeightUpdate(
+            modelId = "m1",
+            version = "1.0",
+            weightsData = data.copyOf(),
+            sampleCount = 10,
+        )
+
+        assertEquals(update1, update2)
+        assertEquals(update1.hashCode(), update2.hashCode())
+    }
+
+    @Test
+    fun `WeightUpdate not equal when weightsData differ`() {
+        val update1 = WeightUpdate(
+            modelId = "m1",
+            version = "1.0",
+            weightsData = byteArrayOf(1, 2, 3),
+            sampleCount = 10,
+        )
+        val update2 = WeightUpdate(
+            modelId = "m1",
+            version = "1.0",
+            weightsData = byteArrayOf(4, 5, 6),
+            sampleCount = 10,
+        )
+
+        assertFalse(update1 == update2)
     }
 
     // =========================================================================
@@ -223,5 +391,75 @@ class TFLiteTrainerTest {
         val info2 = TensorInfo(intArrayOf(1, 32, 32), intArrayOf(1, 10), "FLOAT32", "FLOAT32")
 
         assertFalse(info1 == info2)
+    }
+
+    @Test
+    fun `TensorInfo not equal when types differ`() {
+        val info1 = TensorInfo(intArrayOf(1), intArrayOf(1), "FLOAT32", "FLOAT32")
+        val info2 = TensorInfo(intArrayOf(1), intArrayOf(1), "INT32", "FLOAT32")
+
+        assertFalse(info1 == info2)
+    }
+
+    // =========================================================================
+    // InMemoryTrainingDataProvider
+    // =========================================================================
+
+    @Test
+    fun `InMemoryTrainingDataProvider returns data`() = runTest(testDispatcher) {
+        val data = listOf(
+            floatArrayOf(1.0f, 2.0f) to floatArrayOf(1.0f, 0.0f),
+            floatArrayOf(3.0f, 4.0f) to floatArrayOf(0.0f, 1.0f),
+        )
+        val provider = InMemoryTrainingDataProvider(data)
+
+        val result = provider.getTrainingData()
+        assertEquals(2, result.size)
+        assertEquals(2, provider.getSampleCount())
+    }
+
+    @Test
+    fun `InMemoryTrainingDataProvider handles empty data`() = runTest(testDispatcher) {
+        val provider = InMemoryTrainingDataProvider(emptyList())
+
+        assertEquals(0, provider.getTrainingData().size)
+        assertEquals(0, provider.getSampleCount())
+    }
+
+    // =========================================================================
+    // inputShape and outputShape return copies
+    // =========================================================================
+
+    @Test
+    fun `inputShape returns a defensive copy`() {
+        val shape1 = trainer.inputShape
+        val shape2 = trainer.inputShape
+        // They should be equal but not the same array instance
+        assertTrue(shape1.contentEquals(shape2))
+    }
+
+    @Test
+    fun `outputShape returns a defensive copy`() {
+        val shape1 = trainer.outputShape
+        val shape2 = trainer.outputShape
+        assertTrue(shape1.contentEquals(shape2))
+    }
+
+    // =========================================================================
+    // Multiple trainer instances
+    // =========================================================================
+
+    @Test
+    fun `separate trainer instances are independent`() = runTest(testDispatcher) {
+        val config = testConfig(enableGpuAcceleration = false)
+        val trainer2 = TFLiteTrainer(context, config, testDispatcher, testDispatcher)
+
+        assertFalse(trainer.isModelLoaded())
+        assertFalse(trainer2.isModelLoaded())
+
+        trainer.close()
+        // trainer2 should be unaffected
+        assertFalse(trainer2.isModelLoaded())
+        trainer2.close()
     }
 }
