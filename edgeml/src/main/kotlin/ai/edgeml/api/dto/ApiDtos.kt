@@ -473,6 +473,67 @@ data class DevicePolicyResponse(
 )
 
 // =========================================================================
+// Round Management
+// =========================================================================
+
+/**
+ * A federated learning round returned from the server.
+ */
+@Serializable
+data class RoundAssignment(
+    @SerialName("id")
+    val id: String,
+    @SerialName("org_id")
+    val orgId: String,
+    @SerialName("model_id")
+    val modelId: String,
+    @SerialName("version_id")
+    val versionId: String,
+    @SerialName("state")
+    val state: String,
+    @SerialName("min_clients")
+    val minClients: Int,
+    @SerialName("max_clients")
+    val maxClients: Int,
+    @SerialName("client_selection_strategy")
+    val clientSelectionStrategy: String,
+    @SerialName("aggregation_type")
+    val aggregationType: String,
+    @SerialName("timeout_minutes")
+    val timeoutMinutes: Int,
+    @SerialName("differential_privacy")
+    val differentialPrivacy: Boolean = false,
+    @SerialName("dp_epsilon")
+    val dpEpsilon: Double? = null,
+    @SerialName("dp_delta")
+    val dpDelta: Double? = null,
+    @SerialName("secure_aggregation")
+    val secureAggregation: Boolean = false,
+    @SerialName("secagg_threshold")
+    val secaggThreshold: Int? = null,
+    @SerialName("selected_client_count")
+    val selectedClientCount: Int = 0,
+    @SerialName("received_update_count")
+    val receivedUpdateCount: Int = 0,
+    @SerialName("created_at")
+    val createdAt: String,
+    @SerialName("client_selection_started_at")
+    val clientSelectionStartedAt: String? = null,
+    @SerialName("aggregation_completed_at")
+    val aggregationCompletedAt: String? = null,
+)
+
+/**
+ * Response wrapping a list of rounds.
+ * The server may return a list directly or wrapped in a `rounds` field.
+ */
+@Serializable
+data class RoundsListResponse(
+    @SerialName("rounds")
+    val rounds: List<RoundAssignment> = emptyList(),
+)
+
+// =========================================================================
 // Secure Aggregation
 // =========================================================================
 

@@ -6,6 +6,7 @@ import ai.edgeml.api.dto.DevicePolicyResponse
 import ai.edgeml.api.dto.DeviceRegistrationResponse
 import ai.edgeml.api.dto.GroupMembership
 import ai.edgeml.api.dto.GroupMembershipsResponse
+import ai.edgeml.api.dto.RoundAssignment
 import ai.edgeml.models.InferenceOutput
 import ai.edgeml.models.ModelManager
 import ai.edgeml.storage.SecureStorage
@@ -126,11 +127,18 @@ class EdgeMLClientTest {
      * default param on the mock before MockK intercepts, causing NPE.
      * This helper bypasses full initialization for tests that just need READY.
      */
-    private fun setClientReady() {
-        val field = EdgeMLClient::class.java.getDeclaredField("_state")
-        field.isAccessible = true
+    private fun setClientReady(deviceId: String? = null) {
+        val stateField = EdgeMLClient::class.java.getDeclaredField("_state")
+        stateField.isAccessible = true
         @Suppress("UNCHECKED_CAST")
-        (field.get(client) as MutableStateFlow<ClientState>).value = ClientState.READY
+        (stateField.get(client) as MutableStateFlow<ClientState>).value = ClientState.READY
+
+        if (deviceId != null) {
+            val deviceField = EdgeMLClient::class.java.getDeclaredField("_serverDeviceId")
+            deviceField.isAccessible = true
+            @Suppress("UNCHECKED_CAST")
+            (deviceField.get(client) as MutableStateFlow<String?>).value = deviceId
+        }
     }
 
     // =========================================================================
@@ -435,8 +443,167 @@ class EdgeMLClientTest {
     }
 
     // =========================================================================
+    // Round management
+    // =========================================================================
+
+    @Test
+    fun `checkForRoundAssignment returns assignment when available`() = runTest(testDispatcher) {
+        setClientReady(deviceId = "dev-1")
+
+        val round = testRoundAssignment()
+        coEvery { api.listRounds(any(), any(), any()) } returns Response.success(listOf(round))
+
+        val result = client.checkForRoundAssignment()
+        advanceUntilIdle()
+
+        assertTrue(result.isSuccess)
+        assertNotNull(result.getOrNull())
+        assertEquals("round-1", result.getOrNull()?.id)
+    }
+
+    @Test
+    fun `checkForRoundAssignment returns null when no rounds`() = runTest(testDispatcher) {
+        setClientReady(deviceId = "dev-1")
+
+        coEvery { api.listRounds(any(), any(), any()) } returns Response.success(emptyList())
+
+        val result = client.checkForRoundAssignment()
+        advanceUntilIdle()
+
+        assertTrue(result.isSuccess)
+        assertNull(result.getOrNull())
+    }
+
+    @Test
+    fun `checkForRoundAssignment returns null on HTTP error`() = runTest(testDispatcher) {
+        setClientReady(deviceId = "dev-1")
+
+        coEvery { api.listRounds(any(), any(), any()) } returns
+            Response.error(500, okhttp3.ResponseBody.Companion.create(null, ""))
+
+        val result = client.checkForRoundAssignment()
+        advanceUntilIdle()
+
+        assertTrue(result.isSuccess)
+        assertNull(result.getOrNull())
+    }
+
+    @Test
+    fun `checkForRoundAssignment returns null on exception`() = runTest(testDispatcher) {
+        setClientReady(deviceId = "dev-1")
+
+        coEvery { api.listRounds(any(), any(), any()) } throws RuntimeException("network error")
+
+        val result = client.checkForRoundAssignment()
+        advanceUntilIdle()
+
+        assertTrue(result.isSuccess)
+        assertNull(result.getOrNull())
+    }
+
+    @Test
+    fun `checkForRoundAssignment fails when device not registered`() = runTest(testDispatcher) {
+        setClientReady() // no device ID
+
+        val result = client.checkForRoundAssignment()
+        advanceUntilIdle()
+
+        assertTrue(result.isFailure)
+    }
+
+    @Test
+    fun `getRoundStatus returns round details`() = runTest(testDispatcher) {
+        setClientReady(deviceId = "dev-1")
+
+        val round = testRoundAssignment()
+        coEvery { api.getRound("round-1") } returns Response.success(round)
+
+        val result = client.getRoundStatus("round-1")
+        advanceUntilIdle()
+
+        assertTrue(result.isSuccess)
+        assertEquals("round-1", result.getOrNull()?.id)
+        assertEquals("waiting_for_updates", result.getOrNull()?.state)
+    }
+
+    @Test
+    fun `getRoundStatus fails on HTTP error`() = runTest(testDispatcher) {
+        setClientReady(deviceId = "dev-1")
+
+        coEvery { api.getRound("round-1") } returns
+            Response.error(404, okhttp3.ResponseBody.Companion.create(null, ""))
+
+        val result = client.getRoundStatus("round-1")
+        advanceUntilIdle()
+
+        assertTrue(result.isFailure)
+    }
+
+    @Test
+    fun `participateInRound fails when device not registered`() = runTest(testDispatcher) {
+        setClientReady() // no device ID
+        val dataProvider = mockk<ai.edgeml.training.TrainingDataProvider>(relaxed = true)
+
+        val result = client.participateInRound("round-1", dataProvider)
+        advanceUntilIdle()
+
+        assertTrue(result.isFailure)
+    }
+
+    @Test
+    fun `participateInRound fails when round fetch fails`() = runTest(testDispatcher) {
+        setClientReady(deviceId = "dev-1")
+        val dataProvider = mockk<ai.edgeml.training.TrainingDataProvider>(relaxed = true)
+
+        coEvery { api.getRound("round-1") } returns
+            Response.error(404, okhttp3.ResponseBody.Companion.create(null, ""))
+
+        val result = client.participateInRound("round-1", dataProvider)
+        advanceUntilIdle()
+
+        assertTrue(result.isFailure)
+    }
+
+    @Test
+    fun `checkForRoundAssignment queries correct state and model`() = runTest(testDispatcher) {
+        setClientReady(deviceId = "dev-1")
+
+        coEvery { api.listRounds(any(), any(), any()) } returns Response.success(emptyList())
+
+        client.checkForRoundAssignment()
+        advanceUntilIdle()
+
+        coVerify {
+            api.listRounds(
+                modelId = config.modelId,
+                state = "waiting_for_updates",
+                deviceId = "dev-1",
+            )
+        }
+    }
+
+    // =========================================================================
     // Helpers
     // =========================================================================
+
+    private fun testRoundAssignment(
+        id: String = "round-1",
+        state: String = "waiting_for_updates",
+        secureAggregation: Boolean = false,
+    ) = RoundAssignment(
+        id = id,
+        orgId = "test-org",
+        modelId = config.modelId,
+        versionId = "v1",
+        state = state,
+        minClients = 5,
+        maxClients = 50,
+        clientSelectionStrategy = "random",
+        aggregationType = "fedavg",
+        timeoutMinutes = 30,
+        secureAggregation = secureAggregation,
+        createdAt = "2026-01-01T00:00:00Z",
+    )
 
     private fun stubSuccessfulRegistration() {
         coEvery { storage.getClientDeviceIdentifier() } returns null

@@ -6,6 +6,7 @@ import ai.edgeml.api.EdgeMLApiFactory
 import ai.edgeml.api.dto.DeviceRegistrationRequest
 import ai.edgeml.api.dto.GroupMembership
 import ai.edgeml.api.dto.HeartbeatRequest
+import ai.edgeml.api.dto.RoundAssignment
 import ai.edgeml.config.EdgeMLConfig
 import ai.edgeml.models.CachedModel
 import ai.edgeml.models.DownloadState
@@ -709,6 +710,194 @@ class EdgeMLClient private constructor(
             metadata = metadata,
         )
     }
+
+    // =========================================================================
+    // Round Management
+    // =========================================================================
+
+    /**
+     * Check if this device has been selected for an active training round.
+     *
+     * Polls the server for rounds in the "waiting_for_updates" state for the
+     * configured model. Returns the first matching round assignment, or null
+     * if no round is currently active for this device.
+     *
+     * @return The round assignment, or null if none available.
+     */
+    suspend fun checkForRoundAssignment(): Result<RoundAssignment?> =
+        withContext(ioDispatcher) {
+            checkReady()
+
+            val deviceId = _serverDeviceId.value
+                ?: return@withContext Result.failure(Exception("Device not registered"))
+
+            try {
+                val response = api.listRounds(
+                    modelId = config.modelId,
+                    state = "waiting_for_updates",
+                    deviceId = deviceId,
+                )
+
+                if (!response.isSuccessful) {
+                    Timber.w("Round assignment check failed: ${response.code()}")
+                    return@withContext Result.success(null)
+                }
+
+                val rounds = response.body() ?: emptyList()
+                val assignment = rounds.firstOrNull()
+
+                if (assignment != null) {
+                    Timber.i("Round assignment received: ${assignment.id}")
+                    eventQueue.addTrainingEvent(
+                        type = EventTypes.ROUND_ASSIGNMENT_RECEIVED,
+                        metadata = mapOf(
+                            "round_id" to assignment.id,
+                            "model_id" to assignment.modelId,
+                            "aggregation_type" to assignment.aggregationType,
+                        ),
+                    )
+                }
+
+                Result.success(assignment)
+            } catch (e: Exception) {
+                Timber.w(e, "Error checking for round assignment")
+                Result.success(null)
+            }
+        }
+
+    /**
+     * Get the current status of a training round.
+     *
+     * @param roundId The round to query.
+     * @return The round details.
+     */
+    suspend fun getRoundStatus(roundId: String): Result<RoundAssignment> =
+        withContext(ioDispatcher) {
+            checkReady()
+            try {
+                val response = api.getRound(roundId)
+                if (response.isSuccessful) {
+                    val body = response.body()
+                        ?: return@withContext Result.failure(Exception("Empty round response"))
+                    Result.success(body)
+                } else {
+                    Result.failure(Exception("Failed to get round status: ${response.code()}"))
+                }
+            } catch (e: Exception) {
+                Result.failure(e)
+            }
+        }
+
+    /**
+     * Participate in a federated learning round.
+     *
+     * This is the full round lifecycle:
+     * 1. Fetch round config from the server
+     * 2. Ensure the correct model version is loaded
+     * 3. Train locally using the provided data
+     * 4. Extract weight update (delta)
+     * 5. Apply SecAgg masking if enabled
+     * 6. Upload the update to the server
+     *
+     * @param roundId The round to participate in.
+     * @param dataProvider Provider for local training data.
+     * @param trainingConfig Training hyperparameters (optional, defaults apply).
+     * @return [FederatedTrainingResult] with training metrics and upload status.
+     */
+    suspend fun participateInRound(
+        roundId: String,
+        dataProvider: TrainingDataProvider,
+        trainingConfig: TrainingConfig = TrainingConfig(),
+    ): Result<FederatedTrainingResult> =
+        withContext(ioDispatcher) {
+            checkReady()
+
+            val deviceId = _serverDeviceId.value
+                ?: return@withContext Result.failure(Exception("Device not registered"))
+
+            try {
+                Timber.i("Participating in round $roundId")
+
+                eventQueue.addTrainingEvent(
+                    type = EventTypes.ROUND_PARTICIPATION_STARTED,
+                    metadata = mapOf("round_id" to roundId),
+                )
+
+                // 1. Fetch round config
+                val roundResponse = api.getRound(roundId)
+                if (!roundResponse.isSuccessful) {
+                    return@withContext Result.failure(
+                        Exception("Failed to fetch round config: ${roundResponse.code()}")
+                    )
+                }
+                val round = roundResponse.body()
+                    ?: return@withContext Result.failure(Exception("Empty round response"))
+
+                // 2. Ensure correct model is loaded
+                val modelResult = modelManager.ensureModelAvailable(forceDownload = false)
+                modelResult.onSuccess { model -> trainer.loadModel(model) }
+
+                // 3. Train locally
+                val trainingResult = trainer.train(dataProvider, trainingConfig).getOrThrow()
+
+                eventQueue.addTrainingEvent(
+                    type = EventTypes.TRAINING_COMPLETED,
+                    metrics = mapOf(
+                        "loss" to (trainingResult.loss ?: 0.0),
+                        "accuracy" to (trainingResult.accuracy ?: 0.0),
+                        "training_time" to trainingResult.trainingTime,
+                        "sample_count" to trainingResult.sampleCount.toDouble(),
+                    ),
+                    metadata = mapOf("round_id" to roundId),
+                )
+
+                // 4. Extract weight update
+                val weightUpdate = trainer.extractWeightUpdate(trainingResult).getOrThrow()
+
+                // 5 & 6. Upload (SecAgg or plaintext based on round config)
+                val useSecAgg = (config.enableSecureAggregation || round.secureAggregation) &&
+                    secAggManager != null
+                val uploadResult = if (useSecAgg) {
+                    uploadWithSecAgg(weightUpdate, roundId, deviceId)
+                } else {
+                    uploadPlaintext(weightUpdate, deviceId, roundId)
+                }
+
+                val result = FederatedTrainingResult(
+                    trainingResult = trainingResult,
+                    weightUpdate = weightUpdate,
+                    uploaded = uploadResult.isSuccess,
+                    secureAggregation = useSecAgg,
+                )
+
+                eventQueue.addTrainingEvent(
+                    type = EventTypes.ROUND_PARTICIPATION_COMPLETED,
+                    metrics = mapOf(
+                        "loss" to (trainingResult.loss ?: 0.0),
+                        "accuracy" to (trainingResult.accuracy ?: 0.0),
+                        "sample_count" to trainingResult.sampleCount.toDouble(),
+                    ),
+                    metadata = mapOf(
+                        "round_id" to roundId,
+                        "uploaded" to uploadResult.isSuccess.toString(),
+                        "secure_aggregation" to useSecAgg.toString(),
+                    ),
+                )
+
+                Timber.i("Round $roundId participation complete: ${trainingResult.sampleCount} samples")
+                Result.success(result)
+            } catch (e: Exception) {
+                Timber.e(e, "Round participation failed for $roundId")
+                eventQueue.addTrainingEvent(
+                    type = EventTypes.ROUND_PARTICIPATION_FAILED,
+                    metadata = mapOf(
+                        "round_id" to roundId,
+                        "error" to (e.message ?: "unknown"),
+                    ),
+                )
+                Result.failure(e)
+            }
+        }
 
     // =========================================================================
     // Federated Training

@@ -15,6 +15,7 @@ import ai.edgeml.api.dto.InferenceEventResponse
 import ai.edgeml.api.dto.ModelDownloadResponse
 import ai.edgeml.api.dto.ModelResponse
 import ai.edgeml.api.dto.ModelVersionResponse
+import ai.edgeml.api.dto.RoundAssignment
 import ai.edgeml.api.dto.SecAggKeyExchangeRequest
 import ai.edgeml.api.dto.SecAggSessionResponse
 import ai.edgeml.api.dto.SecAggShareSubmitRequest
@@ -191,6 +192,28 @@ interface EdgeMLApi {
     suspend fun getDevicePolicy(
         @Path("org_id") orgId: String,
     ): Response<DevicePolicyResponse>
+
+    // =========================================================================
+    // Round Management
+    // =========================================================================
+
+    /**
+     * List active training rounds for a model, optionally filtered by device.
+     */
+    @GET("api/v1/training/rounds")
+    suspend fun listRounds(
+        @Query("model_id") modelId: String,
+        @Query("state") state: String? = null,
+        @Query("device_id") deviceId: String? = null,
+    ): Response<List<RoundAssignment>>
+
+    /**
+     * Get details for a specific training round.
+     */
+    @GET("api/v1/training/rounds/{round_id}")
+    suspend fun getRound(
+        @Path("round_id") roundId: String,
+    ): Response<RoundAssignment>
 
     // =========================================================================
     // Secure Aggregation
