@@ -1,25 +1,6 @@
 #!/bin/bash -eu
 
-cd /src/edgeml-android
-
-# Build only the :edgeml library module (skip :sample to avoid manifest issues)
-./gradlew :edgeml:assembleDebug --no-daemon || true
-
-# Extract classes.jar from the built AAR
-AAR_FILE=$(find edgeml/build/outputs -name "*.aar" -type f 2>/dev/null | head -1)
-if [ -n "$AAR_FILE" ]; then
-    mkdir -p /tmp/edgeml-aar
-    unzip -o "$AAR_FILE" classes.jar -d /tmp/edgeml-aar 2>/dev/null || true
-fi
-
-# Build classpath from extracted AAR and Gradle cache dependencies
-EDGEML_JAR=""
-if [ -f /tmp/edgeml-aar/classes.jar ]; then
-    EDGEML_JAR="/tmp/edgeml-aar/classes.jar"
-fi
-DEPS_CP=$(find "$HOME/.gradle/caches" -name "*.jar" -path "*/json*" -type f 2>/dev/null | head -5 | tr '\n' ':')
-
-# Create fuzz target — only uses JDK + Jazzer API to avoid classpath issues
+# Fuzz target using only JDK + Jazzer API (no Android SDK needed)
 cat > FuzzEdgeML.java << 'FUZZ'
 import com.code_intelligence.jazzer.api.FuzzedDataProvider;
 
@@ -50,17 +31,6 @@ public class FuzzEdgeML {
 }
 FUZZ
 
-# Compile and package — no external deps needed (JDK + Jazzer API only)
+# Compile and package as _deploy.jar (oss-fuzz JVM convention)
 javac -cp "$JAZZER_API_PATH" FuzzEdgeML.java
-jar cf FuzzEdgeML.jar FuzzEdgeML.class
-
-cp FuzzEdgeML.jar "$OUT/"
-
-# Create the fuzzer driver script
-cat > "$OUT/FuzzEdgeML" << 'DRIVER'
-#!/bin/bash
-this_dir=$(dirname "$0")
-CLASSPATH="$this_dir/FuzzEdgeML.jar"
-"$this_dir/jazzer_driver" --cp="$CLASSPATH" --target_class=FuzzEdgeML "$@"
-DRIVER
-chmod +x "$OUT/FuzzEdgeML"
+jar cf "$OUT/FuzzEdgeML_deploy.jar" FuzzEdgeML.class
