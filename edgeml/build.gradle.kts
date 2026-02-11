@@ -117,6 +117,8 @@ dependencies {
 
 // JaCoCo configuration
 tasks.register("jacocoTestReport", JacocoReport::class) {
+    group = "verification"
+    description = "Generates JaCoCo code coverage report from debug unit tests."
     dependsOn("testDebugUnitTest")
 
     reports {

@@ -12,8 +12,8 @@ jobs:
   analyze:
     name: Analyze
     runs-on: ubuntu-latest
-    # TODO: Remove continue-on-error once CodeQL supports Kotlin 2.3.10
-    # Tracked: CodeQL 2.24.1 extractor incompatible with Kotlin 2.3.10 compiler
+    # CodeQL 2.24.1 extractor is incompatible with Kotlin 2.3.10 compiler.
+    # Allow failures until a compatible CodeQL version is released.
     continue-on-error: true
     permissions:
       security-events: write
