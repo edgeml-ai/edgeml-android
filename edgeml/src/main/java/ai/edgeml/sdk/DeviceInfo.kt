@@ -6,7 +6,6 @@ import android.net.NetworkCapabilities
 import android.os.BatteryManager
 import android.os.Build
 import android.os.StatFs
-import android.provider.Settings
 import androidx.annotation.ChecksSdkIntAtLeast
 import java.util.Locale
 import java.util.TimeZone
@@ -16,7 +15,7 @@ import java.util.UUID
  * Collects and manages device information for EdgeML platform.
  *
  * Automatically gathers:
- * - Stable device identifier (Android ID)
+ * - Resettable device identifier (app-scoped UUID, not tied to hardware)
  * - Hardware specs (CPU, memory, storage, GPU)
  * - System info (Android version, manufacturer, model)
  * - Runtime constraints (battery, network)
@@ -34,14 +33,22 @@ class DeviceInfo(
     // MARK: - Properties
 
     /**
-     * Stable device identifier (Android ID)
+     * Resettable, app-scoped device identifier.
+     *
+     * Uses a UUID stored in SharedPreferences instead of Android ID
+     * to avoid non-resettable persistent identifiers that put user
+     * privacy at risk. The identifier is stable across app launches
+     * but resets on app data clear or reinstall.
      */
     val deviceId: String
-        get() =
-            Settings.Secure.getString(
-                context.contentResolver,
-                Settings.Secure.ANDROID_ID,
-            ) ?: UUID.randomUUID().toString()
+        get() {
+            val prefs = context.getSharedPreferences("edgeml_device", Context.MODE_PRIVATE)
+            return prefs.getString("device_id", null) ?: run {
+                val id = UUID.randomUUID().toString()
+                prefs.edit().putString("device_id", id).apply()
+                id
+            }
+        }
 
     // MARK: - Device Hardware
 
