@@ -1,0 +1,294 @@
+{
+  "metadata": {
+    "version": "1.0.0",
+    "description": "SecAgg+ cross-platform test vectors",
+    "prime": "170141183460469231731687303715884105727",
+    "prime_hex": "0x7fffffffffffffffffffffffffffffff",
+    "shamir_chunk_size": 16,
+    "mod_range": 4294967296,
+    "default_clipping_range": 8.0,
+    "default_quantization_range": 4194304
+  },
+  "prg": [
+    {
+      "seed_hex": "deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef",
+      "mod_range": 4294967296,
+      "count": 20,
+      "expected": [
+        1339459536,
+        1855813048,
+        2120880023,
+        1413672771,
+        3160275751,
+        4248682961,
+        408410728,
+        3006283048,
+        3046059278,
+        1980147258,
+        2075182480,
+        3104307058,
+        3894852678,
+        4106102946,
+        2112187019,
+        1586970187,
+        2438568133,
+        3454630261,
+        710328965,
+        1298860756
+      ]
+    },
+    {
+      "seed_hex": "cafebabecafebabecafebabecafebabecafebabecafebabecafebabecafebabe",
+      "mod_range": 4294967296,
+      "count": 20,
+      "expected": [
+        3019431093,
+        740707211,
+        892544713,
+        3865565514,
+        1869595300,
+        3302433216,
+        3107252707,
+        1341758507,
+        2348371631,
+        4169898731,
+        62054750,
+        2742670566,
+        3689527215,
+        3529846789,
+        3579960421,
+        1617989442,
+        1119706136,
+        3026887511,
+        1460517113,
+        4229285398
+      ]
+    },
+    {
+      "seed_hex": "deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef",
+      "mod_range": 1000,
+      "count": 10,
+      "expected": [
+        536,
+        48,
+        23,
+        771,
+        751,
+        961,
+        728,
+        48,
+        278,
+        258
+      ]
+    }
+  ],
+  "x25519_ecdh": [
+    {
+      "alice_private_hex": "a0a1a2a3a4a5a6a7a8a9aaabacadaeafb0b1b2b3b4b5b6b7b8b9babbbcbdbebf",
+      "alice_public_hex": "605a725d2a4adfeeb1a29e17edd621c1b7593ee8cdbc44ac6c4ab6e2f805d23c",
+      "bob_private_hex": "c0c1c2c3c4c5c6c7c8c9cacbcccdcecfd0d1d2d3d4d5d6d7d8d9dadbdcdddedf",
+      "bob_public_hex": "dc2cca31e8e43bbd91dff7e475cca3347eb478107d5bd765aba4ae4a30c35d44",
+      "shared_secret_hex": "3b87c5035cce13678dd93d2dbc3a3d42039ebec86444a1ff82cd61b84c6fe968"
+    }
+  ],
+  "hkdf_sha256": [
+    {
+      "ikm_hex": "3b87c5035cce13678dd93d2dbc3a3d42039ebec86444a1ff82cd61b84c6fe968",
+      "info": "secagg-pairwise-mask",
+      "salt_hex": null,
+      "length": 32,
+      "derived_hex": "11d1123d468c04dc25ddfc18673b89840921515d504d867965d0de3f1024923c"
+    },
+    {
+      "ikm_hex": "3b87c5035cce13678dd93d2dbc3a3d42039ebec86444a1ff82cd61b84c6fe968",
+      "info": "secagg-share-encryption",
+      "salt_hex": null,
+      "length": 32,
+      "derived_hex": "129e6ff270d57eb6bb602aad345d8e9daf420f711077a11f4747d8d395b49c9b"
+    }
+  ],
+  "aes_256_gcm": [
+    {
+      "key_hex": "129e6ff270d57eb6bb602aad345d8e9daf420f711077a11f4747d8d395b49c9b",
+      "nonce_hex": "000102030405060708090a0b",
+      "plaintext_hex": "68656c6c6f207365636167672074657374",
+      "ciphertext_hex": "300ca27332b098b38539935569a325a5a95d327315bbd5c856350b390149bac96d",
+      "note": "ciphertext includes 16-byte GCM tag appended"
+    }
+  ],
+  "quantization": [
+    {
+      "clipping_range": 8.0,
+      "quantization_range": 4194304,
+      "float_values": [
+        0.0,
+        1.0,
+        -1.0,
+        4.0,
+        -4.0,
+        8.0,
+        -8.0,
+        0.5,
+        -0.5,
+        3.14159
+      ],
+      "quantized": [
+        2097152,
+        2359296,
+        1835008,
+        3145728,
+        1048576,
+        4194304,
+        0,
+        2228224,
+        1966080,
+        2920700
+      ],
+      "dequantized": [
+        0.0,
+        1.0,
+        -1.0,
+        4.0,
+        -4.0,
+        8.0,
+        -8.0,
+        0.5,
+        -0.5,
+        3.1415863037109375
+      ],
+      "note": "Uses deterministic floor rounding (not stochastic) for reproducibility"
+    }
+  ],
+  "shamir": [
+    {
+      "prime": "170141183460469231731687303715884105727",
+      "secret": 42,
+      "threshold": 3,
+      "num_shares": 5,
+      "coefficients": [
+        "42",
+        "98765432109876543210987654321098765432",
+        "12345678901234567890123456789012345678"
+      ],
+      "shares_hex": [
+        "00000001539738b9cc2258d8a09924226199a7f0",
+        "0000000239c1d361784917d8c9c568e67fa53653",
+        "00000003327fcff704743d007b84ce4c5a22ab52",
+        "000000043dd12e7a70a3c84fb5d75453f11206ed",
+        "000000055bb5eeebbcd7b9c678bcfafd44734924"
+      ],
+      "reconstructions": [
+        {
+          "share_indices": [
+            1,
+            2,
+            3
+          ],
+          "shares_hex": [
+            "00000001539738b9cc2258d8a09924226199a7f0",
+            "0000000239c1d361784917d8c9c568e67fa53653",
+            "00000003327fcff704743d007b84ce4c5a22ab52"
+          ],
+          "reconstructed_secret": 42
+        },
+        {
+          "share_indices": [
+            1,
+            3,
+            5
+          ],
+          "shares_hex": [
+            "00000001539738b9cc2258d8a09924226199a7f0",
+            "00000003327fcff704743d007b84ce4c5a22ab52",
+            "000000055bb5eeebbcd7b9c678bcfafd44734924"
+          ],
+          "reconstructed_secret": 42
+        },
+        {
+          "share_indices": [
+            3,
+            4,
+            5
+          ],
+          "shares_hex": [
+            "00000003327fcff704743d007b84ce4c5a22ab52",
+            "000000043dd12e7a70a3c84fb5d75453f11206ed",
+            "000000055bb5eeebbcd7b9c678bcfafd44734924"
+          ],
+          "reconstructed_secret": 42
+        },
+        {
+          "share_indices": [
+            1,
+            2,
+            3,
+            4,
+            5
+          ],
+          "shares_hex": [
+            "00000001539738b9cc2258d8a09924226199a7f0",
+            "0000000239c1d361784917d8c9c568e67fa53653",
+            "00000003327fcff704743d007b84ce4c5a22ab52",
+            "000000043dd12e7a70a3c84fb5d75453f11206ed",
+            "000000055bb5eeebbcd7b9c678bcfafd44734924"
+          ],
+          "reconstructed_secret": 42
+        }
+      ]
+    },
+    {
+      "prime": "170141183460469231731687303715884105727",
+      "secret": 1339673755198158349044581307228491536,
+      "secret_hex": "0102030405060708090a0b0c0d0e0f10",
+      "threshold": 3,
+      "num_shares": 5,
+      "coefficients": [
+        "1339673755198158349044581307228491536",
+        "55555555555555555555555555555555555555",
+        "77777777777777777777777777777777777777"
+      ],
+      "shares_hex": [
+        "00000001655113e47db9b7aac06ce36162636464",
+        "000000023ea70dcad894610b4dc30d6f9b46f29c",
+        "000000030d03f0b715960329b10c8936b7b8b9b7",
+        "000000045067bca934be9e05ea4956b6b7b8b9b4",
+        "0000000508d271a1360e319ff97975ef9b46f295"
+      ],
+      "reconstructions": [
+        {
+          "share_indices": [
+            1,
+            3,
+            5
+          ],
+          "shares_hex": [
+            "00000001655113e47db9b7aac06ce36162636464",
+            "000000030d03f0b715960329b10c8936b7b8b9b7",
+            "0000000508d271a1360e319ff97975ef9b46f295"
+          ],
+          "reconstructed_secret": 1339673755198158349044581307228491536
+        }
+      ]
+    }
+  ],
+  "pairwise_mask_direction": [
+    {
+      "node_id": 3,
+      "peer_id": 1,
+      "direction": "ADD",
+      "note": "node_id > peer_id => ADD mask"
+    },
+    {
+      "node_id": 1,
+      "peer_id": 3,
+      "direction": "SUBTRACT",
+      "note": "node_id < peer_id => SUBTRACT mask"
+    },
+    {
+      "node_id": 5,
+      "peer_id": 5,
+      "direction": "SKIP",
+      "note": "node_id == peer_id => skip (self)"
+    }
+  ]
+}
