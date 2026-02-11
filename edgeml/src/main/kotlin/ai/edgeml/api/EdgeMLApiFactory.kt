@@ -6,9 +6,11 @@ import kotlinx.serialization.json.Json
 import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
+import okhttp3.Response
 import okhttp3.logging.HttpLoggingInterceptor
 import retrofit2.Retrofit
 import timber.log.Timber
+import java.io.IOException
 import java.util.concurrent.TimeUnit
 
 /**
@@ -50,6 +52,7 @@ object EdgeMLApiFactory {
             .writeTimeout(config.writeTimeoutMs, TimeUnit.MILLISECONDS)
             .addInterceptor(createAuthInterceptor(config))
             .addInterceptor(createUserAgentInterceptor())
+            .addInterceptor(createRetryInterceptor(config.maxRetries, config.retryDelayMs))
             .apply {
                 if (config.debugMode) {
                     addInterceptor(createLoggingInterceptor())
@@ -114,4 +117,72 @@ object EdgeMLApiFactory {
         }.apply {
             level = HttpLoggingInterceptor.Level.BODY
         }
+
+    /**
+     * Retry interceptor with exponential backoff for transient HTTP errors.
+     *
+     * Retries on HTTP 429 (Too Many Requests), 500, 502, 503, 504 and
+     * on network-level IOExceptions. Uses exponential backoff with jitter
+     * starting from [baseDelayMs]. Respects Retry-After header on 429s.
+     */
+    internal fun createRetryInterceptor(
+        maxRetries: Int,
+        baseDelayMs: Long,
+    ): Interceptor = Interceptor { chain ->
+        val request = chain.request()
+        var lastException: IOException? = null
+        var lastResponse: Response? = null
+
+        for (attempt in 0..maxRetries) {
+            try {
+                // Close the previous response body before retrying
+                lastResponse?.close()
+                lastResponse = null
+
+                val response = chain.proceed(request)
+
+                if (!isRetryableStatusCode(response.code) || attempt == maxRetries) {
+                    return@Interceptor response
+                }
+
+                // Determine delay: prefer Retry-After header, fall back to exponential backoff
+                val delayMs = getRetryDelay(response, attempt, baseDelayMs)
+                Timber.d("Retryable HTTP ${response.code}, attempt ${attempt + 1}/$maxRetries, delay ${delayMs}ms")
+                lastResponse = response
+                Thread.sleep(delayMs)
+            } catch (e: IOException) {
+                lastException = e
+                if (attempt == maxRetries) {
+                    throw e
+                }
+                val delayMs = computeBackoffDelay(attempt, baseDelayMs)
+                Timber.d("IOException on attempt ${attempt + 1}/$maxRetries, delay ${delayMs}ms: ${e.message}")
+                Thread.sleep(delayMs)
+            }
+        }
+
+        // Should not reach here, but just in case
+        lastResponse?.let { return@Interceptor it }
+        throw lastException ?: IOException("Retry exhausted with no response")
+    }
+
+    private fun isRetryableStatusCode(code: Int): Boolean =
+        code == 429 || code == 500 || code == 502 || code == 503 || code == 504
+
+    private fun getRetryDelay(response: Response, attempt: Int, baseDelayMs: Long): Long {
+        // Check for Retry-After header (seconds)
+        val retryAfter = response.header("Retry-After")?.toLongOrNull()
+        if (retryAfter != null && retryAfter > 0) {
+            return retryAfter * 1000
+        }
+        return computeBackoffDelay(attempt, baseDelayMs)
+    }
+
+    private fun computeBackoffDelay(attempt: Int, baseDelayMs: Long): Long {
+        // Exponential backoff: baseDelay * 2^attempt, capped at 30s, with jitter
+        val exponential = baseDelayMs * (1L shl minOf(attempt, 5))
+        val capped = minOf(exponential, 30_000L)
+        val jitter = (capped * 0.1 * Math.random()).toLong()
+        return capped + jitter
+    }
 }

@@ -4,6 +4,7 @@ import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import org.junit.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
@@ -619,6 +620,101 @@ class ApiDtoSerializationTest {
         assertEquals("2.0.0", deserialized.version)
         assertEquals("exp-1", deserialized.experimentId)
         assertEquals("treatment", deserialized.variant)
+    }
+
+    // =========================================================================
+    // RoundAssignment
+    // =========================================================================
+
+    @Test
+    fun `RoundAssignment roundtrips correctly`() {
+        val round = RoundAssignment(
+            id = "r-1",
+            orgId = "org-1",
+            modelId = "model-1",
+            versionId = "v-1",
+            state = "waiting_for_updates",
+            minClients = 5,
+            maxClients = 50,
+            clientSelectionStrategy = "random",
+            aggregationType = "fedavg",
+            timeoutMinutes = 30,
+            differentialPrivacy = true,
+            dpEpsilon = 1.0,
+            dpDelta = 1e-5,
+            secureAggregation = true,
+            secaggThreshold = 3,
+            selectedClientCount = 10,
+            receivedUpdateCount = 4,
+            createdAt = "2026-01-01T00:00:00Z",
+            clientSelectionStartedAt = "2026-01-01T00:01:00Z",
+            aggregationCompletedAt = null,
+        )
+
+        val serialized = json.encodeToString(round)
+        val deserialized = json.decodeFromString<RoundAssignment>(serialized)
+
+        assertEquals("r-1", deserialized.id)
+        assertEquals("waiting_for_updates", deserialized.state)
+        assertEquals("fedavg", deserialized.aggregationType)
+        assertTrue(deserialized.secureAggregation)
+        assertEquals(3, deserialized.secaggThreshold)
+        assertEquals(10, deserialized.selectedClientCount)
+        assertNull(deserialized.aggregationCompletedAt)
+    }
+
+    @Test
+    fun `RoundAssignment handles minimal JSON from server`() {
+        val jsonStr = """
+            {
+                "id": "r-2",
+                "org_id": "org-1",
+                "model_id": "m-1",
+                "version_id": "v-1",
+                "state": "initializing",
+                "min_clients": 10,
+                "max_clients": 100,
+                "client_selection_strategy": "random",
+                "aggregation_type": "fedavg",
+                "timeout_minutes": 30,
+                "created_at": "2026-01-01T00:00:00Z"
+            }
+        """.trimIndent()
+
+        val round = json.decodeFromString<RoundAssignment>(jsonStr)
+
+        assertEquals("r-2", round.id)
+        assertFalse(round.differentialPrivacy)
+        assertFalse(round.secureAggregation)
+        assertNull(round.dpEpsilon)
+        assertEquals(0, round.selectedClientCount)
+    }
+
+    @Test
+    fun `RoundsListResponse roundtrips correctly`() {
+        val response = RoundsListResponse(
+            rounds = listOf(
+                RoundAssignment(
+                    id = "r-1",
+                    orgId = "org-1",
+                    modelId = "m-1",
+                    versionId = "v-1",
+                    state = "waiting_for_updates",
+                    minClients = 5,
+                    maxClients = 50,
+                    clientSelectionStrategy = "random",
+                    aggregationType = "fedavg",
+                    timeoutMinutes = 30,
+                    createdAt = "2026-01-01T00:00:00Z",
+                ),
+            ),
+        )
+
+        val serialized = json.encodeToString(response)
+        val deserialized = json.decodeFromString<RoundsListResponse>(serialized)
+
+        assertEquals(1, deserialized.rounds.size)
+        assertEquals("r-1", deserialized.rounds[0].id)
     }
 
     // =========================================================================

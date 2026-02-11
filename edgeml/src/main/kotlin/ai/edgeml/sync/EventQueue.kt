@@ -239,4 +239,10 @@ object EventTypes {
     const val CHUNK_PRODUCED = "chunk_produced"
     const val GENERATION_COMPLETED = "generation_completed"
     const val GENERATION_FAILED = "generation_failed"
+
+    // Round participation events
+    const val ROUND_ASSIGNMENT_RECEIVED = "round_assignment_received"
+    const val ROUND_PARTICIPATION_STARTED = "round_participation_started"
+    const val ROUND_PARTICIPATION_COMPLETED = "round_participation_completed"
+    const val ROUND_PARTICIPATION_FAILED = "round_participation_failed"
 }

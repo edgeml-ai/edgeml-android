@@ -180,8 +180,15 @@ class DeviceAuthManager internal constructor(
 
 private class OkHttpDeviceAuthTransport(
     private val baseUrl: String,
+    connectTimeoutMs: Long = 30_000L,
+    readTimeoutMs: Long = 60_000L,
+    writeTimeoutMs: Long = 60_000L,
 ) : DeviceAuthTransport {
-    private val client = OkHttpClient()
+    private val client = OkHttpClient.Builder()
+        .connectTimeout(connectTimeoutMs, java.util.concurrent.TimeUnit.MILLISECONDS)
+        .readTimeout(readTimeoutMs, java.util.concurrent.TimeUnit.MILLISECONDS)
+        .writeTimeout(writeTimeoutMs, java.util.concurrent.TimeUnit.MILLISECONDS)
+        .build()
     private val contentType = "application/json".toMediaType()
 
     override fun postJson(

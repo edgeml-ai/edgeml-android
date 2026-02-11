@@ -64,6 +64,8 @@ data class EdgeMLConfig(
     val enableEncryptedStorage: Boolean = true,
     /** Privacy configuration for upload behavior and differential privacy */
     val privacyConfiguration: PrivacyConfiguration = PrivacyConfiguration.DEFAULT,
+    /** Enable secure aggregation (SecAgg+) for weight uploads */
+    val enableSecureAggregation: Boolean = false,
 ) {
     init {
         require(serverUrl.isNotBlank()) { "serverUrl must not be blank" }
@@ -110,6 +112,7 @@ data class EdgeMLConfig(
         private var requireUnmeteredNetwork: Boolean = true
         private var enableEncryptedStorage: Boolean = true
         private var privacyConfiguration: PrivacyConfiguration = PrivacyConfiguration.DEFAULT
+        private var enableSecureAggregation: Boolean = false
 
         fun serverUrl(url: String) = apply { this.serverUrl = url.trimEnd('/') }
 
@@ -159,6 +162,8 @@ data class EdgeMLConfig(
 
         fun privacyConfiguration(config: PrivacyConfiguration) = apply { this.privacyConfiguration = config }
 
+        fun enableSecureAggregation(enabled: Boolean) = apply { this.enableSecureAggregation = enabled }
+
         fun build(): EdgeMLConfig =
             EdgeMLConfig(
                 serverUrl = serverUrl,
@@ -185,6 +190,7 @@ data class EdgeMLConfig(
                 requireUnmeteredNetwork = requireUnmeteredNetwork,
                 enableEncryptedStorage = enableEncryptedStorage,
                 privacyConfiguration = privacyConfiguration,
+                enableSecureAggregation = enableSecureAggregation,
             )
     }
 

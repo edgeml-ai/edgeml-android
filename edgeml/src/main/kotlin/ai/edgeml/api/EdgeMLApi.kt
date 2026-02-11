@@ -15,6 +15,11 @@ import ai.edgeml.api.dto.InferenceEventResponse
 import ai.edgeml.api.dto.ModelDownloadResponse
 import ai.edgeml.api.dto.ModelResponse
 import ai.edgeml.api.dto.ModelVersionResponse
+import ai.edgeml.api.dto.RoundAssignment
+import ai.edgeml.api.dto.SecAggKeyExchangeRequest
+import ai.edgeml.api.dto.SecAggSessionResponse
+import ai.edgeml.api.dto.SecAggShareSubmitRequest
+import ai.edgeml.api.dto.SecAggShareSubmitResponse
 import ai.edgeml.api.dto.TrainingEventRequest
 import ai.edgeml.api.dto.VersionResolutionResponse
 import okhttp3.ResponseBody
@@ -187,6 +192,50 @@ interface EdgeMLApi {
     suspend fun getDevicePolicy(
         @Path("org_id") orgId: String,
     ): Response<DevicePolicyResponse>
+
+    // =========================================================================
+    // Round Management
+    // =========================================================================
+
+    /**
+     * List active training rounds for a model, optionally filtered by device.
+     */
+    @GET("api/v1/training/rounds")
+    suspend fun listRounds(
+        @Query("model_id") modelId: String,
+        @Query("state") state: String? = null,
+        @Query("device_id") deviceId: String? = null,
+    ): Response<List<RoundAssignment>>
+
+    /**
+     * Get details for a specific training round.
+     */
+    @GET("api/v1/training/rounds/{round_id}")
+    suspend fun getRound(
+        @Path("round_id") roundId: String,
+    ): Response<RoundAssignment>
+
+    // =========================================================================
+    // Secure Aggregation
+    // =========================================================================
+
+    /**
+     * Join a SecAgg session for a federated learning round.
+     */
+    @POST("api/v1/training/rounds/{round_id}/secagg/join")
+    suspend fun joinSecAggSession(
+        @Path("round_id") roundId: String,
+        @Body request: SecAggKeyExchangeRequest,
+    ): Response<SecAggSessionResponse>
+
+    /**
+     * Submit Shamir secret shares for a SecAgg session.
+     */
+    @POST("api/v1/training/secagg/{session_id}/shares")
+    suspend fun submitSecAggShares(
+        @Path("session_id") sessionId: String,
+        @Body request: SecAggShareSubmitRequest,
+    ): Response<SecAggShareSubmitResponse>
 
     // =========================================================================
     // Model Download (direct URL)
