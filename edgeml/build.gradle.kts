@@ -76,16 +76,16 @@ dependencies {
     implementation("org.jetbrains.kotlin:kotlin-stdlib:2.3.10")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.10.2")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2")
-    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.8.0")
+    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.10.0")
 
     // AndroidX
     implementation("androidx.core:core-ktx:1.17.0")
-    implementation("androidx.appcompat:appcompat:1.6.1")
-    implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.6.2")
+    implementation("androidx.appcompat:appcompat:1.7.1")
+    implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.10.0")
     implementation("androidx.work:work-runtime-ktx:2.11.1")
 
     // Security - EncryptedSharedPreferences
-    implementation("androidx.security:security-crypto:1.1.0-alpha06")
+    implementation("androidx.security:security-crypto:1.1.0")
 
     // Networking - Retrofit + OkHttp
     implementation("com.squareup.retrofit2:retrofit:2.11.0")
@@ -94,16 +94,16 @@ dependencies {
     implementation("com.squareup.retrofit2:converter-kotlinx-serialization:2.11.0")
 
     // TensorFlow Lite
-    implementation("org.tensorflow:tensorflow-lite:2.14.0")
-    implementation("org.tensorflow:tensorflow-lite-support:0.4.4")
-    implementation("org.tensorflow:tensorflow-lite-gpu:2.14.0")
-    implementation("org.tensorflow:tensorflow-lite-gpu-api:2.14.0")
+    implementation("org.tensorflow:tensorflow-lite:2.17.0")
+    implementation("org.tensorflow:tensorflow-lite-support:0.5.0")
+    implementation("org.tensorflow:tensorflow-lite-gpu:2.17.0")
+    implementation("org.tensorflow:tensorflow-lite-gpu-api:2.17.0")
 
     // Logging
     implementation("com.jakewharton.timber:timber:5.0.1")
 
     // Testing
-    testImplementation("org.json:json:20231013")
+    testImplementation("org.json:json:20251224")
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.jetbrains.kotlin:kotlin-test:2.3.10")
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.10.2")
