@@ -19,7 +19,7 @@ class ShamirSecretSharing(
 
     companion object {
         /** Mersenne prime 2^127 - 1, matching server field_size. */
-        val MERSENNE_127: BigInteger = BigInteger.TWO.pow(127).subtract(BigInteger.ONE)
+        val MERSENNE_127: BigInteger = BigInteger.valueOf(2).pow(127).subtract(BigInteger.ONE)
     }
 
     /**

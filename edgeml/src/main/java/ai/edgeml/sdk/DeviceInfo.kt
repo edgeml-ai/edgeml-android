@@ -7,6 +7,7 @@ import android.os.BatteryManager
 import android.os.Build
 import android.os.StatFs
 import android.provider.Settings
+import androidx.annotation.ChecksSdkIntAtLeast
 import java.util.Locale
 import java.util.TimeZone
 import java.util.UUID
@@ -65,6 +66,7 @@ class DeviceInfo(
     /**
      * Check if GPU/NPU is available for ML inference
      */
+    @get:ChecksSdkIntAtLeast(api = Build.VERSION_CODES.O_MR1)
     val gpuAvailable: Boolean
         get() {
             // Check for NNAPI support (Android 8.1+)

@@ -8,6 +8,7 @@ import android.os.Build
 import android.os.Environment
 import android.os.StatFs
 import android.provider.Settings
+import androidx.annotation.ChecksSdkIntAtLeast
 import timber.log.Timber
 import java.security.MessageDigest
 import java.util.Locale
@@ -110,6 +111,7 @@ object DeviceUtils {
     /**
      * Check if NNAPI is available.
      */
+    @ChecksSdkIntAtLeast(api = Build.VERSION_CODES.P)
     fun isNnapiAvailable(): Boolean = Build.VERSION.SDK_INT >= Build.VERSION_CODES.P
 
     /**
@@ -185,14 +187,9 @@ object NetworkUtils {
             context.getSystemService(Context.CONNECTIVITY_SERVICE)
                 as android.net.ConnectivityManager
 
-        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            val network = connectivityManager.activeNetwork
-            val capabilities = connectivityManager.getNetworkCapabilities(network)
-            capabilities?.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_INTERNET) == true
-        } else {
-            @Suppress("DEPRECATION")
-            connectivityManager.activeNetworkInfo?.isConnected == true
-        }
+        val network = connectivityManager.activeNetwork
+        val capabilities = connectivityManager.getNetworkCapabilities(network)
+        return capabilities?.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_INTERNET) == true
     }
 
     /**
@@ -203,14 +200,9 @@ object NetworkUtils {
             context.getSystemService(Context.CONNECTIVITY_SERVICE)
                 as android.net.ConnectivityManager
 
-        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            val network = connectivityManager.activeNetwork
-            val capabilities = connectivityManager.getNetworkCapabilities(network)
-            capabilities?.hasTransport(android.net.NetworkCapabilities.TRANSPORT_WIFI) == true
-        } else {
-            @Suppress("DEPRECATION")
-            connectivityManager.activeNetworkInfo?.type == android.net.ConnectivityManager.TYPE_WIFI
-        }
+        val network = connectivityManager.activeNetwork
+        val capabilities = connectivityManager.getNetworkCapabilities(network)
+        return capabilities?.hasTransport(android.net.NetworkCapabilities.TRANSPORT_WIFI) == true
     }
 
     /**
@@ -221,13 +213,9 @@ object NetworkUtils {
             context.getSystemService(Context.CONNECTIVITY_SERVICE)
                 as android.net.ConnectivityManager
 
-        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            val network = connectivityManager.activeNetwork
-            val capabilities = connectivityManager.getNetworkCapabilities(network)
-            capabilities?.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_NOT_METERED) == true
-        } else {
-            isWifiConnected(context)
-        }
+        val network = connectivityManager.activeNetwork
+        val capabilities = connectivityManager.getNetworkCapabilities(network)
+        return capabilities?.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_NOT_METERED) == true
     }
 }
 

@@ -19,6 +19,7 @@ import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import java.nio.MappedByteBuffer
 import java.nio.channels.FileChannel
+import java.util.Locale
 
 /**
  * TensorFlow Lite model inference and training wrapper.
@@ -373,9 +374,9 @@ class TFLiteTrainer(
 
                     Timber.i(
                         "Training completed: $sampleCount samples, " +
-                            "loss=${String.format("%.4f", result.loss)}, " +
-                            "accuracy=${String.format("%.4f", result.accuracy)}, " +
-                            "time=${String.format("%.2f", trainingTime)}s",
+                            "loss=${String.format(Locale.ROOT, "%.4f", result.loss)}, " +
+                            "accuracy=${String.format(Locale.ROOT, "%.4f", result.accuracy)}, " +
+                            "time=${String.format(Locale.ROOT, "%.2f", trainingTime)}s",
                     )
 
                     Result.success(trainingResult)
@@ -481,7 +482,7 @@ class TFLiteTrainer(
             if (epochBatches > 0) {
                 val avgLoss = epochLoss / epochBatches
                 totalLoss += avgLoss
-                Timber.d("Epoch ${epoch + 1}/${trainingConfig.epochs}: loss=${String.format("%.4f", avgLoss)}")
+                Timber.d("Epoch ${epoch + 1}/${trainingConfig.epochs}: loss=${String.format(Locale.ROOT, "%.4f", avgLoss)}")
             }
         }
 

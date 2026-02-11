@@ -74,7 +74,7 @@ import timber.log.Timber
  * ```
  */
 class EdgeMLClient private constructor(
-    private val context: Context,
+    context: Context,
     private val config: EdgeMLConfig,
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
     private val mainDispatcher: CoroutineDispatcher = Dispatchers.Main,
@@ -86,6 +86,8 @@ class EdgeMLClient private constructor(
     private val eventQueue: EventQueue = EventQueue.getInstance(context),
     private val secAggManager: SecAggManager? = if (config.enableSecureAggregation) SecAggManager(api) else null,
 ) {
+    // Store application context to avoid leaking Activity/Service references
+    private val context: Context = context.applicationContext
 
     // Coroutine scope for background operations
     private val scope = CoroutineScope(SupervisorJob() + mainDispatcher)
