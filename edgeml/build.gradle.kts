@@ -2,6 +2,7 @@ plugins {
     id("com.android.library")
     id("org.jetbrains.kotlin.plugin.serialization")
     id("jacoco")
+    id("maven-publish")
 }
 
 android {
@@ -113,6 +114,30 @@ dependencies {
     androidTestImplementation("androidx.test.ext:junit:1.3.0")
     androidTestImplementation("androidx.test.espresso:espresso-core:3.7.0")
     androidTestImplementation("androidx.work:work-testing:2.11.1")
+}
+
+// Maven publish to GitHub Packages
+afterEvaluate {
+    publishing {
+        publications {
+            create<MavenPublication>("release") {
+                from(components["release"])
+                groupId = "ai.edgeml"
+                artifactId = "edgeml"
+                version = project.property("EDGEML_VERSION").toString()
+            }
+        }
+        repositories {
+            maven {
+                name = "GitHubPackages"
+                url = uri("https://maven.pkg.github.com/edgeml-ai/edgeml-android")
+                credentials {
+                    username = System.getenv("GITHUB_ACTOR") ?: ""
+                    password = System.getenv("GITHUB_TOKEN") ?: ""
+                }
+            }
+        }
+    }
 }
 
 // JaCoCo configuration
