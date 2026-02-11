@@ -79,7 +79,7 @@ class SecAggTestVectorsTest {
 
         for (i in 0 until cases.length()) {
             val case_ = cases.getJSONObject(i)
-            val expectedSecret = BigInteger.valueOf(case_.getLong("secret"))
+            val expectedSecret = BigInteger(case_.get("secret").toString())
             val reconstructions = case_.getJSONArray("reconstructions")
 
             for (r in 0 until reconstructions.length()) {
