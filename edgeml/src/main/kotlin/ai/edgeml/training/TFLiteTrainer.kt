@@ -134,6 +134,32 @@ class TFLiteTrainer(
                         }
                     }
 
+                    // TODO(optimization): Detect delegate op coverage and warn on partial fallback.
+                    //   When a delegate (GPU, NNAPI) can't handle all ops in the model, TFLite
+                    //   silently partitions the graph: some ops run on the delegate, the rest
+                    //   on CPU. Each partition boundary copies data between processors, causing
+                    //   pipeline stalls that can make delegated inference SLOWER than pure CPU.
+                    //
+                    //   Detection approach (Android / TFLite):
+                    //     val delegateNodes = interpreter.getExecutionPlan() // if available
+                    //     // Or: run inference once with GPU, once without, compare latency
+                    //     // If GPU latency > CPU latency, log warning and disable delegate
+                    //
+                    //   On iOS (Core ML), the same problem exists with ANE:
+                    //     let config = MLModelConfiguration()
+                    //     config.computeUnits = .all  // ANE + GPU + CPU
+                    //     // Use MLComputePlan (iOS 17+) to inspect per-layer device assignment:
+                    //     let plan = try await MLComputePlan(contentsOf: modelURL, config: config)
+                    //     for layer in plan.modelStructure.layers {
+                    //         let device = plan.estimatedCost(of: layer).primaryComputeDevice
+                    //         if device != .neuralEngine { /* flag this layer */ }
+                    //     }
+                    //     // If many layers fall back to GPU/CPU, serve a different model variant
+                    //     // or force computeUnits = .cpuAndGPU to avoid ANE partition stalls.
+                    //
+                    //   Report delegate coverage in ModelContract and training events so the
+                    //   server can make better per-device model variant decisions.
+
                     // TODO(optimization): Wire up MNN device config.
                     //   ModelManager fetches and saves mnn_config.json per model+device, but
                     //   nothing reads it here. Load the saved config and apply runtime settings:
