@@ -231,7 +231,9 @@ class EdgeMLClient private constructor(
                 },
                 metadata = mapOf(
                     "using_gpu" to result.usingGpu.toString(),
+                    "active_delegate" to result.activeDelegate,
                     "delegate_disabled" to result.delegateDisabled.toString(),
+                    "disabled_delegates" to result.disabledDelegates.joinToString(","),
                 ),
             )
         }

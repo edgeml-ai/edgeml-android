@@ -66,6 +66,9 @@ class TFLiteTrainer(
     private var _pooledInputBuffer: ByteBuffer? = null
     private var _pooledOutputBuffer: ByteBuffer? = null
 
+    // Resolved thread count (stored for warmup CPU-only benchmark)
+    private var _effectiveThreads: Int = config.numThreads
+
     // Training state
     private var originalModelPath: String? = null
     private var updatedModelPath: String? = null
@@ -114,7 +117,8 @@ class TFLiteTrainer(
                     }
 
                     // Resolve thread count: prefer big-core count on ARM big.LITTLE
-                    val effectiveThreads = resolveThreadCount()
+                    _effectiveThreads = resolveThreadCount()
+                    val effectiveThreads = _effectiveThreads
 
                     val options = Interpreter.Options().apply {
                         setNumThreads(effectiveThreads)
@@ -879,94 +883,97 @@ class TFLiteTrainer(
     // =========================================================================
 
     /**
-     * Run warmup inference to absorb cold-start costs before production requests.
+     * Warm up the interpreter and validate that the active hardware delegate is
+     * actually faster than CPU. If not (partition stalls, bad model compat), the
+     * delegate is disabled and the next one in the priority chain is tried:
      *
-     * The first inference on a TFLite model triggers JIT compilation, GPU shader
-     * compilation, memory allocation, and delegate initialization. Running this
-     * during [ai.edgeml.client.EdgeMLClient.initialize] ensures that real inference
-     * calls don't pay the cold-start penalty.
+     *   vendor NPU → GPU → NNAPI → XNNPack/CPU
      *
-     * When the GPU delegate is active, this also benchmarks GPU vs CPU-only
-     * inference. If GPU is slower (a sign of delegate partition stalls where
-     * unsupported ops bounce data between GPU and CPU), the GPU delegate is
-     * disabled and the interpreter is reloaded CPU-only.
+     * This ensures we never ship an inference path that is _slower_ than CPU.
      *
      * @return [WarmupResult] with timing breakdown, or null if no model is loaded.
      */
     suspend fun warmup(): WarmupResult? =
         withContext(defaultDispatcher) {
             mutex.withLock {
-                val interp = interpreter ?: return@withContext null
+                interpreter ?: return@withContext null
                 val model = _currentModel ?: return@withContext null
 
                 try {
                     val inputSize = getInputSize()
                     if (inputSize <= 0) return@withContext null
 
-                    // --- Benchmark current delegate (GPU if enabled) ---
-                    val delegateLatency = benchmarkInference(interp, inputSize)
+                    // Benchmark CPU-only as baseline (always needed for comparison)
+                    val cpuLatency = benchmarkCpuOnly(model, inputSize)
 
-                    // --- If GPU is active, benchmark CPU-only to detect partition stalls ---
-                    var cpuLatencyMs: Double? = null
-                    var delegateDisabled = false
+                    // Benchmark whatever delegate is currently active
+                    var delegateLatency = benchmarkInference(interpreter!!, inputSize)
+                    val disabledDelegates = mutableListOf<String>()
 
-                    if (gpuDelegate != null) {
-                        val cpuOptions = Interpreter.Options().apply {
-                            setNumThreads(config.numThreads)
+                    // --- Cascade: if active delegate is slower than CPU, try next ---
+
+                    // 1. Vendor NPU active and slower?
+                    if (vendorDelegate != null && cpuLatency.warmMs < delegateLatency.warmMs) {
+                        logPartitionStall("Vendor NPU", delegateLatency.warmMs, cpuLatency.warmMs)
+                        disabledDelegates.add("vendor_npu")
+                        closeVendorDelegate()
+                        vendorDelegate = null
+
+                        // Try falling through to GPU
+                        if (config.enableGpuAcceleration && isGpuSupported()) {
+                            reloadWithGpu(model)
+                            delegateLatency = benchmarkInference(interpreter!!, inputSize)
+                        } else {
+                            reloadCpuOnly(model)
+                            delegateLatency = cpuLatency
                         }
-                        val modelFile = File(model.filePath)
-                        val cpuInterp = Interpreter(loadModelFile(modelFile), cpuOptions)
-                        try {
-                            cpuLatencyMs = benchmarkInference(cpuInterp, inputSize)
+                    }
 
-                            if (cpuLatencyMs < delegateLatency.warmMs) {
-                                // GPU is slower → partition stalls. Swap to CPU.
-                                Timber.e(
-                                    "DELEGATE PARTITION STALL DETECTED: GPU warm=%.1fms, CPU warm=%.1fms. " +
-                                        "GPU delegate is %.1fx SLOWER than CPU — the model likely has ops " +
-                                        "that fall back to CPU, causing data copies at partition boundaries. " +
-                                        "Disabling GPU delegate for this model.",
-                                    delegateLatency.warmMs,
-                                    cpuLatencyMs,
-                                    delegateLatency.warmMs / cpuLatencyMs,
-                                )
+                    // 2. GPU active and slower?
+                    if (gpuDelegate != null && cpuLatency.warmMs < delegateLatency.warmMs) {
+                        logPartitionStall("GPU", delegateLatency.warmMs, cpuLatency.warmMs)
+                        disabledDelegates.add("gpu")
+                        reloadCpuOnly(model)
+                        delegateLatency = cpuLatency
+                    }
 
-                                // Swap: close GPU interpreter, adopt CPU interpreter
-                                interpreter?.close()
-                                gpuDelegate?.close()
-                                gpuDelegate = null
-                                interpreter = cpuInterp
-                                extractTensorInfo()
-                                delegateDisabled = true
-                            } else {
-                                Timber.i(
-                                    "GPU delegate validated: GPU warm=%.1fms, CPU warm=%.1fms (%.1fx faster)",
-                                    delegateLatency.warmMs,
-                                    cpuLatencyMs,
-                                    cpuLatencyMs / delegateLatency.warmMs,
-                                )
-                                cpuInterp.close()
-                            }
-                        } catch (e: Exception) {
-                            Timber.w(e, "CPU benchmark failed, keeping current delegate")
-                            cpuInterp.close()
-                        }
+                    // Re-allocate pooled buffers if we swapped interpreters
+                    if (disabledDelegates.isNotEmpty()) {
+                        extractTensorInfo()
+                        allocatePooledBuffers()
+                    }
+
+                    val activeDelegate = when {
+                        vendorDelegate != null -> "vendor_npu"
+                        gpuDelegate != null -> "gpu"
+                        else -> "cpu"
+                    }
+
+                    if (disabledDelegates.isEmpty() && activeDelegate != "cpu") {
+                        Timber.i(
+                            "%s delegate validated: warm=%.1fms, CPU warm=%.1fms (%.1fx faster)",
+                            activeDelegate.uppercase(),
+                            delegateLatency.warmMs,
+                            cpuLatency.warmMs,
+                            cpuLatency.warmMs / delegateLatency.warmMs,
+                        )
                     }
 
                     val result = WarmupResult(
                         coldInferenceMs = delegateLatency.coldMs,
                         warmInferenceMs = delegateLatency.warmMs,
-                        cpuInferenceMs = cpuLatencyMs,
+                        cpuInferenceMs = cpuLatency.warmMs,
                         usingGpu = isUsingGpu(),
-                        delegateDisabled = delegateDisabled,
+                        activeDelegate = activeDelegate,
+                        disabledDelegates = disabledDelegates,
                     )
 
                     Timber.i(
-                        "Warmup complete: cold=%.1fms, warm=%.1fms, gpu=%s, delegateDisabled=%s",
+                        "Warmup complete: cold=%.1fms, warm=%.1fms, delegate=%s, disabled=%s",
                         delegateLatency.coldMs,
                         delegateLatency.warmMs,
-                        isUsingGpu(),
-                        delegateDisabled,
+                        activeDelegate,
+                        disabledDelegates.ifEmpty { listOf("none") },
                     )
 
                     result
@@ -976,6 +983,60 @@ class TFLiteTrainer(
                 }
             }
         }
+
+    private fun logPartitionStall(delegateName: String, delegateMs: Double, cpuMs: Double) {
+        Timber.e(
+            "DELEGATE PARTITION STALL: %s warm=%.1fms, CPU warm=%.1fms. " +
+                "%s is %.1fx SLOWER than CPU — disabling and cascading to next delegate.",
+            delegateName,
+            delegateMs,
+            cpuMs,
+            delegateName,
+            delegateMs / cpuMs,
+        )
+    }
+
+    /**
+     * Benchmark a CPU-only interpreter against the same model.
+     */
+    private fun benchmarkCpuOnly(model: CachedModel, inputSize: Int): BenchmarkLatency {
+        val cpuOptions = Interpreter.Options().apply {
+            setNumThreads(_effectiveThreads)
+        }
+        val cpuInterp = Interpreter(loadModelFile(File(model.filePath)), cpuOptions)
+        return try {
+            benchmarkInference(cpuInterp, inputSize)
+        } finally {
+            cpuInterp.close()
+        }
+    }
+
+    /**
+     * Reload the model with GPU delegate (cascading from vendor NPU).
+     */
+    private fun reloadWithGpu(model: CachedModel) {
+        interpreter?.close()
+        gpuDelegate?.close()
+        gpuDelegate = null
+
+        val options = Interpreter.Options().apply { setNumThreads(_effectiveThreads) }
+        tryAttachGpu(options, model)
+        interpreter = Interpreter(loadModelFile(File(model.filePath)), options)
+    }
+
+    /**
+     * Reload the model CPU-only (all delegates failed).
+     */
+    private fun reloadCpuOnly(model: CachedModel) {
+        interpreter?.close()
+        gpuDelegate?.close()
+        gpuDelegate = null
+        closeVendorDelegate()
+        vendorDelegate = null
+
+        val options = Interpreter.Options().apply { setNumThreads(_effectiveThreads) }
+        interpreter = Interpreter(loadModelFile(File(model.filePath)), options)
+    }
 
     /**
      * Run cold + warm inference on an interpreter and return both timings.
@@ -1275,6 +1336,7 @@ class TFLiteTrainer(
             _outputShape = intArrayOf()
             _pooledInputBuffer = null
             _pooledOutputBuffer = null
+            _effectiveThreads = config.numThreads
             originalModelPath = null
             originalModelBytes = null
             updatedModelPath = null
@@ -1408,5 +1470,11 @@ data class WarmupResult(
     val warmInferenceMs: Double,
     val cpuInferenceMs: Double?,
     val usingGpu: Boolean,
-    val delegateDisabled: Boolean,
-)
+    /** Which delegate survived warmup: "vendor_npu", "gpu", or "cpu" */
+    val activeDelegate: String,
+    /** Delegates that were disabled during cascade (e.g. ["vendor_npu", "gpu"]) */
+    val disabledDelegates: List<String> = emptyList(),
+) {
+    /** True if any delegate was disabled during warmup. */
+    val delegateDisabled: Boolean get() = disabledDelegates.isNotEmpty()
+}

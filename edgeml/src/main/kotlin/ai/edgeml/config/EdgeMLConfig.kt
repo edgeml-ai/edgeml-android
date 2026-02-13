@@ -124,16 +124,24 @@ data class EdgeMLConfig(
      */
     val enableNnapi: Boolean = false,
     /**
-     * Auto-detect and use vendor NPU delegates (Qualcomm QNN, Samsung Eden,
-     * MediaTek NeuroPilot). Loaded via reflection — if the vendor AAR is not
-     * on the classpath, gracefully falls back to GPU/CPU.
+     * Use vendor NPU delegates (Qualcomm QNN, Samsung Eden, MediaTek
+     * NeuroPilot) when the vendor AAR is on the classpath. Default off —
+     * enable this when you add a vendor delegate AAR to your app:
      *
-     * To enable a vendor delegate, add the AAR to your app dependencies:
+     * ```kotlin
+     * // build.gradle.kts
+     * implementation("com.qualcomm.qti:qnn-tflite-delegate:2.+")
+     *
+     * // EdgeMLConfig
+     * .enableVendorNpu(true)
+     * ```
+     *
+     * Vendor delegate AARs:
      * - Qualcomm: `com.qualcomm.qti:qnn-tflite-delegate`
      * - Samsung: `com.samsung.android:eden-tflite-delegate`
      * - MediaTek: `com.mediatek.neuropilot:tflite-neuron-delegate`
      */
-    val enableVendorNpu: Boolean = true,
+    val enableVendorNpu: Boolean = false,
     /**
      * Detect ARM big.LITTLE core topology and pin TFLite threads to
      * performance (big) cores. Inference on little cores can be 3-5x slower.
@@ -222,7 +230,7 @@ data class EdgeMLConfig(
         private var enableGpuSerialization: Boolean = true
         private var enableFloat16Inference: Boolean = false
         private var enableNnapi: Boolean = false
-        private var enableVendorNpu: Boolean = true
+        private var enableVendorNpu: Boolean = false
         private var preferBigCores: Boolean = true
         private var numThreads: Int = 4
         private var enableBackgroundSync: Boolean = true
