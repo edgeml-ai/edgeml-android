@@ -888,9 +888,9 @@ class EdgeMLClient private constructor(
                         usedSecAgg = useSecAgg
 
                         val uploadResult = if (useSecAgg) {
-                            uploadWithSecAgg(weightUpdate, roundId!!, deviceId)
+                            uploadWithSecAgg(weightUpdate, roundId!!, deviceId, trainingResult, isDegraded)
                         } else {
-                            uploadPlaintext(weightUpdate, deviceId, roundId)
+                            uploadPlaintext(weightUpdate, deviceId, roundId, trainingResult, isDegraded)
                         }
                         uploaded = uploadResult.isSuccess
                     }
@@ -1025,32 +1025,54 @@ class EdgeMLClient private constructor(
     // Weight Upload (internal)
     // =========================================================================
 
-    private suspend fun uploadWithSecAgg(
+    /**
+     * Build the [GradientUpdateRequest] from training context.
+     *
+     * Centralizes the server payload construction so that all upload
+     * paths (SecAgg, plaintext) send consistent, complete data.
+     */
+    private fun buildGradientRequest(
         weightUpdate: WeightUpdate,
-        roundId: String,
         deviceId: String,
-    ): Result<Unit> {
-        val secAgg = secAggManager ?: return Result.failure(Exception("SecAgg not enabled"))
-
-        Timber.d("Uploading weight update with SecAgg for round $roundId")
-
-        val secAggResult = secAgg.processWeightUpdate(weightUpdate, roundId, deviceId).getOrThrow()
-
-        // Upload the masked weights
-        val request = ai.edgeml.api.dto.GradientUpdateRequest(
+        roundId: String,
+        trainingResult: ai.edgeml.training.TrainingResult,
+        isDegraded: Boolean,
+    ): ai.edgeml.api.dto.GradientUpdateRequest =
+        ai.edgeml.api.dto.GradientUpdateRequest(
             deviceId = deviceId,
             modelId = weightUpdate.modelId,
             version = weightUpdate.version,
             roundId = roundId,
             numSamples = weightUpdate.sampleCount,
-            trainingTimeMs = 0L,
+            trainingTimeMs = (trainingResult.trainingTime * 1000).toLong(),
             metrics = ai.edgeml.api.dto.TrainingMetrics(
-                loss = weightUpdate.metrics["loss"] ?: 0.0,
-                accuracy = weightUpdate.metrics["accuracy"],
-                numBatches = weightUpdate.metrics["epochs"]?.toInt() ?: 1,
+                loss = trainingResult.loss ?: 0.0,
+                accuracy = trainingResult.accuracy,
+                numBatches = trainingResult.metrics["epochs"]?.toInt() ?: 1,
+                learningRate = trainingResult.metrics["learning_rate"],
+                customMetrics = buildMap {
+                    put("degraded", if (isDegraded) 1.0 else 0.0)
+                    put("training_method", trainingResult.metrics["training_method"] ?: 0.0)
+                    put("client_timestamp_ms", System.currentTimeMillis().toDouble())
+                    config.appVersion?.let { put("app_version_hash", it.hashCode().toDouble()) }
+                },
             ),
         )
 
+    private suspend fun uploadWithSecAgg(
+        weightUpdate: WeightUpdate,
+        roundId: String,
+        deviceId: String,
+        trainingResult: ai.edgeml.training.TrainingResult = ai.edgeml.training.TrainingResult(0, null, null, 0.0),
+        isDegraded: Boolean = false,
+    ): Result<Unit> {
+        val secAgg = secAggManager ?: return Result.failure(Exception("SecAgg not enabled"))
+
+        Timber.d("Uploading weight update with SecAgg for round $roundId")
+
+        secAgg.processWeightUpdate(weightUpdate, roundId, deviceId).getOrThrow()
+
+        val request = buildGradientRequest(weightUpdate, deviceId, roundId, trainingResult, isDegraded)
         val response = api.submitGradients(roundId, request)
         return if (response.isSuccessful) {
             Result.success(Unit)
@@ -1063,24 +1085,13 @@ class EdgeMLClient private constructor(
         weightUpdate: WeightUpdate,
         deviceId: String,
         roundId: String?,
+        trainingResult: ai.edgeml.training.TrainingResult = ai.edgeml.training.TrainingResult(0, null, null, 0.0),
+        isDegraded: Boolean = false,
     ): Result<Unit> {
         Timber.d("Uploading weight update (plaintext)")
 
         if (roundId != null) {
-            val request = ai.edgeml.api.dto.GradientUpdateRequest(
-                deviceId = deviceId,
-                modelId = weightUpdate.modelId,
-                version = weightUpdate.version,
-                roundId = roundId,
-                numSamples = weightUpdate.sampleCount,
-                trainingTimeMs = 0L,
-                metrics = ai.edgeml.api.dto.TrainingMetrics(
-                    loss = weightUpdate.metrics["loss"] ?: 0.0,
-                    accuracy = weightUpdate.metrics["accuracy"],
-                    numBatches = weightUpdate.metrics["epochs"]?.toInt() ?: 1,
-                ),
-            )
-
+            val request = buildGradientRequest(weightUpdate, deviceId, roundId, trainingResult, isDegraded)
             val response = api.submitGradients(roundId, request)
             return if (response.isSuccessful) {
                 Result.success(Unit)
