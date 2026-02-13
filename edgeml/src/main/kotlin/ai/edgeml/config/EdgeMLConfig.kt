@@ -101,9 +101,49 @@ data class EdgeMLConfig(
     val retryDelayMs: Long = 1_000L,
     /** Model cache size in bytes (default: 100MB) */
     val modelCacheSizeBytes: Long = 100 * 1024 * 1024L,
-    /** Enable TensorFlow Lite GPU delegate */
+    /** Enable TensorFlow Lite GPU delegate. */
     val enableGpuAcceleration: Boolean = true,
-    /** Number of TFLite interpreter threads */
+    /**
+     * Cache compiled GPU shaders to disk so subsequent model loads skip shader
+     * compilation (saves 100-500ms cold-start). No downside — cache is
+     * automatically invalidated when the model changes.
+     */
+    val enableGpuSerialization: Boolean = true,
+    /**
+     * Allow float16 precision on the GPU delegate (~2x throughput).
+     * Safe for most vision/classification models. May reduce accuracy for
+     * models with large dynamic ranges. Only takes effect when GPU is active.
+     */
+    val enableFloat16Inference: Boolean = false,
+    /**
+     * Enable NNAPI delegate for hardware acceleration on Android 8.1–14.
+     *
+     * NNAPI is **deprecated in Android 15** (API 35). On Android 15+ devices
+     * this flag is ignored and vendor NPU delegates are used instead.
+     * Default off because NNAPI can be unpredictable across vendors.
+     */
+    val enableNnapi: Boolean = false,
+    /**
+     * Auto-detect and use vendor NPU delegates (Qualcomm QNN, Samsung Eden,
+     * MediaTek NeuroPilot). Loaded via reflection — if the vendor AAR is not
+     * on the classpath, gracefully falls back to GPU/CPU.
+     *
+     * To enable a vendor delegate, add the AAR to your app dependencies:
+     * - Qualcomm: `com.qualcomm.qti:qnn-tflite-delegate`
+     * - Samsung: `com.samsung.android:eden-tflite-delegate`
+     * - MediaTek: `com.mediatek.neuropilot:tflite-neuron-delegate`
+     */
+    val enableVendorNpu: Boolean = true,
+    /**
+     * Detect ARM big.LITTLE core topology and pin TFLite threads to
+     * performance (big) cores. Inference on little cores can be 3-5x slower.
+     * When true, [numThreads] is overridden with the detected big core count.
+     */
+    val preferBigCores: Boolean = true,
+    /**
+     * Number of TFLite interpreter threads. When [preferBigCores] is true,
+     * this is overridden with the detected performance core count.
+     */
     val numThreads: Int = 4,
     /** Enable background sync via WorkManager */
     val enableBackgroundSync: Boolean = true,
@@ -179,6 +219,11 @@ data class EdgeMLConfig(
         private var retryDelayMs: Long = 1_000L
         private var modelCacheSizeBytes: Long = 100 * 1024 * 1024L
         private var enableGpuAcceleration: Boolean = true
+        private var enableGpuSerialization: Boolean = true
+        private var enableFloat16Inference: Boolean = false
+        private var enableNnapi: Boolean = false
+        private var enableVendorNpu: Boolean = true
+        private var preferBigCores: Boolean = true
         private var numThreads: Int = 4
         private var enableBackgroundSync: Boolean = true
         private var syncIntervalMinutes: Long = 60L
@@ -221,6 +266,16 @@ data class EdgeMLConfig(
         fun modelCacheSizeBytes(size: Long) = apply { this.modelCacheSizeBytes = size }
 
         fun enableGpuAcceleration(enabled: Boolean) = apply { this.enableGpuAcceleration = enabled }
+
+        fun enableGpuSerialization(enabled: Boolean) = apply { this.enableGpuSerialization = enabled }
+
+        fun enableFloat16Inference(enabled: Boolean) = apply { this.enableFloat16Inference = enabled }
+
+        fun enableNnapi(enabled: Boolean) = apply { this.enableNnapi = enabled }
+
+        fun enableVendorNpu(enabled: Boolean) = apply { this.enableVendorNpu = enabled }
+
+        fun preferBigCores(enabled: Boolean) = apply { this.preferBigCores = enabled }
 
         fun numThreads(threads: Int) = apply { this.numThreads = threads }
 
@@ -281,6 +336,11 @@ data class EdgeMLConfig(
                 retryDelayMs = retryDelayMs,
                 modelCacheSizeBytes = modelCacheSizeBytes,
                 enableGpuAcceleration = enableGpuAcceleration,
+                enableGpuSerialization = enableGpuSerialization,
+                enableFloat16Inference = enableFloat16Inference,
+                enableNnapi = enableNnapi,
+                enableVendorNpu = enableVendorNpu,
+                preferBigCores = preferBigCores,
                 numThreads = numThreads,
                 enableBackgroundSync = enableBackgroundSync,
                 syncIntervalMinutes = syncIntervalMinutes,

@@ -105,26 +105,21 @@ dependencies {
     implementation("org.tensorflow:tensorflow-lite-gpu:2.17.0")
     implementation("org.tensorflow:tensorflow-lite-gpu-api:2.17.0")
 
-    // TODO(acceleration): Add delegate dependencies as they are implemented.
-    //   Each is gated behind device detection in TFLiteTrainer.loadModel():
+    // Optional vendor NPU delegates — loaded via reflection in TFLiteTrainer.
+    // Add the ones relevant to your target devices. The SDK auto-detects the SoC
+    // and uses the delegate if the AAR is on the classpath; no code changes needed.
     //
-    //   NNAPI (Android 8.1-14 only, deprecated in Android 15):
-    //     implementation("org.tensorflow:tensorflow-lite-nnapi:2.17.0")
+    // Qualcomm QNN (Snapdragon NPU/DSP — replaces deprecated Hexagon):
+    //   implementation("com.qualcomm.qti:qnn-tflite-delegate:2.+")
+    //   // AAR from Qualcomm AI Hub: https://aihub.qualcomm.com/
     //
-    //   Qualcomm QNN (Snapdragon NPU/DSP — replaces deprecated Hexagon):
-    //     implementation("com.qualcomm.qti:qnn-tflite-delegate:2.+")
-    //     // Requires Qualcomm AI Hub license. AAR from:
-    //     // https://aihub.qualcomm.com/
+    // Samsung Eden / ENN (Exynos NPU):
+    //   implementation("com.samsung.android:eden-tflite-delegate:1.+")
+    //   // AAR from Samsung Mobile AI SDK: https://developer.samsung.com/neural
     //
-    //   Samsung Eden / ENN (Exynos NPU):
-    //     implementation("com.samsung.android:eden-tflite-delegate:1.+")
-    //     // Requires Samsung Mobile AI SDK. AAR from:
-    //     // https://developer.samsung.com/neural
-    //
-    //   MediaTek NeuroPilot (Dimensity APU):
-    //     implementation("com.mediatek.neuropilot:tflite-neuron-delegate:1.+")
-    //     // Requires NeuroPilot SDK. AAR from:
-    //     // https://neuropilot.mediatek.com/
+    // MediaTek NeuroPilot (Dimensity APU):
+    //   implementation("com.mediatek.neuropilot:tflite-neuron-delegate:1.+")
+    //   // AAR from NeuroPilot SDK: https://neuropilot.mediatek.com/
 
     // Logging
     implementation("com.jakewharton.timber:timber:5.0.1")
