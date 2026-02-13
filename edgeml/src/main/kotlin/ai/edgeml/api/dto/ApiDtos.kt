@@ -287,6 +287,28 @@ data class ModelVersionResponse(
 /**
  * Model download URL response.
  */
+// TODO(optimization): Add optimization metadata to this response.
+//   The server should return model properties so the client can select
+//   the right delegate and runtime configuration:
+//     @SerialName("quantization") val quantization: String? = null,
+//       // e.g., "float32", "float16", "int8_dynamic", "int8_full"
+//     @SerialName("recommended_delegates") val recommendedDelegates: List<String>? = null,
+//       // e.g., ["gpu"], ["xnnpack"], ["nnapi", "gpu"]
+//     @SerialName("input_shape") val inputShape: List<Int>? = null,
+//     @SerialName("output_shape") val outputShape: List<Int>? = null,
+//     @SerialName("has_training_signature") val hasTrainingSignature: Boolean? = null,
+//   This enables the client to configure TFLiteTrainer before loading the model.
+//
+// TODO(server): Generate INT8 and float16 TFLite variants on model upload.
+//   When a model version is published, the server conversion pipeline should:
+//   1. Take the uploaded SavedModel/ONNX/TFLite float32 source
+//   2. Run TFLiteConverter with:
+//      - Default: float32 (no quantization)
+//      - converter.optimizations = [tf.lite.Optimize.DEFAULT] → dynamic range
+//      - converter.target_spec.supported_types = [tf.float16] → float16
+//      - Full int8 with representative_dataset → int8
+//   3. Store all variants with their optimization metadata
+//   4. Return the right variant based on the client's format query param
 @Serializable
 data class ModelDownloadResponse(
     @SerialName("download_url")

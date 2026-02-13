@@ -92,10 +92,32 @@ class TFLiteTrainer(
                     }
 
                     // Create interpreter options
+                    // TODO(optimization): Select delegates based on model optimization metadata
+                    //   from ModelDownloadResponse. Currently we only try GPU. The server can
+                    //   return recommended delegates per model variant:
+                    //   - float32 model → GPU delegate (current behavior)
+                    //   - float16 model → GPU delegate with float16 inference
+                    //   - int8 model    → XNNPack delegate (2-6x faster CPU inference)
+                    //   - any model on supported SoC → NNAPI delegate (Qualcomm/Samsung/MediaTek HW accel)
                     val options =
                         Interpreter.Options().apply {
                             setNumThreads(config.numThreads)
                         }
+
+                    // TODO(optimization): Add NNAPI delegate support.
+                    //   NNAPI is detected in DeviceInfo (Build.VERSION.SDK_INT >= O_MR1) but never
+                    //   used. Create NnApiDelegate when device supports it and model is compatible:
+                    //     val nnApiDelegate = NnApiDelegate(NnApiDelegate.Options())
+                    //     options.addDelegate(nnApiDelegate)
+                    //   Must handle: fallback on unsupported ops, GPU vs NNAPI priority.
+
+                    // TODO(optimization): Add XNNPack delegate for quantized models.
+                    //   XNNPack is bundled with TFLite but needs explicit opt-in for best perf:
+                    //     val xnnpackOptions = XNNPackDelegate.Options().apply {
+                    //         setNumThreads(config.numThreads)
+                    //     }
+                    //     options.addDelegate(XNNPackDelegate(xnnpackOptions))
+                    //   Should be selected when model metadata indicates int8 quantization.
 
                     // Try to use GPU delegate if enabled
                     if (config.enableGpuAcceleration && isGpuSupported()) {
@@ -111,6 +133,14 @@ class TFLiteTrainer(
                             gpuDelegate = null
                         }
                     }
+
+                    // TODO(optimization): Wire up MNN device config.
+                    //   ModelManager fetches and saves mnn_config.json per model+device, but
+                    //   nothing reads it here. Load the saved config and apply runtime settings:
+                    //     val mnnConfig = loadMnnConfig(model.modelId, model.version)
+                    //     mnnConfig?.let { applyRuntimeConfig(options, it) }
+                    //   Config may include: thread affinity, memory allocation strategy,
+                    //   operator fusion hints, precision mode.
 
                     // Load model into memory-mapped buffer
                     val modelBuffer = loadModelFile(modelFile)

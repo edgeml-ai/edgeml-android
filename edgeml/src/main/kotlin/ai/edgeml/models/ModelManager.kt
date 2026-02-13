@@ -199,6 +199,25 @@ class ModelManager(
         return resolvedVersion.version
     }
 
+    // TODO(optimization): Negotiate model format from device capabilities.
+    //   Currently hardcoded to "tensorflow_lite" (float32). Should use
+    //   DeviceInfo.deviceProfile to request the best variant for this device:
+    //     val format = when (deviceInfo.deviceProfile) {
+    //         "low_end_android" -> "tensorflow_lite_int8"   // smallest, XNNPack-optimized
+    //         "mid_range_android" -> "tensorflow_lite"       // float32 baseline
+    //         "galaxy_s24", "pixel_8" -> "tensorflow_lite_float16" // GPU-optimized
+    //         else -> "tensorflow_lite"
+    //     }
+    //   The server already accepts a format query param — just need to pass the right one.
+
+    // TODO(optimization): Add per-device model variant support.
+    //   Server should serve pruned/quantized models based on device tier. The
+    //   infrastructure exists (getDeviceConfig endpoint, deviceProfile mapping)
+    //   but is not wired into the download path. Server needs to:
+    //   1. Store multiple variants per model version (float32, float16, int8)
+    //   2. Return the right variant URL based on format param
+    //   3. Include optimization metadata in ModelDownloadResponse
+
     private suspend fun fetchDownloadUrl(
         modelId: String,
         version: String,
