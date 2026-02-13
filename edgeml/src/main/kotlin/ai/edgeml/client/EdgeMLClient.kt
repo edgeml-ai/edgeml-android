@@ -217,19 +217,21 @@ class EdgeMLClient private constructor(
     /**
      * Run warmup inference to absorb cold-start costs (JIT, GPU shader
      * compilation, delegate init) before [ClientState.READY] is set.
-     * This ensures production [runInference] calls hit steady-state latency.
+     * Also benchmarks GPU vs CPU — disables GPU if partition stalls detected.
      */
     private suspend fun warmupModel() {
         val result = trainer.warmup()
         if (result != null) {
             eventQueue.addTrainingEvent(
                 type = EventTypes.MODEL_WARMUP_COMPLETED,
-                metrics = mapOf(
-                    "cold_inference_ms" to result.coldInferenceMs,
-                    "warm_inference_ms" to result.warmInferenceMs,
-                ),
+                metrics = buildMap {
+                    put("cold_inference_ms", result.coldInferenceMs)
+                    put("warm_inference_ms", result.warmInferenceMs)
+                    result.cpuInferenceMs?.let { put("cpu_inference_ms", it) }
+                },
                 metadata = mapOf(
                     "using_gpu" to result.usingGpu.toString(),
+                    "delegate_disabled" to result.delegateDisabled.toString(),
                 ),
             )
         }

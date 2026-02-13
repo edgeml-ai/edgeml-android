@@ -134,31 +134,9 @@ class TFLiteTrainer(
                         }
                     }
 
-                    // TODO(optimization): Detect delegate op coverage and warn on partial fallback.
-                    //   When a delegate (GPU, NNAPI) can't handle all ops in the model, TFLite
-                    //   silently partitions the graph: some ops run on the delegate, the rest
-                    //   on CPU. Each partition boundary copies data between processors, causing
-                    //   pipeline stalls that can make delegated inference SLOWER than pure CPU.
-                    //
-                    //   Detection approach (Android / TFLite):
-                    //     val delegateNodes = interpreter.getExecutionPlan() // if available
-                    //     // Or: run inference once with GPU, once without, compare latency
-                    //     // If GPU latency > CPU latency, log warning and disable delegate
-                    //
-                    //   On iOS (Core ML), the same problem exists with ANE:
-                    //     let config = MLModelConfiguration()
-                    //     config.computeUnits = .all  // ANE + GPU + CPU
-                    //     // Use MLComputePlan (iOS 17+) to inspect per-layer device assignment:
-                    //     let plan = try await MLComputePlan(contentsOf: modelURL, config: config)
-                    //     for layer in plan.modelStructure.layers {
-                    //         let device = plan.estimatedCost(of: layer).primaryComputeDevice
-                    //         if device != .neuralEngine { /* flag this layer */ }
-                    //     }
-                    //     // If many layers fall back to GPU/CPU, serve a different model variant
-                    //     // or force computeUnits = .cpuAndGPU to avoid ANE partition stalls.
-                    //
-                    //   Report delegate coverage in ModelContract and training events so the
-                    //   server can make better per-device model variant decisions.
+                    // NOTE: Delegate partition stall detection is handled by warmup().
+                    // After loading, warmup() benchmarks GPU vs CPU and disables the GPU
+                    // delegate if CPU is faster (indicating partition stalls).
 
                     // TODO(optimization): Wire up MNN device config.
                     //   ModelManager fetches and saves mnn_config.json per model+device, but
@@ -802,9 +780,10 @@ class TFLiteTrainer(
      * during [ai.edgeml.client.EdgeMLClient.initialize] ensures that real inference
      * calls don't pay the cold-start penalty.
      *
-     * Runs two dummy inferences:
-     * 1. **Cold run** — triggers all one-time initialization costs.
-     * 2. **Warm run** — represents steady-state latency.
+     * When the GPU delegate is active, this also benchmarks GPU vs CPU-only
+     * inference. If GPU is slower (a sign of delegate partition stalls where
+     * unsupported ops bounce data between GPU and CPU), the GPU delegate is
+     * disabled and the interpreter is reloaded CPU-only.
      *
      * @return [WarmupResult] with timing breakdown, or null if no model is loaded.
      */
@@ -812,39 +791,76 @@ class TFLiteTrainer(
         withContext(defaultDispatcher) {
             mutex.withLock {
                 val interp = interpreter ?: return@withContext null
+                val model = _currentModel ?: return@withContext null
 
                 try {
                     val inputSize = getInputSize()
                     if (inputSize <= 0) return@withContext null
 
-                    val dummyInput = FloatArray(inputSize) // zero-filled
-                    val inputBuffer = createInputBuffer(dummyInput)
-                    val outputBuffer = createOutputBuffer()
+                    // --- Benchmark current delegate (GPU if enabled) ---
+                    val delegateLatency = benchmarkInference(interp, inputSize)
 
-                    // First run: triggers JIT, GPU shader compilation, memory allocation
-                    val coldStart = System.nanoTime()
-                    interp.run(inputBuffer, outputBuffer)
-                    val coldTimeMs = (System.nanoTime() - coldStart) / 1_000_000.0
+                    // --- If GPU is active, benchmark CPU-only to detect partition stalls ---
+                    var cpuLatencyMs: Double? = null
+                    var delegateDisabled = false
 
-                    // Second run: steady-state latency
-                    inputBuffer.rewind()
-                    outputBuffer.clear()
-                    val warmStart = System.nanoTime()
-                    interp.run(inputBuffer, outputBuffer)
-                    val warmTimeMs = (System.nanoTime() - warmStart) / 1_000_000.0
+                    if (gpuDelegate != null) {
+                        val cpuOptions = Interpreter.Options().apply {
+                            setNumThreads(config.numThreads)
+                        }
+                        val modelFile = File(model.filePath)
+                        val cpuInterp = Interpreter(loadModelFile(modelFile), cpuOptions)
+                        try {
+                            cpuLatencyMs = benchmarkInference(cpuInterp, inputSize)
+
+                            if (cpuLatencyMs < delegateLatency.warmMs) {
+                                // GPU is slower → partition stalls. Swap to CPU.
+                                Timber.e(
+                                    "DELEGATE PARTITION STALL DETECTED: GPU warm=%.1fms, CPU warm=%.1fms. " +
+                                        "GPU delegate is %.1fx SLOWER than CPU — the model likely has ops " +
+                                        "that fall back to CPU, causing data copies at partition boundaries. " +
+                                        "Disabling GPU delegate for this model.",
+                                    delegateLatency.warmMs,
+                                    cpuLatencyMs,
+                                    delegateLatency.warmMs / cpuLatencyMs,
+                                )
+
+                                // Swap: close GPU interpreter, adopt CPU interpreter
+                                interpreter?.close()
+                                gpuDelegate?.close()
+                                gpuDelegate = null
+                                interpreter = cpuInterp
+                                extractTensorInfo()
+                                delegateDisabled = true
+                            } else {
+                                Timber.i(
+                                    "GPU delegate validated: GPU warm=%.1fms, CPU warm=%.1fms (%.1fx faster)",
+                                    delegateLatency.warmMs,
+                                    cpuLatencyMs,
+                                    cpuLatencyMs / delegateLatency.warmMs,
+                                )
+                                cpuInterp.close()
+                            }
+                        } catch (e: Exception) {
+                            Timber.w(e, "CPU benchmark failed, keeping current delegate")
+                            cpuInterp.close()
+                        }
+                    }
 
                     val result = WarmupResult(
-                        coldInferenceMs = coldTimeMs,
-                        warmInferenceMs = warmTimeMs,
+                        coldInferenceMs = delegateLatency.coldMs,
+                        warmInferenceMs = delegateLatency.warmMs,
+                        cpuInferenceMs = cpuLatencyMs,
                         usingGpu = isUsingGpu(),
+                        delegateDisabled = delegateDisabled,
                     )
 
                     Timber.i(
-                        "Warmup complete: cold=%.1fms, warm=%.1fms (%.1fx speedup), gpu=%s",
-                        coldTimeMs,
-                        warmTimeMs,
-                        if (warmTimeMs > 0) coldTimeMs / warmTimeMs else 0.0,
+                        "Warmup complete: cold=%.1fms, warm=%.1fms, gpu=%s, delegateDisabled=%s",
+                        delegateLatency.coldMs,
+                        delegateLatency.warmMs,
                         isUsingGpu(),
+                        delegateDisabled,
                     )
 
                     result
@@ -854,6 +870,31 @@ class TFLiteTrainer(
                 }
             }
         }
+
+    /**
+     * Run cold + warm inference on an interpreter and return both timings.
+     */
+    private fun benchmarkInference(interp: Interpreter, inputSize: Int): BenchmarkLatency {
+        val dummyInput = FloatArray(inputSize)
+        val inputBuffer = createInputBuffer(dummyInput)
+        val outputBuffer = createOutputBuffer()
+
+        // Cold run
+        val coldStart = System.nanoTime()
+        interp.run(inputBuffer, outputBuffer)
+        val coldMs = (System.nanoTime() - coldStart) / 1_000_000.0
+
+        // Warm run
+        inputBuffer.rewind()
+        outputBuffer.clear()
+        val warmStart = System.nanoTime()
+        interp.run(inputBuffer, outputBuffer)
+        val warmMs = (System.nanoTime() - warmStart) / 1_000_000.0
+
+        return BenchmarkLatency(coldMs, warmMs)
+    }
+
+    private data class BenchmarkLatency(val coldMs: Double, val warmMs: Double)
 
     // =========================================================================
     // GPU Support
@@ -1012,14 +1053,18 @@ data class TensorInfo(
 }
 
 /**
- * Result of a warmup pass.
+ * Result of a warmup pass including delegate benchmark.
  *
  * @property coldInferenceMs First inference time (includes JIT/shader/delegate init).
- * @property warmInferenceMs Second inference time (steady-state latency).
- * @property usingGpu Whether the GPU delegate was active during warmup.
+ * @property warmInferenceMs Second inference time (steady-state latency with selected delegate).
+ * @property cpuInferenceMs CPU-only warm latency, if GPU was benchmarked. Null when GPU wasn't active.
+ * @property usingGpu Whether the GPU delegate is active after warmup (may be false if it was disabled).
+ * @property delegateDisabled True if GPU was disabled during warmup because CPU was faster.
  */
 data class WarmupResult(
     val coldInferenceMs: Double,
     val warmInferenceMs: Double,
+    val cpuInferenceMs: Double?,
     val usingGpu: Boolean,
+    val delegateDisabled: Boolean,
 )
