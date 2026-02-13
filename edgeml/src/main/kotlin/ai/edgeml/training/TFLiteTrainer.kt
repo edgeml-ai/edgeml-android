@@ -21,6 +21,14 @@ import java.nio.MappedByteBuffer
 import java.nio.channels.FileChannel
 import java.util.Locale
 
+// TODO(acceleration): Migrate from TensorFlow Lite to LiteRT.
+//   TensorFlow Lite has been rebranded to LiteRT (google-ai-edge/LiteRT).
+//   LiteRT provides the same API surface but with newer NPU delegate support,
+//   better GPU performance, and access to the Acceleration Service (Play Services).
+//   Migration: replace org.tensorflow:tensorflow-lite:* with
+//   com.google.ai.edge.litert:litert:* in build.gradle.kts.
+//   See: https://github.com/google-ai-edge/LiteRT
+
 /**
  * TensorFlow Lite model inference and training wrapper.
  *
@@ -92,38 +100,115 @@ class TFLiteTrainer(
                     }
 
                     // Create interpreter options
-                    // TODO(optimization): Select delegates based on model optimization metadata
+                    // TODO(acceleration): Select delegates based on model optimization metadata
                     //   from ModelDownloadResponse. Currently we only try GPU. The server can
                     //   return recommended delegates per model variant:
                     //   - float32 model → GPU delegate (current behavior)
                     //   - float16 model → GPU delegate with float16 inference
                     //   - int8 model    → XNNPack delegate (2-6x faster CPU inference)
-                    //   - any model on supported SoC → NNAPI delegate (Qualcomm/Samsung/MediaTek HW accel)
+                    //   - any model on supported SoC → vendor NPU delegate
+                    //   Priority order: vendor NPU > GPU > XNNPack > CPU
+                    //   warmup() already benchmarks and disables underperforming delegates.
                     val options =
                         Interpreter.Options().apply {
                             setNumThreads(config.numThreads)
                         }
 
-                    // TODO(optimization): Add NNAPI delegate support.
-                    //   NNAPI is detected in DeviceInfo (Build.VERSION.SDK_INT >= O_MR1) but never
-                    //   used. Create NnApiDelegate when device supports it and model is compatible:
-                    //     val nnApiDelegate = NnApiDelegate(NnApiDelegate.Options())
-                    //     options.addDelegate(nnApiDelegate)
-                    //   Must handle: fallback on unsupported ops, GPU vs NNAPI priority.
+                    // ---------------------------------------------------------------
+                    // Delegate TODOs — each should be gated behind config + device check
+                    // ---------------------------------------------------------------
 
-                    // TODO(optimization): Add XNNPack delegate for quantized models.
-                    //   XNNPack is bundled with TFLite but needs explicit opt-in for best perf:
+                    // TODO(acceleration): XNNPack delegate — optimized CPU inference.
+                    //   XNNPack is bundled with TFLite and is the default CPU backend,
+                    //   but explicit opt-in unlocks best performance for INT8 and float
+                    //   models (2-6x faster than the default TFLite CPU kernels):
                     //     val xnnpackOptions = XNNPackDelegate.Options().apply {
                     //         setNumThreads(config.numThreads)
                     //     }
                     //     options.addDelegate(XNNPackDelegate(xnnpackOptions))
-                    //   Should be selected when model metadata indicates int8 quantization.
+                    //   Dependency: already bundled in org.tensorflow:tensorflow-lite.
+                    //   Use when: model metadata indicates int8 quantization, or as the
+                    //   baseline CPU backend for all models.
+
+                    // TODO(acceleration): NNAPI delegate — DEPRECATED in Android 15.
+                    //   NNAPI delegates to vendor HW (Qualcomm DSP, Samsung NPU, etc.)
+                    //   but is deprecated starting Android 15 (API 35). Keep as a
+                    //   fallback for Android 8.1–14 devices that lack vendor NPU SDKs:
+                    //     if (Build.VERSION.SDK_INT in Build.VERSION_CODES.O_MR1..34) {
+                    //         val nnApiDelegate = NnApiDelegate(NnApiDelegate.Options())
+                    //         options.addDelegate(nnApiDelegate)
+                    //     }
+                    //   Dependency: org.tensorflow:tensorflow-lite-nnapi (not yet added).
+                    //   On Android 15+ devices, use vendor NPU delegates instead.
+
+                    // TODO(acceleration): Qualcomm QNN delegate — Snapdragon NPU/DSP/GPU.
+                    //   Qualcomm's QNN (Qualcomm Neural Network) SDK replaces the deprecated
+                    //   Hexagon DSP delegate. Supports Snapdragon 8 Gen 1+ NPUs with up to
+                    //   25x faster / 5x more power-efficient inference vs CPU:
+                    //     val qnnDelegate = QnnDelegate(QnnDelegate.Options().apply {
+                    //         setBackendType(QnnDelegate.Options.BackendType.HTP) // Hexagon Tensor Processor
+                    //     })
+                    //     options.addDelegate(qnnDelegate)
+                    //   Dependency: com.qualcomm.qti:qnn-tflite-delegate (AAR from Qualcomm AI Hub).
+                    //   Gate behind: Build.HARDWARE contains "qcom" or Build.SOC_MODEL starts with "SM-".
+                    //   Note: Hexagon DSP delegate is fully deprecated — do not add it.
+
+                    // TODO(acceleration): Samsung Eden / ENN delegate — Exynos NPU.
+                    //   Samsung's Eden Neural Network (ENN) SDK accelerates inference on
+                    //   Exynos chipsets (Galaxy S series, A series with NPU). Samsung provides
+                    //   a TFLite delegate wrapper:
+                    //     val edenDelegate = EdenDelegate(EdenDelegate.Options())
+                    //     options.addDelegate(edenDelegate)
+                    //   Dependency: com.samsung.android:eden-tflite-delegate (Samsung Mobile AI SDK).
+                    //   Gate behind: Build.MANUFACTURER == "samsung" && hasExynosNpu().
+                    //   Falls back to GPU delegate on Snapdragon-based Samsung devices.
+
+                    // TODO(acceleration): MediaTek NeuroPilot delegate — Dimensity APU.
+                    //   MediaTek's NeuroPilot SDK accelerates inference on the AI Processing
+                    //   Unit (APU) in Dimensity chipsets. Supports INT8/INT16/FP16 models:
+                    //     val neuronDelegate = NeuronDelegate(NeuronDelegate.Options().apply {
+                    //         setExecutionPreference(NeuronDelegate.Options.EXECUTION_PREFERENCE_FAST)
+                    //     })
+                    //     options.addDelegate(neuronDelegate)
+                    //   Dependency: com.mediatek.neuropilot:tflite-neuron-delegate (NeuroPilot SDK).
+                    //   Gate behind: Build.HARDWARE contains "mt" or Build.SOC_MODEL starts with "MT".
+
+                    // TODO(acceleration): Google Tensor TPU delegate — Pixel devices.
+                    //   Pixel 6+ devices with Google Tensor (G1-G4) SoCs have a dedicated
+                    //   edge TPU. Google does not yet expose a public TFLite delegate for it,
+                    //   but LiteRT Acceleration Service (Play Services) routes to it internally.
+                    //   Monitor: https://github.com/google-ai-edge/LiteRT/issues/969
+                    //   When available:
+                    //     val tensorDelegate = TensorTpuDelegate(TensorTpuDelegate.Options())
+                    //     options.addDelegate(tensorDelegate)
+                    //   Gate behind: Build.SOC_MODEL starts with "Tensor".
 
                     // Try to use GPU delegate if enabled
                     if (config.enableGpuAcceleration && isGpuSupported()) {
                         try {
                             @Suppress("DEPRECATION")
                             val delegateOptions = GpuDelegate.Options()
+                            // TODO(acceleration): GPU delegate serialization — skip shader recompilation.
+                            //   TFLite GPU delegate can serialize the compiled OpenCL/GL program
+                            //   to disk so subsequent loads skip shader compilation entirely
+                            //   (eliminates 100-500ms cold-start on GPU):
+                            //     delegateOptions.setSerializationParams(
+                            //         cacheDir.absolutePath,
+                            //         "${model.modelId}_${model.version}_gpu_cache",
+                            //     )
+                            //   The cache is invalidated automatically when the model changes.
+                            //   Combine with warmup() — first launch pays full cost, subsequent
+                            //   launches hit the serialized cache and skip warmup overhead.
+
+                            // TODO(acceleration): GPU float16 inference mode.
+                            //   When model metadata indicates float16 quantization, enable
+                            //   float16 inference on the GPU delegate for ~2x throughput:
+                            //     delegateOptions.setPrecisionLossAllowed(true) // allow fp16
+                            //     delegateOptions.setInferencePreference(
+                            //         GpuDelegate.Options.INFERENCE_PREFERENCE_SUSTAINED_SPEED
+                            //     )
+                            //   This is safe for most vision models; may affect accuracy for
+                            //   models with large dynamic ranges.
                             gpuDelegate = GpuDelegate(delegateOptions)
                             options.addDelegate(gpuDelegate)
                             Timber.d("GPU delegate enabled")
@@ -138,7 +223,7 @@ class TFLiteTrainer(
                     // After loading, warmup() benchmarks GPU vs CPU and disables the GPU
                     // delegate if CPU is faster (indicating partition stalls).
 
-                    // TODO(optimization): Wire up MNN device config.
+                    // TODO(acceleration): Wire up MNN device config.
                     //   ModelManager fetches and saves mnn_config.json per model+device, but
                     //   nothing reads it here. Load the saved config and apply runtime settings:
                     //     val mnnConfig = loadMnnConfig(model.modelId, model.version)
@@ -159,6 +244,28 @@ class TFLiteTrainer(
 
                     // Get input/output tensor info
                     extractTensorInfo()
+
+                    // TODO(acceleration): Pre-allocate reusable I/O buffers after extractTensorInfo.
+                    //   Currently createInputBuffer() and createOutputBuffer() allocate new
+                    //   DirectByteBuffers on every inference call. Direct buffers are expensive
+                    //   to allocate (native malloc + JNI overhead) and not freed by GC promptly.
+                    //   Pre-allocate once here and reuse via rewind()/clear() in runInference():
+                    //     _inputBuffer = ByteBuffer.allocateDirect(getInputSize() * 4)
+                    //         .order(ByteOrder.nativeOrder())
+                    //     _outputBuffer = ByteBuffer.allocateDirect(getOutputSize() * 4)
+                    //         .order(ByteOrder.nativeOrder())
+                    //   This eliminates per-inference allocation and reduces GC pressure,
+                    //   especially important for high-frequency inference (camera/audio streams).
+
+                    // TODO(acceleration): Thread affinity — pin to big cores on ARM big.LITTLE.
+                    //   Most Android SoCs use ARM big.LITTLE (e.g., 4 big + 4 little cores).
+                    //   TFLite inference on little cores can be 3-5x slower. Pin the interpreter
+                    //   threads to performance (big) cores via:
+                    //     android.os.Process.setThreadGroupAndCpuSet() // requires root/system
+                    //   Or use the XNNPack delegate's thread pool with affinity:
+                    //     xnnpackOptions.setThreadPoolSize(bigCoreCount)
+                    //   At minimum, detect core topology and set numThreads to big core count
+                    //   rather than total core count (which may schedule on little cores).
 
                     Timber.i("Model loaded: ${model.modelId} v${model.version}")
                     Result.success(true)
@@ -230,12 +337,28 @@ class TFLiteTrainer(
      */
     suspend fun runInference(input: InferenceInput): Result<InferenceOutput> = runInference(input.data)
 
+    // TODO(acceleration): Pipeline inference — overlap preprocessing with execution.
+    //   For camera/sensor streams, input preprocessing (resize, normalize) and
+    //   model inference can be pipelined. While inference runs on the current frame,
+    //   the next frame's preprocessing runs on a separate coroutine/thread:
+    //     val preprocessJob = async { preprocessNextFrame() }
+    //     val inferenceResult = runInference(currentFrame)
+    //     val nextInput = preprocessJob.await()
+    //   This hides preprocessing latency entirely for continuous streams.
+
     /**
      * Run batch inference on multiple inputs.
      *
      * @param inputs List of input data arrays
      * @return List of inference outputs
      */
+    // TODO(acceleration): True batch inference with reshaped input tensor.
+    //   Current implementation runs N sequential single inferences. TFLite supports
+    //   actual batch inference by resizing the input tensor's batch dimension:
+    //     interp.resizeInput(0, intArrayOf(batchSize, *inputShape.drop(1).toIntArray()))
+    //     interp.allocateTensors()
+    //   This runs all samples in a single kernel launch — much faster on GPU/NPU.
+    //   Requires the model to accept dynamic batch size (batch dim = -1).
     suspend fun runBatchInference(inputs: List<FloatArray>): Result<List<InferenceOutput>> =
         withContext(defaultDispatcher) {
             try {

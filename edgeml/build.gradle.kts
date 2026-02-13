@@ -94,11 +94,37 @@ dependencies {
     implementation("com.squareup.okhttp3:logging-interceptor:4.12.0")
     implementation("com.squareup.retrofit2:converter-kotlinx-serialization:2.11.0")
 
-    // TensorFlow Lite
+    // TensorFlow Lite — core + GPU delegate
+    // TODO(acceleration): Migrate to LiteRT (google-ai-edge/LiteRT) for newer NPU support.
+    //   Replace these with:
+    //     implementation("com.google.ai.edge.litert:litert:latest")
+    //     implementation("com.google.ai.edge.litert:litert-gpu:latest")
+    //   See: https://github.com/google-ai-edge/LiteRT
     implementation("org.tensorflow:tensorflow-lite:2.17.0")
     implementation("org.tensorflow:tensorflow-lite-support:0.5.0")
     implementation("org.tensorflow:tensorflow-lite-gpu:2.17.0")
     implementation("org.tensorflow:tensorflow-lite-gpu-api:2.17.0")
+
+    // TODO(acceleration): Add delegate dependencies as they are implemented.
+    //   Each is gated behind device detection in TFLiteTrainer.loadModel():
+    //
+    //   NNAPI (Android 8.1-14 only, deprecated in Android 15):
+    //     implementation("org.tensorflow:tensorflow-lite-nnapi:2.17.0")
+    //
+    //   Qualcomm QNN (Snapdragon NPU/DSP — replaces deprecated Hexagon):
+    //     implementation("com.qualcomm.qti:qnn-tflite-delegate:2.+")
+    //     // Requires Qualcomm AI Hub license. AAR from:
+    //     // https://aihub.qualcomm.com/
+    //
+    //   Samsung Eden / ENN (Exynos NPU):
+    //     implementation("com.samsung.android:eden-tflite-delegate:1.+")
+    //     // Requires Samsung Mobile AI SDK. AAR from:
+    //     // https://developer.samsung.com/neural
+    //
+    //   MediaTek NeuroPilot (Dimensity APU):
+    //     implementation("com.mediatek.neuropilot:tflite-neuron-delegate:1.+")
+    //     // Requires NeuroPilot SDK. AAR from:
+    //     // https://neuropilot.mediatek.com/
 
     // Logging
     implementation("com.jakewharton.timber:timber:5.0.1")
