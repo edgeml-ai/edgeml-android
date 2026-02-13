@@ -66,6 +66,10 @@ data class EdgeMLConfig(
     val privacyConfiguration: PrivacyConfiguration = PrivacyConfiguration.DEFAULT,
     /** Enable secure aggregation (SecAgg+) for weight uploads */
     val enableSecureAggregation: Boolean = false,
+    /** SHA-256 certificate pin hashes for certificate pinning (base64-encoded) */
+    val certificatePins: List<String> = emptyList(),
+    /** Hostname to pin certificates against (required when certificatePins is non-empty) */
+    val pinnedHostname: String = "",
 ) {
     init {
         require(serverUrl.isNotBlank()) { "serverUrl must not be blank" }
@@ -113,6 +117,8 @@ data class EdgeMLConfig(
         private var enableEncryptedStorage: Boolean = true
         private var privacyConfiguration: PrivacyConfiguration = PrivacyConfiguration.DEFAULT
         private var enableSecureAggregation: Boolean = false
+        private var certificatePins: List<String> = emptyList()
+        private var pinnedHostname: String = ""
 
         fun serverUrl(url: String) = apply { this.serverUrl = url.trimEnd('/') }
 
@@ -164,6 +170,9 @@ data class EdgeMLConfig(
 
         fun enableSecureAggregation(enabled: Boolean) = apply { this.enableSecureAggregation = enabled }
 
+        fun certificatePins(pins: List<String>) = apply { this.certificatePins = pins }
+        fun pinnedHostname(hostname: String) = apply { this.pinnedHostname = hostname }
+
         fun build(): EdgeMLConfig =
             EdgeMLConfig(
                 serverUrl = serverUrl,
@@ -191,6 +200,8 @@ data class EdgeMLConfig(
                 enableEncryptedStorage = enableEncryptedStorage,
                 privacyConfiguration = privacyConfiguration,
                 enableSecureAggregation = enableSecureAggregation,
+                certificatePins = certificatePins,
+                pinnedHostname = pinnedHostname,
             )
     }
 
