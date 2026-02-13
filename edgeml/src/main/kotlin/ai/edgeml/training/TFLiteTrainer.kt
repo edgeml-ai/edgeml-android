@@ -8,6 +8,8 @@ import android.content.Context
 import android.os.Build
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
@@ -226,40 +228,132 @@ class TFLiteTrainer(
      */
     suspend fun runInference(input: InferenceInput): Result<InferenceOutput> = runInference(input.data)
 
-    // TODO(acceleration): Pipeline inference — overlap preprocessing with execution.
-    //   For camera/sensor streams, input preprocessing (resize, normalize) and
-    //   model inference can be pipelined. While inference runs on the current frame,
-    //   the next frame's preprocessing runs on a separate coroutine/thread:
-    //     val preprocessJob = async { preprocessNextFrame() }
-    //     val inferenceResult = runInference(currentFrame)
-    //     val nextInput = preprocessJob.await()
-    //   This hides preprocessing latency entirely for continuous streams.
+    /**
+     * Run pipelined inference — overlap preprocessing with model execution.
+     *
+     * For camera/sensor streams, this hides preprocessing latency by running
+     * the next frame's preprocessing concurrently with the current inference.
+     *
+     * @param currentInput Already-preprocessed input for the current frame
+     * @param preprocess Suspend function that preprocesses the next frame.
+     *   Return null to signal end of stream.
+     * @return Pair of (current inference result, next preprocessed input or null)
+     */
+    suspend fun runPipelinedInference(
+        currentInput: FloatArray,
+        preprocess: suspend () -> FloatArray?,
+    ): Result<Pair<InferenceOutput, FloatArray?>> =
+        coroutineScope {
+            try {
+                // Launch preprocessing on IO thread while inference runs on default
+                val nextInputDeferred = async(ioDispatcher) { preprocess() }
+                val inferenceResult = runInference(currentInput).getOrThrow()
+                val nextInput = nextInputDeferred.await()
+                Result.success(inferenceResult to nextInput)
+            } catch (e: Exception) {
+                Timber.e(e, "Pipelined inference failed")
+                Result.failure(e)
+            }
+        }
 
     /**
      * Run batch inference on multiple inputs.
      *
+     * Attempts true batched execution (single kernel launch) by resizing the
+     * input tensor's batch dimension. Falls back to sequential inference if
+     * the model doesn't support dynamic batch size.
+     *
      * @param inputs List of input data arrays
      * @return List of inference outputs
      */
-    // TODO(acceleration): True batch inference with reshaped input tensor.
-    //   Current implementation runs N sequential single inferences. TFLite supports
-    //   actual batch inference by resizing the input tensor's batch dimension:
-    //     interp.resizeInput(0, intArrayOf(batchSize, *inputShape.drop(1).toIntArray()))
-    //     interp.allocateTensors()
-    //   This runs all samples in a single kernel launch — much faster on GPU/NPU.
-    //   Requires the model to accept dynamic batch size (batch dim = -1).
     suspend fun runBatchInference(inputs: List<FloatArray>): Result<List<InferenceOutput>> =
         withContext(defaultDispatcher) {
-            try {
-                val results =
-                    inputs.map { input ->
-                        runInference(input).getOrThrow()
-                    }
-                Result.success(results)
-            } catch (e: Exception) {
-                Timber.e(e, "Batch inference failed")
-                Result.failure(e)
+            mutex.withLock {
+                val interp =
+                    interpreter
+                        ?: return@withContext Result.failure(
+                            IllegalStateException("No model loaded. Call loadModel() first."),
+                        )
+
+                if (inputs.isEmpty()) {
+                    return@withContext Result.success(emptyList())
+                }
+
+                try {
+                    runTrueBatchInference(interp, inputs)
+                } catch (e: Exception) {
+                    Timber.d(e, "True batch inference failed, falling back to sequential")
+                    runSequentialBatchInference(inputs)
+                }
             }
+        }
+
+    /**
+     * True batch inference: resize input tensor batch dimension and run all
+     * samples in a single kernel launch. Much faster on GPU/NPU.
+     */
+    private fun runTrueBatchInference(
+        interp: Interpreter,
+        inputs: List<FloatArray>,
+    ): Result<List<InferenceOutput>> {
+        val batchSize = inputs.size
+        val singleInputSize = getInputSize()
+        val singleOutputSize = getOutputSize()
+
+        // Resize input tensor: [1, ...shape] → [batchSize, ...shape]
+        val batchedInputShape = _inputShape.copyOf().also { it[0] = batchSize }
+        interp.resizeInput(0, batchedInputShape)
+        interp.allocateTensors()
+
+        // Pack all inputs into one contiguous buffer
+        val batchedInput = ByteBuffer.allocateDirect(batchSize * singleInputSize * 4)
+            .order(ByteOrder.nativeOrder())
+        for (input in inputs) {
+            for (value in input) batchedInput.putFloat(value)
+        }
+        batchedInput.rewind()
+
+        // Allocate batched output buffer
+        val batchedOutput = ByteBuffer.allocateDirect(batchSize * singleOutputSize * 4)
+            .order(ByteOrder.nativeOrder())
+
+        // Single kernel launch for the full batch
+        val startTime = System.nanoTime()
+        interp.run(batchedInput, batchedOutput)
+        val totalMs = (System.nanoTime() - startTime) / 1_000_000
+        val perSampleMs = totalMs / batchSize
+
+        // Split output back into individual InferenceOutputs
+        batchedOutput.rewind()
+        val results = (0 until batchSize).map {
+            val sampleData = FloatArray(singleOutputSize)
+            for (i in 0 until singleOutputSize) sampleData[i] = batchedOutput.float
+            InferenceOutput(
+                data = sampleData,
+                shape = _outputShape.copyOf(),
+                inferenceTimeMs = perSampleMs,
+            )
+        }
+
+        // Restore original single-sample tensor shape for subsequent inferences
+        interp.resizeInput(0, _inputShape)
+        interp.allocateTensors()
+
+        return Result.success(results)
+    }
+
+    /**
+     * Fallback: run each sample individually when batch resizing isn't supported.
+     */
+    private suspend fun runSequentialBatchInference(
+        inputs: List<FloatArray>,
+    ): Result<List<InferenceOutput>> =
+        try {
+            val results = inputs.map { input -> runInference(input).getOrThrow() }
+            Result.success(results)
+        } catch (e: Exception) {
+            Timber.e(e, "Sequential batch inference failed")
+            Result.failure(e)
         }
 
     /**

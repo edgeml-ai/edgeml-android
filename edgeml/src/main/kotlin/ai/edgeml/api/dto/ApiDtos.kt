@@ -286,19 +286,12 @@ data class ModelVersionResponse(
 
 /**
  * Model download URL response.
+ *
+ * Includes optional optimization metadata so the client can select the right
+ * delegate and runtime configuration before loading the model. All metadata
+ * fields are nullable for backwards compatibility — older servers that don't
+ * populate them will just return nulls.
  */
-// TODO(optimization): Add optimization metadata to this response.
-//   The server should return model properties so the client can select
-//   the right delegate and runtime configuration:
-//     @SerialName("quantization") val quantization: String? = null,
-//       // e.g., "float32", "float16", "int8_dynamic", "int8_full"
-//     @SerialName("recommended_delegates") val recommendedDelegates: List<String>? = null,
-//       // e.g., ["gpu"], ["xnnpack"], ["nnapi", "gpu"]
-//     @SerialName("input_shape") val inputShape: List<Int>? = null,
-//     @SerialName("output_shape") val outputShape: List<Int>? = null,
-//     @SerialName("has_training_signature") val hasTrainingSignature: Boolean? = null,
-//   This enables the client to configure TFLiteTrainer before loading the model.
-//
 // TODO(server): Generate INT8 and float16 TFLite variants on model upload.
 //   When a model version is published, the server conversion pipeline should:
 //   1. Take the uploaded SavedModel/ONNX/TFLite float32 source
@@ -319,6 +312,21 @@ data class ModelDownloadResponse(
     val checksum: String,
     @SerialName("size_bytes")
     val sizeBytes: Long,
+    /** Quantization type: "float32", "float16", "int8_dynamic", "int8_full" */
+    @SerialName("quantization")
+    val quantization: String? = null,
+    /** Recommended TFLite delegates for this model variant, e.g. ["gpu"], ["xnnpack"] */
+    @SerialName("recommended_delegates")
+    val recommendedDelegates: List<String>? = null,
+    /** Model input tensor shape, e.g. [1, 224, 224, 3] */
+    @SerialName("input_shape")
+    val inputShape: List<Int>? = null,
+    /** Model output tensor shape, e.g. [1, 1000] */
+    @SerialName("output_shape")
+    val outputShape: List<Int>? = null,
+    /** Whether the model includes a TFLite "train" signature for on-device training */
+    @SerialName("has_training_signature")
+    val hasTrainingSignature: Boolean? = null,
 )
 
 /**
