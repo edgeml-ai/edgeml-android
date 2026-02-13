@@ -3,6 +3,7 @@ package ai.edgeml.api
 import ai.edgeml.config.EdgeMLConfig
 import retrofit2.converter.kotlinx.serialization.asConverterFactory
 import kotlinx.serialization.json.Json
+import okhttp3.CertificatePinner
 import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
@@ -57,7 +58,11 @@ object EdgeMLApiFactory {
                 if (config.debugMode) {
                     addInterceptor(createLoggingInterceptor())
                 }
-            }.retryOnConnectionFailure(true)
+            }
+            .apply {
+                buildCertificatePinner(config)?.let { certificatePinner(it) }
+            }
+            .retryOnConnectionFailure(true)
             .build()
 
     /**
@@ -164,6 +169,20 @@ object EdgeMLApiFactory {
         // Should not reach here, but just in case
         lastResponse?.let { return@Interceptor it }
         throw lastException ?: IOException("Retry exhausted with no response")
+    }
+
+    /**
+     * Build a CertificatePinner from config. Returns null if no pins configured.
+     */
+    private fun buildCertificatePinner(config: EdgeMLConfig): CertificatePinner? {
+        if (config.certificatePins.isEmpty() || config.pinnedHostname.isBlank()) {
+            return null
+        }
+        val builder = CertificatePinner.Builder()
+        for (pin in config.certificatePins) {
+            builder.add(config.pinnedHostname, "sha256/$pin")
+        }
+        return builder.build()
     }
 
     private fun isRetryableStatusCode(code: Int): Boolean =
