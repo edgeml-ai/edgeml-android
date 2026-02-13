@@ -3,20 +3,71 @@ package ai.edgeml.config
 import kotlinx.serialization.Serializable
 
 /**
+ * Deployment environment for the EdgeML server.
+ *
+ * EdgeML supports three deployment modes:
+ * - **Cloud (default)**: Managed EdgeML service at `api.edgeml.ai`. No infrastructure to manage.
+ * - **VPC**: Self-hosted EdgeML server running inside your Virtual Private Cloud.
+ *   Point `serverUrl` to your internal load balancer (e.g., `https://edgeml.internal.mycompany.com`).
+ * - **On-premises**: Air-gapped deployment on your own hardware.
+ *   Point `serverUrl` to your local server (e.g., `https://edgeml.local:8443`).
+ *
+ * For VPC and on-premises deployments, you may also need to configure:
+ * - [EdgeMLConfig.certificatePins] for certificate pinning against your internal CA
+ * - [EdgeMLConfig.pinnedHostname] for the hostname to pin against
+ */
+enum class ServerEnvironment {
+    /** Managed EdgeML cloud service (api.edgeml.ai). */
+    CLOUD,
+
+    /** Self-hosted EdgeML server inside a Virtual Private Cloud. */
+    VPC,
+
+    /** Air-gapped on-premises EdgeML server deployment. */
+    ON_PREMISES,
+}
+
+/**
  * Configuration for the EdgeML SDK.
  *
  * Use [EdgeMLConfig.Builder] to create a configuration instance:
+ *
+ * ## Cloud (simplest)
  * ```kotlin
  * val config = EdgeMLConfig.Builder()
  *     .serverUrl("https://api.edgeml.ai")
  *     .deviceAccessToken("<short-lived-device-token>")
+ *     .orgId("your-org-id")
  *     .modelId("model-123")
+ *     .build()
+ * ```
+ *
+ * ## VPC / On-premises
+ * ```kotlin
+ * val config = EdgeMLConfig.Builder()
+ *     .serverUrl("https://edgeml.internal.mycompany.com")
+ *     .serverEnvironment(ServerEnvironment.VPC)
+ *     .deviceAccessToken(token)
+ *     .orgId("your-org-id")
+ *     .modelId("model-123")
+ *     .certificatePins(listOf("AABB..."))        // pin your internal CA
+ *     .pinnedHostname("edgeml.internal.mycompany.com")
  *     .build()
  * ```
  */
 @Serializable
 data class EdgeMLConfig(
-    /** Base URL of the EdgeML server */
+    /**
+     * Base URL of the EdgeML server.
+     *
+     * This is the HTTP(S) endpoint where the EdgeML coordination server is running.
+     * - **Cloud**: `https://api.edgeml.ai` (managed service)
+     * - **VPC**: Your internal load balancer URL (e.g., `https://edgeml.internal.company.com`)
+     * - **On-premises**: Your local server URL (e.g., `https://edgeml.local:8443`)
+     *
+     * The server handles device registration, model distribution, round coordination,
+     * gradient aggregation, and secure aggregation key exchange.
+     */
     val serverUrl: String,
     /** Short-lived device access token for authentication */
     val deviceAccessToken: String,
@@ -24,6 +75,14 @@ data class EdgeMLConfig(
     val orgId: String,
     /** Model ID to use for training/inference */
     val modelId: String,
+    /**
+     * Deployment environment. Defaults to [ServerEnvironment.CLOUD].
+     *
+     * Set to [ServerEnvironment.VPC] or [ServerEnvironment.ON_PREMISES] when running
+     * against a self-hosted EdgeML server. This affects default behaviors like
+     * certificate validation and telemetry.
+     */
+    val serverEnvironment: ServerEnvironment = ServerEnvironment.CLOUD,
     /** Device ID (auto-generated if not provided) */
     val deviceId: String? = null,
     /** App version for device metadata */
@@ -70,6 +129,19 @@ data class EdgeMLConfig(
     val certificatePins: List<String> = emptyList(),
     /** Hostname to pin certificates against (required when certificatePins is non-empty) */
     val pinnedHostname: String = "",
+    /**
+     * Allow training to proceed in degraded mode when the model lacks training signatures.
+     *
+     * When **false** (default), calling [ai.edgeml.client.EdgeMLClient.train] on a model
+     * without a TFLite "train" signature will throw
+     * [ai.edgeml.training.MissingTrainingSignatureException]. This is the safe default
+     * because forward-pass-only training cannot update weights on-device.
+     *
+     * When **true**, forward-pass training is permitted. Loss and accuracy metrics will
+     * be computed but weights will NOT be updated. The returned
+     * [ai.edgeml.training.TrainingOutcome.degraded] flag will be `true`.
+     */
+    val allowDegradedTraining: Boolean = false,
 ) {
     init {
         require(serverUrl.isNotBlank()) { "serverUrl must not be blank" }
@@ -96,6 +168,7 @@ data class EdgeMLConfig(
         private var deviceAccessToken: String = ""
         private var orgId: String = ""
         private var modelId: String = ""
+        private var serverEnvironment: ServerEnvironment = ServerEnvironment.CLOUD
         private var deviceId: String? = null
         private var appVersion: String? = null
         private var debugMode: Boolean = false
@@ -119,6 +192,7 @@ data class EdgeMLConfig(
         private var enableSecureAggregation: Boolean = false
         private var certificatePins: List<String> = emptyList()
         private var pinnedHostname: String = ""
+        private var allowDegradedTraining: Boolean = false
 
         fun serverUrl(url: String) = apply { this.serverUrl = url.trimEnd('/') }
 
@@ -173,12 +247,30 @@ data class EdgeMLConfig(
         fun certificatePins(pins: List<String>) = apply { this.certificatePins = pins }
         fun pinnedHostname(hostname: String) = apply { this.pinnedHostname = hostname }
 
+        /**
+         * Set the deployment environment.
+         *
+         * @see ServerEnvironment
+         */
+        fun serverEnvironment(env: ServerEnvironment) = apply { this.serverEnvironment = env }
+
+        /**
+         * Allow training to proceed without model training signatures.
+         *
+         * When false (default), training on a model without a "train" signature
+         * throws [ai.edgeml.training.MissingTrainingSignatureException].
+         * Set to true only if you understand that forward-pass training
+         * cannot update weights on-device.
+         */
+        fun allowDegradedTraining(allowed: Boolean) = apply { this.allowDegradedTraining = allowed }
+
         fun build(): EdgeMLConfig =
             EdgeMLConfig(
                 serverUrl = serverUrl,
                 deviceAccessToken = deviceAccessToken,
                 orgId = orgId,
                 modelId = modelId,
+                serverEnvironment = serverEnvironment,
                 deviceId = deviceId,
                 appVersion = appVersion,
                 debugMode = debugMode,
@@ -202,11 +294,18 @@ data class EdgeMLConfig(
                 enableSecureAggregation = enableSecureAggregation,
                 certificatePins = certificatePins,
                 pinnedHostname = pinnedHostname,
+                allowDegradedTraining = allowDegradedTraining,
             )
     }
 
     companion object {
-        /** Default server URL for production */
+        /**
+         * Default server URL for the managed EdgeML cloud service.
+         *
+         * For VPC or on-premises deployments, replace this with your own server URL:
+         * - VPC example: `https://edgeml.internal.mycompany.com`
+         * - On-prem example: `https://edgeml.local:8443`
+         */
         const val DEFAULT_SERVER_URL = "https://api.edgeml.ai"
     }
 }

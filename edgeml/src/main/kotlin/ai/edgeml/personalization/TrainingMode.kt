@@ -3,9 +3,12 @@ package ai.edgeml.personalization
 /**
  * Training mode for personalization and federated learning.
  *
+ * **Default: [LOCAL_ONLY]** — the safest starting point. Switch to [FEDERATED]
+ * only when you've verified your privacy requirements and users have opted in.
+ *
  * This enum provides a clear API for choosing between:
- * - LOCAL_ONLY: Maximum privacy, all training stays on-device
- * - FEDERATED: Privacy-preserving collaborative learning with encrypted updates
+ * - [LOCAL_ONLY]: Maximum privacy, all training stays on-device (default)
+ * - [FEDERATED]: Privacy-preserving collaborative learning with encrypted updates
  */
 enum class TrainingMode {
     /**

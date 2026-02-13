@@ -19,9 +19,12 @@ import ai.edgeml.sync.EventQueue
 import ai.edgeml.sync.EventTypes
 import ai.edgeml.sync.WorkManagerSync
 import ai.edgeml.training.TFLiteTrainer
+import ai.edgeml.training.MissingTrainingSignatureException
 import ai.edgeml.training.TrainingConfig
 import ai.edgeml.training.TrainingDataProvider
+import ai.edgeml.training.TrainingOutcome
 import ai.edgeml.training.TrainingResult
+import ai.edgeml.training.UploadPolicy
 import ai.edgeml.training.WeightUpdate
 import ai.edgeml.utils.BatteryUtils
 import ai.edgeml.utils.DeviceUtils
@@ -672,6 +675,42 @@ class EdgeMLClient private constructor(
         )
     }
 
+    /**
+     * Get the model's input/output contract.
+     *
+     * Use this at setup time to validate that your data pipeline produces
+     * the correct shapes and types before calling [runInference]. This
+     * enables "compile-time" validation of the data contract rather than
+     * discovering shape mismatches at inference time.
+     *
+     * ```kotlin
+     * val contract = client.getModelContract()
+     *     ?: error("No model loaded")
+     *
+     * // Validate your pipeline output matches the model's expectations
+     * require(contract.validateInput(myData)) {
+     *     "Input shape mismatch: expected ${contract.inputDescription}"
+     * }
+     * ```
+     *
+     * @return The model contract, or null if no model is loaded.
+     */
+    fun getModelContract(): ModelContract? {
+        val model = trainer.currentModel ?: return null
+        val tensorInfo = trainer.getTensorInfo() ?: return null
+
+        return ModelContract(
+            modelId = model.modelId,
+            version = model.version,
+            inputShape = tensorInfo.inputShape.copyOf(),
+            outputShape = tensorInfo.outputShape.copyOf(),
+            inputType = tensorInfo.inputType,
+            outputType = tensorInfo.outputType,
+            hasTrainingSignature = trainer.hasTrainingSignature(),
+            signatureKeys = trainer.getSignatureKeys(),
+        )
+    }
+
     // =========================================================================
     // Sync Management
     // =========================================================================
@@ -712,6 +751,199 @@ class EdgeMLClient private constructor(
             metadata = metadata,
         )
     }
+
+    // =========================================================================
+    // Training (Unified API)
+    // =========================================================================
+
+    /**
+     * Train the model on local data with a single, unified API.
+     *
+     * This is the **recommended** way to do all training. It replaces the
+     * previous split between `participateInRound()` and `trainAndUpload()`.
+     *
+     * ## Upload behavior
+     *
+     * The [uploadPolicy] parameter controls what happens after training:
+     * - [UploadPolicy.AUTO] (default): Extracts weights and uploads automatically.
+     *   Uses SecAgg if enabled and a `roundId` is provided.
+     * - [UploadPolicy.MANUAL]: Extracts weights but does NOT upload.
+     *   Returns them in [TrainingOutcome.weightUpdate] for you to handle.
+     * - [UploadPolicy.DISABLED]: No weight extraction or upload. Pure local training.
+     *
+     * ## Degraded mode
+     *
+     * If the model lacks TFLite training signatures, behavior depends on
+     * [EdgeMLConfig.allowDegradedTraining]:
+     * - **false (default)**: Throws [MissingTrainingSignatureException].
+     * - **true**: Runs forward-pass training (no weight updates) and sets
+     *   [TrainingOutcome.degraded] to `true`.
+     *
+     * ## Examples
+     *
+     * ```kotlin
+     * // Simple local-only training
+     * val outcome = client.train(myDataProvider).getOrThrow()
+     *
+     * // Federated training with auto-upload
+     * val outcome = client.train(
+     *     dataProvider = myDataProvider,
+     *     uploadPolicy = UploadPolicy.AUTO,
+     *     roundId = assignment.id,
+     * ).getOrThrow()
+     *
+     * // Train and inspect weights before uploading
+     * val outcome = client.train(
+     *     dataProvider = myDataProvider,
+     *     uploadPolicy = UploadPolicy.MANUAL,
+     * ).getOrThrow()
+     * val weights = outcome.weightUpdate!! // non-null for MANUAL
+     * ```
+     *
+     * @param dataProvider Provider for local training data.
+     * @param trainingConfig Training hyperparameters (optional, sensible defaults apply).
+     * @param uploadPolicy Controls weight extraction and upload. Default: [UploadPolicy.AUTO].
+     * @param roundId Optional federated learning round ID. When provided with
+     *   [UploadPolicy.AUTO], the server coordinates this as part of a round.
+     * @return [TrainingOutcome] with training metrics, optional weights, and upload status.
+     */
+    suspend fun train(
+        dataProvider: TrainingDataProvider,
+        trainingConfig: TrainingConfig = TrainingConfig(),
+        uploadPolicy: UploadPolicy = UploadPolicy.AUTO,
+        roundId: String? = null,
+    ): Result<TrainingOutcome> =
+        withContext(ioDispatcher) {
+            checkReady()
+
+            try {
+                val deviceId = _serverDeviceId.value
+                    ?: return@withContext Result.failure(Exception("Device not registered"))
+
+                // Check for training signature support
+                val isDegraded = !trainer.hasTrainingSignature()
+                if (isDegraded && !config.allowDegradedTraining) {
+                    return@withContext Result.failure(
+                        MissingTrainingSignatureException(trainer.getSignatureKeys())
+                    )
+                }
+
+                if (isDegraded) {
+                    Timber.e(
+                        "MODEL TRAINING DEGRADED: Model lacks 'train' signature. " +
+                            "Weights will NOT be updated on-device. Loss/accuracy reflect " +
+                            "inference only. Export model with training signatures for real learning.",
+                    )
+                }
+
+                Timber.i("Starting training: policy=$uploadPolicy, round=$roundId, degraded=$isDegraded")
+
+                // If this is a round, fetch config and ensure correct model
+                if (roundId != null) {
+                    val roundResponse = api.getRound(roundId)
+                    if (!roundResponse.isSuccessful) {
+                        return@withContext Result.failure(
+                            Exception("Failed to fetch round config: ${roundResponse.code()}")
+                        )
+                    }
+                    val modelResult = modelManager.ensureModelAvailable(forceDownload = false)
+                    modelResult.onSuccess { model -> trainer.loadModel(model) }
+                }
+
+                eventQueue.addTrainingEvent(
+                    type = EventTypes.ROUND_PARTICIPATION_STARTED,
+                    metadata = buildMap {
+                        roundId?.let { put("round_id", it) }
+                        put("upload_policy", uploadPolicy.name)
+                        put("degraded", isDegraded.toString())
+                    },
+                )
+
+                // Train locally
+                val trainingResult = trainer.train(dataProvider, trainingConfig).getOrThrow()
+
+                eventQueue.addTrainingEvent(
+                    type = EventTypes.TRAINING_COMPLETED,
+                    metrics = mapOf(
+                        "loss" to (trainingResult.loss ?: 0.0),
+                        "accuracy" to (trainingResult.accuracy ?: 0.0),
+                        "training_time" to trainingResult.trainingTime,
+                        "sample_count" to trainingResult.sampleCount.toDouble(),
+                    ),
+                    metadata = buildMap {
+                        roundId?.let { put("round_id", it) }
+                        put("degraded", isDegraded.toString())
+                    },
+                )
+
+                // Handle weight extraction and upload based on policy
+                var weightUpdate: WeightUpdate? = null
+                var uploaded = false
+                var usedSecAgg = false
+
+                when (uploadPolicy) {
+                    UploadPolicy.AUTO -> {
+                        weightUpdate = trainer.extractWeightUpdate(trainingResult).getOrThrow()
+                        val useSecAgg = (config.enableSecureAggregation || roundId != null) &&
+                            secAggManager != null && roundId != null
+                        usedSecAgg = useSecAgg
+
+                        val uploadResult = if (useSecAgg) {
+                            uploadWithSecAgg(weightUpdate, roundId!!, deviceId)
+                        } else {
+                            uploadPlaintext(weightUpdate, deviceId, roundId)
+                        }
+                        uploaded = uploadResult.isSuccess
+                    }
+                    UploadPolicy.MANUAL -> {
+                        weightUpdate = trainer.extractWeightUpdate(trainingResult).getOrThrow()
+                    }
+                    UploadPolicy.DISABLED -> {
+                        // No extraction, no upload
+                    }
+                }
+
+                val outcome = TrainingOutcome(
+                    trainingResult = trainingResult,
+                    weightUpdate = weightUpdate,
+                    uploaded = uploaded,
+                    secureAggregation = usedSecAgg,
+                    uploadPolicy = uploadPolicy,
+                    degraded = isDegraded,
+                )
+
+                eventQueue.addTrainingEvent(
+                    type = EventTypes.ROUND_PARTICIPATION_COMPLETED,
+                    metrics = mapOf(
+                        "loss" to (trainingResult.loss ?: 0.0),
+                        "accuracy" to (trainingResult.accuracy ?: 0.0),
+                        "sample_count" to trainingResult.sampleCount.toDouble(),
+                    ),
+                    metadata = buildMap {
+                        roundId?.let { put("round_id", it) }
+                        put("uploaded", uploaded.toString())
+                        put("upload_policy", uploadPolicy.name)
+                        put("degraded", isDegraded.toString())
+                    },
+                )
+
+                Timber.i(
+                    "Training complete: ${trainingResult.sampleCount} samples, " +
+                        "policy=$uploadPolicy, uploaded=$uploaded, degraded=$isDegraded",
+                )
+                Result.success(outcome)
+            } catch (e: MissingTrainingSignatureException) {
+                Timber.e(e, "Training blocked: model lacks training signatures")
+                Result.failure(e)
+            } catch (e: Exception) {
+                Timber.e(e, "Training failed")
+                eventQueue.addTrainingEvent(
+                    type = EventTypes.TRAINING_FAILED,
+                    metadata = mapOf("error" to (e.message ?: "unknown")),
+                )
+                Result.failure(e)
+            }
+        }
 
     // =========================================================================
     // Round Management
@@ -793,19 +1025,23 @@ class EdgeMLClient private constructor(
     /**
      * Participate in a federated learning round.
      *
-     * This is the full round lifecycle:
-     * 1. Fetch round config from the server
-     * 2. Ensure the correct model version is loaded
-     * 3. Train locally using the provided data
-     * 4. Extract weight update (delta)
-     * 5. Apply SecAgg masking if enabled
-     * 6. Upload the update to the server
+     * @deprecated Use [train] with `roundId` and `uploadPolicy = UploadPolicy.AUTO` instead:
+     * ```kotlin
+     * client.train(dataProvider, roundId = roundId, uploadPolicy = UploadPolicy.AUTO)
+     * ```
      *
      * @param roundId The round to participate in.
      * @param dataProvider Provider for local training data.
      * @param trainingConfig Training hyperparameters (optional, defaults apply).
      * @return [FederatedTrainingResult] with training metrics and upload status.
      */
+    @Deprecated(
+        message = "Use train() with roundId and uploadPolicy instead",
+        replaceWith = ReplaceWith(
+            "train(dataProvider, trainingConfig, UploadPolicy.AUTO, roundId)",
+            "ai.edgeml.training.UploadPolicy",
+        ),
+    )
     suspend fun participateInRound(
         roundId: String,
         dataProvider: TrainingDataProvider,
@@ -908,15 +1144,23 @@ class EdgeMLClient private constructor(
     /**
      * Run local training and upload the weight update to the server.
      *
-     * When secure aggregation is enabled, the weight update is automatically
-     * masked using the SecAgg+ protocol before upload. The server can only
-     * reconstruct the aggregate, never individual client updates.
+     * @deprecated Use [train] with `uploadPolicy = UploadPolicy.AUTO` instead:
+     * ```kotlin
+     * client.train(dataProvider, trainingConfig, UploadPolicy.AUTO, roundId)
+     * ```
      *
      * @param dataProvider Provider for local training data.
      * @param trainingConfig Training hyperparameters.
      * @param roundId The federated learning round ID (required for SecAgg).
      * @return [FederatedTrainingResult] with training metrics and upload status.
      */
+    @Deprecated(
+        message = "Use train() with uploadPolicy instead",
+        replaceWith = ReplaceWith(
+            "train(dataProvider, trainingConfig, UploadPolicy.AUTO, roundId)",
+            "ai.edgeml.training.UploadPolicy",
+        ),
+    )
     suspend fun trainAndUpload(
         dataProvider: TrainingDataProvider,
         trainingConfig: TrainingConfig = TrainingConfig(),
@@ -1200,6 +1444,105 @@ enum class ClientState {
 
     /** Client closed */
     CLOSED,
+}
+
+/**
+ * Describes the input/output contract of a loaded model.
+ *
+ * Use this at initialization time to validate that your data pipeline
+ * produces tensors with the correct shape and type. This catches
+ * mismatches early rather than at inference time.
+ *
+ * ```kotlin
+ * val contract = client.getModelContract()!!
+ *
+ * // Check input compatibility
+ * val myInput = FloatArray(784)
+ * require(contract.validateInput(myInput)) {
+ *     "Bad input: ${contract.inputDescription}"
+ * }
+ *
+ * // Check training support
+ * if (!contract.hasTrainingSignature) {
+ *     Log.w("Model does not support on-device training")
+ * }
+ * ```
+ */
+data class ModelContract(
+    val modelId: String,
+    val version: String,
+    /** Expected input tensor shape (e.g., [1, 28, 28, 1] for MNIST). */
+    val inputShape: IntArray,
+    /** Expected output tensor shape (e.g., [1, 10] for 10-class classifier). */
+    val outputShape: IntArray,
+    /** Input tensor data type (e.g., "FLOAT32"). */
+    val inputType: String,
+    /** Output tensor data type (e.g., "FLOAT32"). */
+    val outputType: String,
+    /** Whether the model supports on-device gradient-based training. */
+    val hasTrainingSignature: Boolean,
+    /** Available TFLite signature keys (e.g., ["train", "infer", "save"]). */
+    val signatureKeys: List<String>,
+) {
+    /** Total number of input elements expected (product of input shape dimensions). */
+    val inputSize: Int get() = inputShape.fold(1) { acc, dim -> acc * dim }
+
+    /** Total number of output elements produced (product of output shape dimensions). */
+    val outputSize: Int get() = outputShape.fold(1) { acc, dim -> acc * dim }
+
+    /** Human-readable description of expected input (e.g., "FloatArray[784] shape=[1, 28, 28, 1] type=FLOAT32"). */
+    val inputDescription: String
+        get() = "FloatArray[$inputSize] shape=${inputShape.contentToString()} type=$inputType"
+
+    /** Human-readable description of output (e.g., "FloatArray[10] shape=[1, 10] type=FLOAT32"). */
+    val outputDescription: String
+        get() = "FloatArray[$outputSize] shape=${outputShape.contentToString()} type=$outputType"
+
+    /**
+     * Validate that a float array is compatible with this model's input.
+     *
+     * @param input The data to validate.
+     * @return true if the input size matches the model's expected input size.
+     */
+    fun validateInput(input: FloatArray): Boolean = input.size == inputSize
+
+    /**
+     * Validate that a float array is compatible with this model's input,
+     * throwing a descriptive exception if not.
+     *
+     * @param input The data to validate.
+     * @throws IllegalArgumentException if the input size doesn't match.
+     */
+    fun requireValidInput(input: FloatArray) {
+        require(input.size == inputSize) {
+            "Input size mismatch: got ${input.size} elements, " +
+                "expected $inputDescription"
+        }
+    }
+
+    override fun equals(other: Any?): Boolean {
+        if (this === other) return true
+        if (javaClass != other?.javaClass) return false
+        other as ModelContract
+        return modelId == other.modelId &&
+            version == other.version &&
+            inputShape.contentEquals(other.inputShape) &&
+            outputShape.contentEquals(other.outputShape) &&
+            inputType == other.inputType &&
+            outputType == other.outputType &&
+            hasTrainingSignature == other.hasTrainingSignature
+    }
+
+    override fun hashCode(): Int {
+        var result = modelId.hashCode()
+        result = 31 * result + version.hashCode()
+        result = 31 * result + inputShape.contentHashCode()
+        result = 31 * result + outputShape.contentHashCode()
+        result = 31 * result + inputType.hashCode()
+        result = 31 * result + outputType.hashCode()
+        result = 31 * result + hasTrainingSignature.hashCode()
+        return result
+    }
 }
 
 /**

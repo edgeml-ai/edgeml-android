@@ -1,7 +1,6 @@
 package ai.edgeml.inference
 
 import android.content.Context
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 
@@ -9,6 +8,11 @@ import kotlinx.coroutines.flow.flow
  * Video generation engine for Android.
  *
  * Each video frame is emitted as a chunk containing raw pixel data.
+ *
+ * **STATUS: NOT IMPLEMENTED.** This engine requires integration with an
+ * on-device video generation model. Calling [generate] will throw
+ * [NotImplementedError]. To use streaming video generation, provide your own
+ * [StreamingInferenceEngine] implementation to [ai.edgeml.client.EdgeMLClient.generateStream].
  *
  * @param context Android application context.
  * @param frameCount Number of frames to generate.
@@ -22,18 +26,10 @@ class VideoEngine(
         modality: Modality,
     ): Flow<InferenceChunk> =
         flow {
-            for (frame in 0 until frameCount) {
-                val data = ByteArray(1024) { (frame % 256).toByte() }
-                emit(
-                    InferenceChunk(
-                        index = frame,
-                        data = data,
-                        modality = Modality.VIDEO,
-                        timestamp = System.currentTimeMillis(),
-                        latencyMs = 0.0,
-                    ),
-                )
-                delay(33) // ~30fps
-            }
+            throw NotImplementedError(
+                "VideoEngine is not yet implemented. " +
+                    "Provide a custom StreamingInferenceEngine to generateStream() " +
+                    "with your video model integration.",
+            )
         }
 }

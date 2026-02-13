@@ -1,7 +1,6 @@
 package ai.edgeml.inference
 
 import android.content.Context
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 
@@ -9,6 +8,11 @@ import kotlinx.coroutines.flow.flow
  * Audio generation engine for Android.
  *
  * Audio frames are emitted as chunks of PCM sample data.
+ *
+ * **STATUS: NOT IMPLEMENTED.** This engine requires integration with an
+ * on-device audio generation model. Calling [generate] will throw
+ * [NotImplementedError]. To use streaming audio generation, provide your own
+ * [StreamingInferenceEngine] implementation to [ai.edgeml.client.EdgeMLClient.generateStream].
  *
  * @param context Android application context.
  * @param totalFrames Number of audio frames to generate.
@@ -22,18 +26,10 @@ class AudioEngine(
         modality: Modality,
     ): Flow<InferenceChunk> =
         flow {
-            for (frame in 0 until totalFrames) {
-                val data = ByteArray(1024 * 2) // 1024 samples × 2 bytes
-                emit(
-                    InferenceChunk(
-                        index = frame,
-                        data = data,
-                        modality = Modality.AUDIO,
-                        timestamp = System.currentTimeMillis(),
-                        latencyMs = 0.0,
-                    ),
-                )
-                delay(10)
-            }
+            throw NotImplementedError(
+                "AudioEngine is not yet implemented. " +
+                    "Provide a custom StreamingInferenceEngine to generateStream() " +
+                    "with your audio model integration.",
+            )
         }
 }

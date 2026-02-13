@@ -116,3 +116,92 @@ class InMemoryTrainingDataProvider(
 
     override suspend fun getSampleCount(): Int = data.size
 }
+
+/**
+ * Controls whether and how weight updates are uploaded after training.
+ *
+ * This is the single knob developers use to decide upload behavior:
+ * - [AUTO]: Upload automatically after training completes (default for FEDERATED mode).
+ * - [MANUAL]: Train locally and return the [WeightUpdate] without uploading.
+ *   The developer can inspect, transform, or upload it themselves.
+ * - [DISABLED]: Local-only training. No weight data is prepared for upload.
+ */
+enum class UploadPolicy {
+    /**
+     * Upload weight updates automatically after training completes.
+     *
+     * If a roundId is provided, uploads to that round (with SecAgg if enabled).
+     * Otherwise uploads as an ad-hoc update.
+     */
+    AUTO,
+
+    /**
+     * Train locally and return weight updates without uploading.
+     *
+     * Use this when you need to inspect or transform weights before upload,
+     * or when you want full control over upload timing.
+     */
+    MANUAL,
+
+    /**
+     * Local-only training. No weight extraction or upload.
+     *
+     * Use this for pure on-device personalization where model
+     * improvements never leave the device.
+     */
+    DISABLED,
+}
+
+/**
+ * Result of the unified [ai.edgeml.client.EdgeMLClient.train] method.
+ *
+ * Combines training metrics, optional weight update, and upload status
+ * into a single result type. Replaces the previous split between
+ * `FederatedTrainingResult` and raw `TrainingResult`.
+ */
+data class TrainingOutcome(
+    /** Local training metrics (loss, accuracy, timing). */
+    val trainingResult: TrainingResult,
+    /** Extracted weight update, or null if [UploadPolicy.DISABLED]. */
+    val weightUpdate: WeightUpdate? = null,
+    /** Whether the update was uploaded to the server. */
+    val uploaded: Boolean = false,
+    /** Whether secure aggregation was used for the upload. */
+    val secureAggregation: Boolean = false,
+    /** The upload policy that was used. */
+    val uploadPolicy: UploadPolicy = UploadPolicy.DISABLED,
+    /**
+     * Whether training ran in degraded mode (forward-pass only, no gradient updates).
+     *
+     * When true, the model's weights were NOT updated on-device. The loss and accuracy
+     * metrics reflect inference on training data, not actual learning. To enable real
+     * on-device training, export your model with TFLite training signatures.
+     *
+     * @see [ai.edgeml.training.TFLiteTrainer.hasTrainingSignature]
+     */
+    val degraded: Boolean = false,
+)
+
+/**
+ * Exception thrown when a model lacks training signatures and
+ * [EdgeMLConfig.allowDegradedTraining][ai.edgeml.config.EdgeMLConfig.allowDegradedTraining]
+ * is false (the default).
+ *
+ * To fix this, export your TFLite model with training signatures:
+ * ```python
+ * converter = tf.lite.TFLiteConverter.from_saved_model(saved_model_dir)
+ * converter.experimental_enable_resource_variables = True
+ * tflite_model = converter.convert()
+ * ```
+ *
+ * Or set `allowDegradedTraining(true)` in config to permit forward-pass-only training.
+ */
+class MissingTrainingSignatureException(
+    availableSignatures: List<String>,
+) : IllegalStateException(
+    "Model does not have a 'train' signature and cannot perform on-device gradient updates. " +
+        "Available signatures: $availableSignatures. " +
+        "Either export your model with training signatures " +
+        "(converter.experimental_enable_resource_variables = True) " +
+        "or set allowDegradedTraining(true) to permit forward-pass-only training.",
+)

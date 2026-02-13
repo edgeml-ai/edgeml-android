@@ -353,6 +353,11 @@ class TFLiteTrainer(
                     val result = if (hasTrainingSignature()) {
                         trainWithSignature(interp, trainingData, trainingConfig, model)
                     } else {
+                        if (!config.allowDegradedTraining) {
+                            return@withContext Result.failure(
+                                MissingTrainingSignatureException(getSignatureKeys())
+                            )
+                        }
                         trainWithForwardPass(interp, trainingData, trainingConfig, model)
                     }
 
@@ -510,11 +515,12 @@ class TFLiteTrainer(
         trainingConfig: TrainingConfig,
         model: CachedModel,
     ): TrainingMetrics {
-        Timber.i("Training via forward-pass (model lacks training signatures)")
-        Timber.w(
-            "Model does not have a '$TRAIN_SIGNATURE' signature. " +
-                "Convert your model with training signatures for real on-device gradient updates. " +
-                "Available signatures: ${getSignatureKeys()}",
+        Timber.e(
+            "DEGRADED TRAINING: Model does not have a '$TRAIN_SIGNATURE' signature. " +
+                "Weights will NOT be updated on-device. Loss/accuracy metrics reflect " +
+                "inference on training data only, not actual learning. " +
+                "Available signatures: ${getSignatureKeys()}. " +
+                "To fix: export model with converter.experimental_enable_resource_variables = True",
         )
 
         var totalLoss = 0.0

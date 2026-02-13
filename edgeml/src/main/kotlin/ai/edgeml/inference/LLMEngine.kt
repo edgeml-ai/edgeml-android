@@ -1,7 +1,6 @@
 package ai.edgeml.inference
 
 import android.content.Context
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import java.io.File
@@ -10,8 +9,12 @@ import java.io.File
  * MediaPipe LLM Inference API-based text generation engine.
  *
  * Each generated token is emitted as an [InferenceChunk] with UTF-8 encoded
- * token text. In production this delegates to MediaPipe's `LlmInference` API;
- * the current implementation provides a placeholder demonstrating the interface.
+ * token text. In production this delegates to MediaPipe's `LlmInference` API.
+ *
+ * **STATUS: NOT IMPLEMENTED.** This engine requires integration with MediaPipe
+ * LLM Inference or another on-device LLM runtime. Calling [generate] will throw
+ * [NotImplementedError]. To use streaming text generation, provide your own
+ * [StreamingInferenceEngine] implementation to [ai.edgeml.client.EdgeMLClient.generateStream].
  *
  * @param context Android application context.
  * @param modelPath Path to the MediaPipe `.task` model file.
@@ -29,29 +32,11 @@ class LLMEngine(
         modality: Modality,
     ): Flow<InferenceChunk> =
         flow {
-            val prompt = input.toString()
-
-            // In production: use MediaPipe LlmInference for token streaming.
-            // Placeholder implementation for interface demonstration.
-            val response = "Generated response for: ${prompt.take(30)}..."
-            val tokens = response.split(" ")
-
-            for ((index, token) in tokens.withIndex()) {
-                if (index >= maxTokens) break
-
-                val data = "$token ".toByteArray(Charsets.UTF_8)
-                emit(
-                    InferenceChunk(
-                        index = index,
-                        data = data,
-                        modality = Modality.TEXT,
-                        timestamp = System.currentTimeMillis(),
-                        latencyMs = 0.0, // filled by timing wrapper
-                    ),
-                )
-
-                // Simulate per-token latency
-                delay(5)
-            }
+            throw NotImplementedError(
+                "LLMEngine is not yet implemented. " +
+                    "Provide a custom StreamingInferenceEngine to generateStream() " +
+                    "or integrate MediaPipe LlmInference. " +
+                    "See: https://ai.google.dev/edge/mediapipe/solutions/genai/llm_inference/android",
+            )
         }
 }
