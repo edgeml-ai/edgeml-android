@@ -791,6 +791,71 @@ class TFLiteTrainer(
         }
 
     // =========================================================================
+    // Warmup
+    // =========================================================================
+
+    /**
+     * Run warmup inference to absorb cold-start costs before production requests.
+     *
+     * The first inference on a TFLite model triggers JIT compilation, GPU shader
+     * compilation, memory allocation, and delegate initialization. Running this
+     * during [ai.edgeml.client.EdgeMLClient.initialize] ensures that real inference
+     * calls don't pay the cold-start penalty.
+     *
+     * Runs two dummy inferences:
+     * 1. **Cold run** — triggers all one-time initialization costs.
+     * 2. **Warm run** — represents steady-state latency.
+     *
+     * @return [WarmupResult] with timing breakdown, or null if no model is loaded.
+     */
+    suspend fun warmup(): WarmupResult? =
+        withContext(defaultDispatcher) {
+            mutex.withLock {
+                val interp = interpreter ?: return@withContext null
+
+                try {
+                    val inputSize = getInputSize()
+                    if (inputSize <= 0) return@withContext null
+
+                    val dummyInput = FloatArray(inputSize) // zero-filled
+                    val inputBuffer = createInputBuffer(dummyInput)
+                    val outputBuffer = createOutputBuffer()
+
+                    // First run: triggers JIT, GPU shader compilation, memory allocation
+                    val coldStart = System.nanoTime()
+                    interp.run(inputBuffer, outputBuffer)
+                    val coldTimeMs = (System.nanoTime() - coldStart) / 1_000_000.0
+
+                    // Second run: steady-state latency
+                    inputBuffer.rewind()
+                    outputBuffer.clear()
+                    val warmStart = System.nanoTime()
+                    interp.run(inputBuffer, outputBuffer)
+                    val warmTimeMs = (System.nanoTime() - warmStart) / 1_000_000.0
+
+                    val result = WarmupResult(
+                        coldInferenceMs = coldTimeMs,
+                        warmInferenceMs = warmTimeMs,
+                        usingGpu = isUsingGpu(),
+                    )
+
+                    Timber.i(
+                        "Warmup complete: cold=%.1fms, warm=%.1fms (%.1fx speedup), gpu=%s",
+                        coldTimeMs,
+                        warmTimeMs,
+                        if (warmTimeMs > 0) coldTimeMs / warmTimeMs else 0.0,
+                        isUsingGpu(),
+                    )
+
+                    result
+                } catch (e: Exception) {
+                    Timber.w(e, "Warmup inference failed (non-fatal)")
+                    null
+                }
+            }
+        }
+
+    // =========================================================================
     // GPU Support
     // =========================================================================
 
@@ -945,3 +1010,16 @@ data class TensorInfo(
         return result
     }
 }
+
+/**
+ * Result of a warmup pass.
+ *
+ * @property coldInferenceMs First inference time (includes JIT/shader/delegate init).
+ * @property warmInferenceMs Second inference time (steady-state latency).
+ * @property usingGpu Whether the GPU delegate was active during warmup.
+ */
+data class WarmupResult(
+    val coldInferenceMs: Double,
+    val warmInferenceMs: Double,
+    val usingGpu: Boolean,
+)

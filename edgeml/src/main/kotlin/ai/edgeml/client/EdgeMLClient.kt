@@ -24,6 +24,7 @@ import ai.edgeml.training.TrainingConfig
 import ai.edgeml.training.TrainingDataProvider
 import ai.edgeml.training.TrainingOutcome
 import ai.edgeml.training.UploadPolicy
+import ai.edgeml.training.WarmupResult
 import ai.edgeml.training.WeightUpdate
 import ai.edgeml.utils.BatteryUtils
 import ai.edgeml.utils.DeviceUtils
@@ -167,6 +168,7 @@ class EdgeMLClient private constructor(
                 }
 
                 ensureModelLoaded()
+                warmupModel()
                 setupBackgroundServices(serverId)
 
                 _state.value = ClientState.READY
@@ -210,6 +212,27 @@ class EdgeMLClient private constructor(
             }
         }
         modelManager.getCachedModel()?.let { trainer.loadModel(it) }
+    }
+
+    /**
+     * Run warmup inference to absorb cold-start costs (JIT, GPU shader
+     * compilation, delegate init) before [ClientState.READY] is set.
+     * This ensures production [runInference] calls hit steady-state latency.
+     */
+    private suspend fun warmupModel() {
+        val result = trainer.warmup()
+        if (result != null) {
+            eventQueue.addTrainingEvent(
+                type = EventTypes.MODEL_WARMUP_COMPLETED,
+                metrics = mapOf(
+                    "cold_inference_ms" to result.coldInferenceMs,
+                    "warm_inference_ms" to result.warmInferenceMs,
+                ),
+                metadata = mapOf(
+                    "using_gpu" to result.usingGpu.toString(),
+                ),
+            )
+        }
     }
 
     private fun setupBackgroundServices(serverId: String?) {

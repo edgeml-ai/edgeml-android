@@ -223,6 +223,7 @@ object EventTypes {
     const val MODEL_DOWNLOAD_STARTED = "model_download_started"
     const val MODEL_DOWNLOAD_COMPLETED = "model_download_completed"
     const val MODEL_DOWNLOAD_FAILED = "model_download_failed"
+    const val MODEL_WARMUP_COMPLETED = "model_warmup_completed"
     const val INFERENCE_STARTED = "inference_started"
     const val INFERENCE_COMPLETED = "inference_completed"
     const val INFERENCE_FAILED = "inference_failed"
