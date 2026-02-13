@@ -146,6 +146,15 @@ interface EdgeMLApi {
         @Query("format") format: String = "tensorflow_lite",
     ): Response<ModelDownloadResponse>
 
+    /**
+     * Get device-specific optimized runtime config (e.g., MNN settings).
+     */
+    @GET("api/v1/models/{modelId}/optimized-config/{deviceType}")
+    suspend fun getDeviceConfig(
+        @Path("modelId") modelId: String,
+        @Path("deviceType") deviceType: String,
+    ): Response<Map<String, Any>>
+
     // =========================================================================
     // Training Events & Metrics
     // =========================================================================
