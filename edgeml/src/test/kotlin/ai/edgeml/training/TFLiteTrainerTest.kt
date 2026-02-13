@@ -446,6 +446,122 @@ class TFLiteTrainerTest {
     }
 
     // =========================================================================
+    // warmup() — guard clauses (native paths cannot run on CI JVM)
+    // =========================================================================
+
+    @Test
+    fun `warmup returns null when no model loaded`() = runTest(testDispatcher) {
+        val result = trainer.warmup()
+        assertNull(result)
+    }
+
+    // =========================================================================
+    // WarmupResult data class
+    // =========================================================================
+
+    @Test
+    fun `WarmupResult delegateDisabled is true when delegates were disabled`() {
+        val result = WarmupResult(
+            coldInferenceMs = 10.0,
+            warmInferenceMs = 5.0,
+            cpuInferenceMs = 4.0,
+            usingGpu = false,
+            activeDelegate = "cpu",
+            disabledDelegates = listOf("vendor_npu", "gpu"),
+        )
+
+        assertTrue(result.delegateDisabled)
+        assertEquals(2, result.disabledDelegates.size)
+        assertEquals("vendor_npu", result.disabledDelegates[0])
+        assertEquals("gpu", result.disabledDelegates[1])
+    }
+
+    @Test
+    fun `WarmupResult delegateDisabled is false when no delegates disabled`() {
+        val result = WarmupResult(
+            coldInferenceMs = 10.0,
+            warmInferenceMs = 5.0,
+            cpuInferenceMs = 4.0,
+            usingGpu = true,
+            activeDelegate = "gpu",
+            disabledDelegates = emptyList(),
+        )
+
+        assertFalse(result.delegateDisabled)
+        assertTrue(result.disabledDelegates.isEmpty())
+    }
+
+    @Test
+    fun `WarmupResult disabledDelegates defaults to empty list`() {
+        val result = WarmupResult(
+            coldInferenceMs = 10.0,
+            warmInferenceMs = 5.0,
+            cpuInferenceMs = null,
+            usingGpu = false,
+            activeDelegate = "cpu",
+        )
+
+        assertFalse(result.delegateDisabled)
+        assertTrue(result.disabledDelegates.isEmpty())
+    }
+
+    @Test
+    fun `WarmupResult stores all fields correctly`() {
+        val result = WarmupResult(
+            coldInferenceMs = 15.5,
+            warmInferenceMs = 3.2,
+            cpuInferenceMs = 4.8,
+            usingGpu = false,
+            activeDelegate = "vendor_npu",
+            disabledDelegates = listOf("gpu"),
+        )
+
+        assertEquals(15.5, result.coldInferenceMs)
+        assertEquals(3.2, result.warmInferenceMs)
+        assertEquals(4.8, result.cpuInferenceMs)
+        assertFalse(result.usingGpu)
+        assertEquals("vendor_npu", result.activeDelegate)
+        assertEquals(listOf("gpu"), result.disabledDelegates)
+        assertTrue(result.delegateDisabled) // gpu was disabled
+    }
+
+    @Test
+    fun `WarmupResult cpuInferenceMs can be null`() {
+        val result = WarmupResult(
+            coldInferenceMs = 10.0,
+            warmInferenceMs = 5.0,
+            cpuInferenceMs = null,
+            usingGpu = false,
+            activeDelegate = "cpu",
+        )
+
+        assertNull(result.cpuInferenceMs)
+    }
+
+    @Test
+    fun `WarmupResult equality compares all fields`() {
+        val a = WarmupResult(
+            coldInferenceMs = 10.0,
+            warmInferenceMs = 5.0,
+            cpuInferenceMs = 4.0,
+            usingGpu = false,
+            activeDelegate = "cpu",
+            disabledDelegates = listOf("gpu"),
+        )
+        val b = WarmupResult(
+            coldInferenceMs = 10.0,
+            warmInferenceMs = 5.0,
+            cpuInferenceMs = 4.0,
+            usingGpu = false,
+            activeDelegate = "cpu",
+            disabledDelegates = listOf("gpu"),
+        )
+
+        assertEquals(a, b)
+        assertEquals(a.hashCode(), b.hashCode())
+    }
+
+    // =========================================================================
     // Multiple trainer instances
     // =========================================================================
 

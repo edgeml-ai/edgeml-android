@@ -15,6 +15,8 @@ import ai.edgeml.sync.WorkManagerSync
 import ai.edgeml.testCachedModel
 import ai.edgeml.testConfig
 import ai.edgeml.training.TFLiteTrainer
+import ai.edgeml.training.WarmupResult
+import ai.edgeml.sync.EventTypes
 import ai.edgeml.utils.DeviceUtils
 import android.content.Context
 import io.mockk.coEvery
@@ -215,6 +217,102 @@ class EdgeMLClientTest {
         advanceUntilIdle()
 
         coVerify(exactly = 0) { api.registerDevice(any()) }
+    }
+
+    // =========================================================================
+    // Warmup event tracking
+    // =========================================================================
+
+    @Test
+    fun `warmup tracks active delegate and disabled delegates in event`() = runTest(testDispatcher) {
+        stubSuccessfulRegistration()
+        coEvery { modelManager.ensureModelAvailable(any(), any()) } returns Result.success(testCachedModel())
+        coEvery { modelManager.getCachedModel(any(), any()) } returns testCachedModel()
+        coEvery { trainer.loadModel(any()) } returns Result.success(true)
+        coEvery { trainer.warmup() } returns WarmupResult(
+            coldInferenceMs = 15.0,
+            warmInferenceMs = 5.0,
+            cpuInferenceMs = 4.0,
+            usingGpu = false,
+            activeDelegate = "cpu",
+            disabledDelegates = listOf("vendor_npu", "gpu"),
+        )
+
+        client.initialize()
+        advanceUntilIdle()
+
+        coVerify {
+            eventQueue.addTrainingEvent(
+                type = EventTypes.MODEL_WARMUP_COMPLETED,
+                metrics = match { metrics ->
+                    metrics["cold_inference_ms"] == 15.0 &&
+                        metrics["warm_inference_ms"] == 5.0 &&
+                        metrics["cpu_inference_ms"] == 4.0
+                },
+                metadata = match { meta ->
+                    meta["active_delegate"] == "cpu" &&
+                        meta["delegate_disabled"] == "true" &&
+                        meta["disabled_delegates"] == "vendor_npu,gpu" &&
+                        meta["using_gpu"] == "false"
+                },
+            )
+        }
+    }
+
+    @Test
+    fun `warmup tracks gpu delegate when no cascading occurred`() = runTest(testDispatcher) {
+        stubSuccessfulRegistration()
+        coEvery { modelManager.ensureModelAvailable(any(), any()) } returns Result.success(testCachedModel())
+        coEvery { modelManager.getCachedModel(any(), any()) } returns testCachedModel()
+        coEvery { trainer.loadModel(any()) } returns Result.success(true)
+        coEvery { trainer.warmup() } returns WarmupResult(
+            coldInferenceMs = 20.0,
+            warmInferenceMs = 3.0,
+            cpuInferenceMs = 8.0,
+            usingGpu = true,
+            activeDelegate = "gpu",
+            disabledDelegates = emptyList(),
+        )
+
+        client.initialize()
+        advanceUntilIdle()
+
+        coVerify {
+            eventQueue.addTrainingEvent(
+                type = EventTypes.MODEL_WARMUP_COMPLETED,
+                metrics = match { metrics ->
+                    metrics["cold_inference_ms"] == 20.0 &&
+                        metrics["warm_inference_ms"] == 3.0 &&
+                        metrics["cpu_inference_ms"] == 8.0
+                },
+                metadata = match { meta ->
+                    meta["active_delegate"] == "gpu" &&
+                        meta["delegate_disabled"] == "false" &&
+                        meta["disabled_delegates"] == "" &&
+                        meta["using_gpu"] == "true"
+                },
+            )
+        }
+    }
+
+    @Test
+    fun `warmup with null result does not track event`() = runTest(testDispatcher) {
+        stubSuccessfulRegistration()
+        coEvery { modelManager.ensureModelAvailable(any(), any()) } returns Result.success(testCachedModel())
+        coEvery { modelManager.getCachedModel(any(), any()) } returns testCachedModel()
+        coEvery { trainer.loadModel(any()) } returns Result.success(true)
+        coEvery { trainer.warmup() } returns null
+
+        client.initialize()
+        advanceUntilIdle()
+
+        coVerify(exactly = 0) {
+            eventQueue.addTrainingEvent(
+                type = EventTypes.MODEL_WARMUP_COMPLETED,
+                metrics = any(),
+                metadata = any(),
+            )
+        }
     }
 
     // =========================================================================

@@ -4,6 +4,7 @@ import ai.edgeml.config.EdgeMLConfig
 import org.junit.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
@@ -67,6 +68,7 @@ class EdgeMLConfigTest {
         assertEquals(false, config.requireCharging)
         assertEquals(true, config.requireUnmeteredNetwork)
         assertEquals(true, config.enableEncryptedStorage)
+        assertEquals(false, config.enableVendorNpu)
     }
 
     @Test
@@ -183,6 +185,32 @@ class EdgeMLConfigTest {
                 .minBatteryLevel(101)
                 .build()
         }
+    }
+
+    @Test
+    fun `vendor NPU is disabled by default and requires explicit opt-in`() {
+        val defaultConfig =
+            EdgeMLConfig
+                .Builder()
+                .serverUrl("https://api.edgeml.ai")
+                .deviceAccessToken("test-api-key")
+                .orgId("org-123")
+                .modelId("model-456")
+                .build()
+
+        assertFalse(defaultConfig.enableVendorNpu)
+
+        val optInConfig =
+            EdgeMLConfig
+                .Builder()
+                .serverUrl("https://api.edgeml.ai")
+                .deviceAccessToken("test-api-key")
+                .orgId("org-123")
+                .modelId("model-456")
+                .enableVendorNpu(true)
+                .build()
+
+        assertTrue(optInConfig.enableVendorNpu)
     }
 
     @Test
