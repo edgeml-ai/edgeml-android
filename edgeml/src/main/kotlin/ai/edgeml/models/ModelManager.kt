@@ -56,6 +56,8 @@ class ModelManager(
     // In-memory cache metadata
     private var cacheMetadata: MutableMap<String, CachedModel> = mutableMapOf()
 
+    private val deviceInfo = ai.edgeml.sdk.DeviceInfo(context)
+
     init {
         // Ensure cache directory exists
         cacheDir.mkdirs()
@@ -139,6 +141,17 @@ class ModelManager(
                     storage.setModelChecksum(downloadInfo.checksum)
 
                     evictOldModels()
+
+                    // Fetch device-specific MNN runtime config if available
+                    val deviceProfile = deviceInfo.deviceProfile
+                    try {
+                        val mnnConfig = fetchDeviceConfig(modelId, deviceProfile)
+                        if (mnnConfig != null) {
+                            saveMnnConfig(modelId, version, mnnConfig)
+                        }
+                    } catch (e: Exception) {
+                        Timber.d("No MNN config for $modelId on $deviceProfile")
+                    }
 
                     _downloadState.value = DownloadState.Completed(newCachedModel)
                     Result.success(newCachedModel)
@@ -492,5 +505,30 @@ class ModelManager(
         }
 
         saveCacheMetadata()
+    }
+
+    private suspend fun fetchDeviceConfig(
+        modelId: String,
+        deviceType: String,
+    ): Map<String, Any>? {
+        val response = api.getDeviceConfig(modelId = modelId, deviceType = deviceType)
+        if (!response.isSuccessful) return null
+        return response.body()
+    }
+
+    private fun saveMnnConfig(
+        modelId: String,
+        version: String,
+        config: Map<String, Any>,
+    ) {
+        try {
+            val configDir = File(cacheDir, "${modelId}_${version}_mnn")
+            configDir.mkdirs()
+            val configFile = File(configDir, "mnn_config.json")
+            configFile.writeText(json.encodeToString(config))
+            Timber.d("Saved MNN config for $modelId to ${configFile.absolutePath}")
+        } catch (e: Exception) {
+            Timber.w(e, "Failed to save MNN config")
+        }
     }
 }

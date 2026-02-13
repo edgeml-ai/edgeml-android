@@ -111,6 +111,38 @@ class DeviceInfo(
             }
         }
 
+    /**
+     * Maps this device to an EdgeML server device profile key.
+     *
+     * The server uses these keys to select the optimal model format,
+     * quantization settings, and MNN runtime config for the device.
+     *
+     * Detection priority: known flagship models first, then RAM-based fallback.
+     */
+    val deviceProfile: String
+        get() {
+            val mfr = manufacturer.lowercase()
+            val mdl = model.lowercase()
+            val ramMb = totalMemoryMB ?: 0
+
+            // Samsung flagships (S24, S23, S22 — 8GB+)
+            if (mfr == "samsung" && (mdl.contains("s24") || mdl.contains("s23") || mdl.contains("s22"))) {
+                return "galaxy_s24"
+            }
+
+            // Google Pixel flagships (Pixel 8, 7, 9 — 8GB+)
+            if (mfr == "google" && (mdl.contains("pixel 8") || mdl.contains("pixel 7") || mdl.contains("pixel 9"))) {
+                return "pixel_8"
+            }
+
+            // RAM-based fallback
+            return when {
+                ramMb >= 7000 -> "galaxy_s24"   // 8GB+ flagship tier
+                ramMb >= 4000 -> "mid_range_android"
+                else -> "low_end_android"
+            }
+        }
+
     // MARK: - Runtime Constraints
 
     /**
