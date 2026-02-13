@@ -156,8 +156,7 @@ enum class UploadPolicy {
  * Result of the unified [ai.edgeml.client.EdgeMLClient.train] method.
  *
  * Combines training metrics, optional weight update, and upload status
- * into a single result type. Replaces the previous split between
- * `FederatedTrainingResult` and raw `TrainingResult`.
+ * into a single result type.
  */
 data class TrainingOutcome(
     /** Local training metrics (loss, accuracy, timing). */

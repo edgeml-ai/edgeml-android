@@ -540,25 +540,25 @@ class EdgeMLClientTest {
     }
 
     @Test
-    fun `participateInRound fails when device not registered`() = runTest(testDispatcher) {
+    fun `train fails when device not registered`() = runTest(testDispatcher) {
         setClientReady() // no device ID
         val dataProvider = mockk<ai.edgeml.training.TrainingDataProvider>(relaxed = true)
 
-        val result = client.participateInRound("round-1", dataProvider)
+        val result = client.train(dataProvider, roundId = "round-1")
         advanceUntilIdle()
 
         assertTrue(result.isFailure)
     }
 
     @Test
-    fun `participateInRound fails when round fetch fails`() = runTest(testDispatcher) {
+    fun `train with round fails when round fetch fails`() = runTest(testDispatcher) {
         setClientReady(deviceId = "dev-1")
         val dataProvider = mockk<ai.edgeml.training.TrainingDataProvider>(relaxed = true)
 
         coEvery { api.getRound("round-1") } returns
             Response.error(404, okhttp3.ResponseBody.Companion.create(null, ""))
 
-        val result = client.participateInRound("round-1", dataProvider)
+        val result = client.train(dataProvider, roundId = "round-1")
         advanceUntilIdle()
 
         assertTrue(result.isFailure)
