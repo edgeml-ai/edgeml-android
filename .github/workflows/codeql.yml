@@ -28,14 +28,15 @@ jobs:
           distribution: "temurin"
 
       - name: Initialize CodeQL
-        uses: github/codeql-action/init@45cbd0c69e560cd9e7cd7f8c32362050c9b7ded2 # v4.32.2
+        uses: github/codeql-action/init@9da17a5aa4abec2340d6e6c8d8efb0770b1c9cb8 # v4.32.3
         with:
           languages: java-kotlin
+          tools: latest
 
       - name: Build with Gradle
         run: ./gradlew assembleDebug --no-daemon
 
       - name: Perform CodeQL Analysis
-        uses: github/codeql-action/analyze@45cbd0c69e560cd9e7cd7f8c32362050c9b7ded2 # v4.32.2
+        uses: github/codeql-action/analyze@9da17a5aa4abec2340d6e6c8d8efb0770b1c9cb8 # v4.32.3
         with:
           category: "/language:java-kotlin"

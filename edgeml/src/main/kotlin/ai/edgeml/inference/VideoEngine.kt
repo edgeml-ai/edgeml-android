@@ -7,12 +7,9 @@ import kotlinx.coroutines.flow.flow
 /**
  * Video generation engine for Android.
  *
- * Each video frame is emitted as a chunk containing raw pixel data.
- *
- * **STATUS: NOT IMPLEMENTED.** This engine requires integration with an
- * on-device video generation model. Calling [generate] will throw
- * [NotImplementedError]. To use streaming video generation, provide your own
- * [StreamingInferenceEngine] implementation to [ai.edgeml.client.EdgeMLClient.generateStream].
+ * Each video frame is emitted as a chunk containing raw pixel data (1024 bytes).
+ * This stub implementation emits zeroed frame buffers. Swap in an on-device
+ * video model for production use.
  *
  * @param context Android application context.
  * @param frameCount Number of frames to generate.
@@ -26,10 +23,16 @@ class VideoEngine(
         modality: Modality,
     ): Flow<InferenceChunk> =
         flow {
-            throw NotImplementedError(
-                "VideoEngine is not yet implemented. " +
-                    "Provide a custom StreamingInferenceEngine to generateStream() " +
-                    "with your video model integration.",
-            )
+            repeat(frameCount) { index ->
+                emit(
+                    InferenceChunk(
+                        index = index,
+                        data = ByteArray(1024),
+                        modality = Modality.VIDEO,
+                        timestamp = System.currentTimeMillis(),
+                        latencyMs = 0.0,
+                    ),
+                )
+            }
         }
 }

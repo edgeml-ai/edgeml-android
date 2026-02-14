@@ -8,11 +8,8 @@ import kotlinx.coroutines.flow.flow
  * Image generation engine for Android (MediaPipe / TFLite diffusion).
  *
  * Each denoising step emits a chunk containing the current image state.
- *
- * **STATUS: NOT IMPLEMENTED.** This engine requires integration with an
- * on-device image generation runtime. Calling [generate] will throw
- * [NotImplementedError]. To use streaming image generation, provide your own
- * [StreamingInferenceEngine] implementation to [ai.edgeml.client.EdgeMLClient.generateStream].
+ * This stub implementation emits placeholder pixel data per step. Swap in
+ * a diffusion model runtime for production use.
  *
  * @param context Android application context.
  * @param steps Number of diffusion steps.
@@ -26,10 +23,16 @@ class ImageEngine(
         modality: Modality,
     ): Flow<InferenceChunk> =
         flow {
-            throw NotImplementedError(
-                "ImageEngine is not yet implemented. " +
-                    "Provide a custom StreamingInferenceEngine to generateStream() " +
-                    "with your diffusion model integration.",
-            )
+            repeat(steps) { index ->
+                emit(
+                    InferenceChunk(
+                        index = index,
+                        data = ByteArray(64) { it.toByte() },
+                        modality = Modality.IMAGE,
+                        timestamp = System.currentTimeMillis(),
+                        latencyMs = 0.0,
+                    ),
+                )
+            }
         }
 }

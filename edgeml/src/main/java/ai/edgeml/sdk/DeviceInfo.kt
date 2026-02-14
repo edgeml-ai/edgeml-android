@@ -56,13 +56,13 @@ class DeviceInfo(
      * Get device manufacturer (e.g., "Samsung", "Google")
      */
     val manufacturer: String
-        get() = Build.MANUFACTURER
+        get() = Build.MANUFACTURER ?: "unknown"
 
     /**
      * Get device model (e.g., "Pixel 7 Pro", "Galaxy S23")
      */
     val model: String
-        get() = Build.MODEL
+        get() = Build.MODEL ?: "unknown"
 
     /**
      * Get CPU architecture (e.g., "arm64-v8a", "armeabi-v7a")
