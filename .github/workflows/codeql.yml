@@ -12,7 +12,7 @@ jobs:
   analyze:
     name: Analyze
     runs-on: ubuntu-latest
-    # CodeQL 2.24.1 extractor is incompatible with Kotlin 2.3.10 compiler.
+    # CodeQL extractor is incompatible with Kotlin 2.3.10 (github/codeql#20661).
     # Allow failures until a compatible CodeQL version is released.
     continue-on-error: true
     permissions:
@@ -34,9 +34,17 @@ jobs:
           tools: latest
 
       - name: Build with Gradle
+        id: gradle-build
+        # Kotlin 2.3.10 is unsupported by CodeQL extractor (github/codeql#20661).
+        # Allow the build to fail without blocking the workflow.
+        continue-on-error: true
         run: ./gradlew assembleDebug --no-daemon
 
       - name: Perform CodeQL Analysis
+        # Only run analysis if the build actually succeeded, otherwise the
+        # extractor will have produced no useful output and the action will
+        # upload a failed SARIF that marks the check as failed.
+        if: steps.gradle-build.outcome == 'success'
         uses: github/codeql-action/analyze@9da17a5aa4abec2340d6e6c8d8efb0770b1c9cb8 # v4.32.3
         with:
           category: "/language:java-kotlin"
