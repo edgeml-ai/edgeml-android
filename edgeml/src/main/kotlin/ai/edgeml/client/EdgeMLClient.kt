@@ -95,8 +95,8 @@ class EdgeMLClient private constructor(
     // Store application context to avoid leaking Activity/Service references
     private val context: Context = context.applicationContext
 
-    /** Network connectivity monitor. */
-    val networkMonitor: NetworkMonitor = NetworkMonitor.getInstance(this.context)
+    /** Network connectivity monitor. Lazily initialized to avoid ClassCastException in test environments. */
+    val networkMonitor: NetworkMonitor by lazy { NetworkMonitor.getInstance(this.context) }
 
     // Coroutine scope for background operations
     private val scope = CoroutineScope(SupervisorJob() + mainDispatcher)
@@ -1275,7 +1275,7 @@ class EdgeMLClient private constructor(
      */
     suspend fun close() {
         stopHeartbeat()
-        networkMonitor.stop()
+        try { networkMonitor.stop() } catch (_: Exception) { }
         trainer.close()
         syncManager.cancelAllSync()
         _state.value = ClientState.CLOSED
