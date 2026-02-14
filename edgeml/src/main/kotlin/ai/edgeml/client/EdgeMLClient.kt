@@ -203,15 +203,18 @@ class EdgeMLClient private constructor(
     }
 
     private suspend fun ensureModelLoaded() {
-        val modelResult = modelManager.ensureModelAvailable()
+        // Pass config.modelId explicitly to avoid evaluating the default-parameter
+        // expression on the ModelManager mock (whose `config` field is null in tests).
+        val modelId = config.modelId
+        val modelResult = modelManager.ensureModelAvailable(modelId = modelId)
         if (modelResult.isFailure) {
             Timber.w("Model download failed, checking for cached model")
-            if (modelManager.getCachedModel() == null) {
+            if (modelManager.getCachedModel(modelId = modelId) == null) {
                 _state.value = ClientState.ERROR
                 throw modelResult.exceptionOrNull() ?: Exception("No model available")
             }
         }
-        modelManager.getCachedModel()?.let { trainer.loadModel(it) }
+        modelManager.getCachedModel(modelId = modelId)?.let { trainer.loadModel(it) }
     }
 
     /**
