@@ -73,6 +73,22 @@ class WeightExtractor(
     suspend fun extractWeightDelta(
         originalModelPath: String,
         updatedModelPath: String,
+    ): ByteArray = extractWeightDelta(originalModelPath, updatedModelPath, privacyTransform = null)
+
+    /**
+     * Extracts weight deltas with an optional privacy transform applied before serialization.
+     *
+     * @param originalModelPath Path to the original (pre-training) model file
+     * @param updatedModelPath Path to the updated (post-training) model file
+     * @param privacyTransform Transform applied to the delta tensors before
+     *   serialization (e.g., differential privacy clipping + noise injection).
+     * @return Serialized weight delta in PyTorch-compatible format
+     * @throws Exception if extraction fails
+     */
+    internal suspend fun extractWeightDelta(
+        originalModelPath: String,
+        updatedModelPath: String,
+        privacyTransform: ((Map<String, TensorData>) -> Map<String, TensorData>)?,
     ): ByteArray =
         withContext(ioDispatcher) {
             Timber.i("Extracting weight delta from trained model")
@@ -88,9 +104,10 @@ class WeightExtractor(
                 }
 
                 val delta = computeDelta(originalWeights, updatedWeights)
-                val serialized = serializeToPyTorch(delta)
+                val transformed = privacyTransform?.invoke(delta) ?: delta
+                val serialized = serializeToPyTorch(transformed)
 
-                Timber.i("Weight delta extracted: ${serialized.size} bytes, ${delta.size} tensors")
+                Timber.i("Weight delta extracted: ${serialized.size} bytes, ${transformed.size} tensors")
 
                 serialized
             } catch (e: WeightExtractionException) {

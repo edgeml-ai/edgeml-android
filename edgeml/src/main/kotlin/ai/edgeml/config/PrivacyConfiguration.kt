@@ -53,6 +53,15 @@ data class PrivacyConfiguration(
      * Default: 1.0
      */
     val dpClippingNorm: Double = 1.0,
+    /**
+     * Privacy failure probability (delta) for differential privacy.
+     *
+     * Represents the probability that the privacy guarantee does not hold.
+     * Should be much smaller than 1/N where N is the dataset size.
+     *
+     * Default: 1e-5 (standard default for most FL applications)
+     */
+    val dpDelta: Double = 1e-5,
 ) {
     /**
      * Compute a random upload delay based on configuration.
@@ -88,6 +97,7 @@ data class PrivacyConfiguration(
                 enableDifferentialPrivacy = true,
                 dpEpsilon = 0.5, // Strong privacy
                 dpClippingNorm = 1.0,
+                dpDelta = 1e-6,
             )
 
         /**
@@ -116,6 +126,7 @@ data class PrivacyConfiguration(
                 enableDifferentialPrivacy = true,
                 dpEpsilon = 1.0, // Moderate privacy
                 dpClippingNorm = 1.0,
+                dpDelta = 1e-5,
             )
     }
 }

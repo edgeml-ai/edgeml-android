@@ -106,5 +106,25 @@ class PrivacyConfigurationTest {
         assertFalse(config.enableDifferentialPrivacy)
         assertEquals(1.0, config.dpEpsilon)
         assertEquals(1.0, config.dpClippingNorm)
+        assertEquals(1e-5, config.dpDelta)
+    }
+
+    @Test
+    fun `dpDelta has correct default across all presets`() {
+        assertEquals(1e-5, PrivacyConfiguration.DEFAULT.dpDelta)
+        assertEquals(1e-6, PrivacyConfiguration.HIGH_PRIVACY.dpDelta)
+        assertEquals(1e-5, PrivacyConfiguration.DISABLED.dpDelta)
+        assertEquals(1e-5, PrivacyConfiguration.MODERATE.dpDelta)
+    }
+
+    @Test
+    fun `custom dpDelta is preserved`() {
+        val config = PrivacyConfiguration(
+            enableDifferentialPrivacy = true,
+            dpEpsilon = 2.0,
+            dpClippingNorm = 0.5,
+            dpDelta = 1e-7,
+        )
+        assertEquals(1e-7, config.dpDelta)
     }
 }

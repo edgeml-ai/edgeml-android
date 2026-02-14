@@ -4,6 +4,7 @@ import ai.edgeml.config.EdgeMLConfig
 import ai.edgeml.models.CachedModel
 import ai.edgeml.models.InferenceInput
 import ai.edgeml.models.InferenceOutput
+import ai.edgeml.privacy.DifferentialPrivacy
 import android.content.Context
 import android.os.Build
 import kotlinx.coroutines.CoroutineDispatcher
@@ -832,12 +833,31 @@ class TFLiteTrainer(
                 var weightsData: ByteArray
                 var updateFormat: String
 
+                val privacyConfig = config.privacyConfiguration
+                val privacyTransform: ((Map<String, WeightExtractor.TensorData>) -> Map<String, WeightExtractor.TensorData>)? =
+                    if (privacyConfig.enableDifferentialPrivacy) { deltas ->
+                        val sigma = DifferentialPrivacy.calibrateSigma(
+                            clippingNorm = privacyConfig.dpClippingNorm,
+                            epsilon = privacyConfig.dpEpsilon,
+                            delta = privacyConfig.dpDelta,
+                        )
+                        Timber.i(
+                            "Applying differential privacy: epsilon=%.2f, delta=%.1e, sigma=%.4f, clippingNorm=%.2f",
+                            privacyConfig.dpEpsilon,
+                            privacyConfig.dpDelta,
+                            sigma,
+                            privacyConfig.dpClippingNorm,
+                        )
+                        DifferentialPrivacy.apply(deltas, privacyConfig, trainingResult.sampleCount)
+                    } else null
+
                 if (originalModelPath != null) {
                     try {
                         weightsData =
                             weightExtractor.extractWeightDelta(
                                 originalModelPath = originalModelPath!!,
                                 updatedModelPath = updatedPath,
+                                privacyTransform = privacyTransform,
                             )
                         updateFormat = "delta"
                         Timber.i("Successfully extracted weight delta")
