@@ -1,6 +1,7 @@
 package ai.edgeml
 
 import ai.edgeml.models.InferenceOutput
+import ai.edgeml.training.WarmupResult
 
 /**
  * A model deployed to a specific inference engine.
@@ -15,6 +16,13 @@ class DeployedModel internal constructor(
     val engine: Engine,
     private val localModel: LocalModel,
 ) {
+    /** Warmup benchmark results, populated when deployed with `benchmark = true`. */
+    var warmupResult: WarmupResult? = null
+        internal set
+
+    /** Active compute delegate after benchmarking (e.g. "gpu", "cpu", "vendor_npu"). */
+    val activeDelegate: String get() = warmupResult?.activeDelegate ?: "unknown"
+
     /** Whether the model is loaded and ready for inference. */
     val isLoaded: Boolean get() = localModel.isLoaded
 

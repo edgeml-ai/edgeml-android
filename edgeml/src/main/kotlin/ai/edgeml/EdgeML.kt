@@ -93,14 +93,19 @@ object EdgeML {
         engine: Engine = Engine.AUTO,
         name: String? = null,
         options: LocalModelOptions = LocalModelOptions(),
+        benchmark: Boolean = true,
     ): DeployedModel {
         val resolvedName = name ?: modelPath.substringBeforeLast(".").substringAfterLast("/")
         val localModel = loadModel(context, modelPath, options)
-        return DeployedModel(
+        val deployed = DeployedModel(
             name = resolvedName,
             engine = resolveEngine(modelPath, engine),
             localModel = localModel,
         )
+        if (benchmark) {
+            deployed.warmupResult = localModel.warmup()
+        }
+        return deployed
     }
 
     /**
@@ -119,14 +124,19 @@ object EdgeML {
         engine: Engine = Engine.AUTO,
         name: String? = null,
         options: LocalModelOptions = LocalModelOptions(),
+        benchmark: Boolean = true,
     ): DeployedModel {
         val resolvedName = name ?: modelFile.nameWithoutExtension
         val localModel = loadModel(context, modelFile, options)
-        return DeployedModel(
+        val deployed = DeployedModel(
             name = resolvedName,
             engine = resolveEngine(modelFile.name, engine),
             localModel = localModel,
         )
+        if (benchmark) {
+            deployed.warmupResult = localModel.warmup()
+        }
+        return deployed
     }
 
     private fun resolveEngine(filename: String, engine: Engine): Engine {
