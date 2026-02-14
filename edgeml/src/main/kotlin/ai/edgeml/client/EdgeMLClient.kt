@@ -756,6 +756,20 @@ class EdgeMLClient private constructor(
     }
 
     // =========================================================================
+    // Federated Analytics
+    // =========================================================================
+
+    /**
+     * Creates a federated analytics client for the given federation.
+     *
+     * @param federationId The federation to run analytics against.
+     * @return A [ai.edgeml.analytics.FederatedAnalyticsApi] bound to this client's API connection.
+     */
+    fun analytics(federationId: String): ai.edgeml.analytics.FederatedAnalyticsApi {
+        return ai.edgeml.analytics.FederatedAnalyticsApi(api, federationId)
+    }
+
+    // =========================================================================
     // Event Tracking
     // =========================================================================
 

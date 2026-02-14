@@ -247,6 +247,65 @@ interface EdgeMLApi {
     ): Response<SecAggShareSubmitResponse>
 
     // =========================================================================
+    // Federated Analytics
+    // =========================================================================
+
+    /**
+     * Run descriptive statistics across groups in a federation.
+     */
+    @POST("api/v1/federations/{federation_id}/analytics/descriptive")
+    suspend fun runDescriptive(
+        @Path("federation_id") federationId: String,
+        @Body request: ai.edgeml.analytics.DescriptiveRequest,
+    ): Response<ai.edgeml.analytics.DescriptiveResult>
+
+    /**
+     * Run a two-sample t-test between two groups.
+     */
+    @POST("api/v1/federations/{federation_id}/analytics/t-test")
+    suspend fun runTTest(
+        @Path("federation_id") federationId: String,
+        @Body request: ai.edgeml.analytics.TTestRequest,
+    ): Response<ai.edgeml.analytics.TTestResult>
+
+    /**
+     * Run a chi-square test of independence.
+     */
+    @POST("api/v1/federations/{federation_id}/analytics/chi-square")
+    suspend fun runChiSquare(
+        @Path("federation_id") federationId: String,
+        @Body request: ai.edgeml.analytics.ChiSquareRequest,
+    ): Response<ai.edgeml.analytics.ChiSquareResult>
+
+    /**
+     * Run one-way ANOVA across groups.
+     */
+    @POST("api/v1/federations/{federation_id}/analytics/anova")
+    suspend fun runAnova(
+        @Path("federation_id") federationId: String,
+        @Body request: ai.edgeml.analytics.AnovaRequest,
+    ): Response<ai.edgeml.analytics.AnovaResult>
+
+    /**
+     * List past analytics queries for a federation.
+     */
+    @GET("api/v1/federations/{federation_id}/analytics/queries")
+    suspend fun listAnalyticsQueries(
+        @Path("federation_id") federationId: String,
+        @Query("limit") limit: Int = 50,
+        @Query("offset") offset: Int = 0,
+    ): Response<ai.edgeml.analytics.AnalyticsQueryListResponse>
+
+    /**
+     * Get a specific analytics query by ID.
+     */
+    @GET("api/v1/federations/{federation_id}/analytics/queries/{query_id}")
+    suspend fun getAnalyticsQuery(
+        @Path("federation_id") federationId: String,
+        @Path("query_id") queryId: String,
+    ): Response<ai.edgeml.analytics.AnalyticsQuery>
+
+    // =========================================================================
     // Model Download (direct URL)
     // =========================================================================
 
