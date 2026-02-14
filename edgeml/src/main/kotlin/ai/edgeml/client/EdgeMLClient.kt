@@ -982,11 +982,10 @@ class EdgeMLClient private constructor(
                     },
                 )
 
-                // Train locally with thermal policy from config
+                // Train locally
                 val trainingResult = trainer.train(
                     dataProvider,
                     trainingConfig,
-                    config.thermalPolicy,
                 ).getOrThrow()
 
                 eventQueue.addTrainingEvent(
@@ -1011,7 +1010,7 @@ class EdgeMLClient private constructor(
                 when (uploadPolicy) {
                     UploadPolicy.AUTO -> {
                         weightUpdate =
-                            trainer.extractWeightUpdate(trainingResult, storage).getOrThrow()
+                            trainer.extractWeightUpdate(trainingResult).getOrThrow()
                         val useSecAgg = (config.enableSecureAggregation || roundId != null) &&
                             secAggManager != null && roundId != null
                         usedSecAgg = useSecAgg
@@ -1025,7 +1024,7 @@ class EdgeMLClient private constructor(
                     }
                     UploadPolicy.MANUAL -> {
                         weightUpdate =
-                            trainer.extractWeightUpdate(trainingResult, storage).getOrThrow()
+                            trainer.extractWeightUpdate(trainingResult).getOrThrow()
                     }
                     UploadPolicy.DISABLED -> {
                         // No extraction, no upload

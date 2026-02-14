@@ -1,6 +1,5 @@
 package ai.edgeml.config
 
-import ai.edgeml.runtime.ThermalPolicy
 import kotlinx.serialization.Serializable
 
 /**
@@ -191,16 +190,6 @@ data class EdgeMLConfig(
      * [ai.edgeml.training.TrainingOutcome.degraded] flag will be `true`.
      */
     val allowDegradedTraining: Boolean = false,
-    /**
-     * Thermal management policy for on-device training.
-     *
-     * Controls how the SDK responds to device overheating during training:
-     * - [ThermalPolicy.ADAPTIVE] (default): Dynamically reduce batch size and insert
-     *   cooldown delays based on thermal state. Aborts only at CRITICAL.
-     * - [ThermalPolicy.AGGRESSIVE]: Abort training early at SERIOUS or higher.
-     * - [ThermalPolicy.IGNORE]: No thermal management (not recommended for production).
-     */
-    val thermalPolicy: ThermalPolicy = ThermalPolicy.ADAPTIVE,
 ) {
     init {
         require(serverUrl.isNotBlank()) { "serverUrl must not be blank" }
@@ -257,7 +246,6 @@ data class EdgeMLConfig(
         private var certificatePins: List<String> = emptyList()
         private var pinnedHostname: String = ""
         private var allowDegradedTraining: Boolean = false
-        private var thermalPolicy: ThermalPolicy = ThermalPolicy.ADAPTIVE
 
         fun serverUrl(url: String) = apply { this.serverUrl = url.trimEnd('/') }
 
@@ -339,13 +327,6 @@ data class EdgeMLConfig(
          */
         fun allowDegradedTraining(allowed: Boolean) = apply { this.allowDegradedTraining = allowed }
 
-        /**
-         * Set the thermal management policy for training.
-         *
-         * @see ThermalPolicy
-         */
-        fun thermalPolicy(policy: ThermalPolicy) = apply { this.thermalPolicy = policy }
-
         fun build(): EdgeMLConfig =
             EdgeMLConfig(
                 serverUrl = serverUrl,
@@ -382,7 +363,6 @@ data class EdgeMLConfig(
                 certificatePins = certificatePins,
                 pinnedHostname = pinnedHostname,
                 allowDegradedTraining = allowDegradedTraining,
-                thermalPolicy = thermalPolicy,
             )
     }
 
