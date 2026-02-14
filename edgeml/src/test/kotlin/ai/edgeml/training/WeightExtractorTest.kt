@@ -536,6 +536,101 @@ class WeightExtractorTest {
     }
 
     // =========================================================================
+    // Privacy transform integration
+    // =========================================================================
+
+    @Test
+    fun `extractWeightDelta applies privacy transform`() = runBlocking {
+        val original = floatArrayOf(1.0f, 2.0f, 3.0f, 4.0f)
+        val updated = floatArrayOf(2.0f, 4.0f, 6.0f, 8.0f)
+
+        val origModel = TFLiteFlatBufferBuilder()
+            .addWeightTensor("w", intArrayOf(2, 2), original)
+            .build()
+        val updModel = TFLiteFlatBufferBuilder()
+            .addWeightTensor("w", intArrayOf(2, 2), updated)
+            .build()
+
+        val origFile = writeTempModel("orig_transform.tflite", origModel)
+        val updFile = writeTempModel("upd_transform.tflite", updModel)
+
+        // Transform that doubles all delta values
+        val doubleTransform: (Map<String, WeightExtractor.TensorData>) -> Map<String, WeightExtractor.TensorData> =
+            { deltas ->
+                deltas.mapValues { (_, tensor) ->
+                    WeightExtractor.TensorData(
+                        name = tensor.name,
+                        shape = tensor.shape.copyOf(),
+                        dataType = tensor.dataType,
+                        data = FloatArray(tensor.data.size) { i -> tensor.data[i] * 2.0f },
+                    )
+                }
+            }
+
+        val delta = extractor.extractWeightDelta(
+            origFile.absolutePath,
+            updFile.absolutePath,
+            privacyTransform = doubleTransform,
+        )
+
+        // Parse and verify: original delta = [1,2,3,4], doubled = [2,4,6,8]
+        val bb = ByteBuffer.wrap(delta).order(ByteOrder.BIG_ENDIAN)
+        bb.getInt() // magic
+        bb.getInt() // version
+        assertEquals(1, bb.getInt()) // 1 parameter
+
+        // Skip name
+        val nameLen = bb.getInt()
+        bb.position(bb.position() + nameLen)
+        // Skip shape
+        val dims = bb.getInt()
+        repeat(dims) { bb.getInt() }
+        bb.getInt() // dtype
+
+        val dataLen = bb.getInt()
+        assertEquals(16, dataLen) // 4 floats * 4 bytes
+        assertEquals(2.0f, bb.getFloat(), 1e-6f) // (2-1)*2 = 2
+        assertEquals(4.0f, bb.getFloat(), 1e-6f) // (4-2)*2 = 4
+        assertEquals(6.0f, bb.getFloat(), 1e-6f) // (6-3)*2 = 6
+        assertEquals(8.0f, bb.getFloat(), 1e-6f) // (8-4)*2 = 8
+    }
+
+    @Test
+    fun `extractWeightDelta without transform returns raw delta`() = runBlocking {
+        val original = floatArrayOf(1.0f, 2.0f)
+        val updated = floatArrayOf(3.0f, 5.0f)
+
+        val origModel = TFLiteFlatBufferBuilder()
+            .addWeightTensor("w", intArrayOf(2), original)
+            .build()
+        val updModel = TFLiteFlatBufferBuilder()
+            .addWeightTensor("w", intArrayOf(2), updated)
+            .build()
+
+        val origFile = writeTempModel("orig_notransform.tflite", origModel)
+        val updFile = writeTempModel("upd_notransform.tflite", updModel)
+
+        // No transform (null)
+        val delta = extractor.extractWeightDelta(origFile.absolutePath, updFile.absolutePath)
+
+        val bb = ByteBuffer.wrap(delta).order(ByteOrder.BIG_ENDIAN)
+        bb.getInt() // magic
+        bb.getInt() // version
+        bb.getInt() // param count
+
+        // Skip name
+        val nameLen = bb.getInt()
+        bb.position(bb.position() + nameLen)
+        val dims = bb.getInt()
+        repeat(dims) { bb.getInt() }
+        bb.getInt() // dtype
+
+        bb.getInt() // data length
+        assertEquals(2.0f, bb.getFloat(), 1e-6f)
+        assertEquals(3.0f, bb.getFloat(), 1e-6f)
+    }
+
+    // =========================================================================
     // Helpers
     // =========================================================================
 

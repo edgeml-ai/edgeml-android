@@ -1,5 +1,15 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
+}
+
+// Load local.properties for optional config overrides
+val localProperties = Properties().apply {
+    val localPropsFile = rootProject.file("local.properties")
+    if (localPropsFile.exists()) {
+        localPropsFile.inputStream().use { load(it) }
+    }
 }
 
 android {
@@ -14,6 +24,27 @@ android {
         versionName = "1.0.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+        buildConfigField(
+            "String",
+            "EDGEML_SERVER_URL",
+            "\"${localProperties.getProperty("EDGEML_SERVER_URL", "https://api.edgeml.ai")}\"",
+        )
+        buildConfigField(
+            "String",
+            "EDGEML_DEVICE_TOKEN",
+            "\"${localProperties.getProperty("EDGEML_DEVICE_TOKEN", "")}\"",
+        )
+        buildConfigField(
+            "String",
+            "EDGEML_ORG_ID",
+            "\"${localProperties.getProperty("EDGEML_ORG_ID", "")}\"",
+        )
+        buildConfigField(
+            "String",
+            "EDGEML_MODEL_ID",
+            "\"${localProperties.getProperty("EDGEML_MODEL_ID", "")}\"",
+        )
     }
 
     buildTypes {
@@ -39,6 +70,7 @@ android {
 
     buildFeatures {
         viewBinding = true
+        buildConfig = true
     }
 }
 

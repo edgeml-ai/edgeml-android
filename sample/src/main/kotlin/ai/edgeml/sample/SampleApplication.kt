@@ -2,6 +2,7 @@ package ai.edgeml.sample
 
 import ai.edgeml.client.EdgeMLClient
 import ai.edgeml.config.EdgeMLConfig
+import ai.edgeml.config.PrivacyConfiguration
 import android.app.Application
 import timber.log.Timber
 
@@ -20,19 +21,27 @@ class SampleApplication : Application() {
     }
 
     private fun initializeEdgeML() {
+        // Read config from BuildConfig (generated from local.properties),
+        // falling back to SampleConfig placeholders.
+        val serverUrl = BuildConfig.EDGEML_SERVER_URL.ifBlank { SampleConfig.EDGEML_SERVER_URL }
+        val deviceToken = BuildConfig.EDGEML_DEVICE_TOKEN.ifBlank { SampleConfig.EDGEML_DEVICE_ACCESS_TOKEN }
+        val orgId = BuildConfig.EDGEML_ORG_ID.ifBlank { SampleConfig.EDGEML_ORG_ID }
+        val modelId = BuildConfig.EDGEML_MODEL_ID.ifBlank { SampleConfig.EDGEML_MODEL_ID }
+
         // Build configuration
-        // In production, these would come from secure storage or a config file
         val config =
             EdgeMLConfig
                 .Builder()
-                .serverUrl(SampleConfig.EDGEML_SERVER_URL)
-                .deviceAccessToken(SampleConfig.EDGEML_DEVICE_ACCESS_TOKEN)
-                .orgId(SampleConfig.EDGEML_ORG_ID)
-                .modelId(SampleConfig.EDGEML_MODEL_ID)
+                .serverUrl(serverUrl)
+                .deviceAccessToken(deviceToken)
+                .orgId(orgId)
+                .modelId(modelId)
                 .debugMode(SampleConfig.DEBUG)
                 .enableGpuAcceleration(true)
                 .enableBackgroundSync(true)
                 .syncIntervalMinutes(60)
+                .allowDegradedTraining(true)
+                .privacyConfiguration(PrivacyConfiguration.MODERATE)
                 .build()
 
         // Create EdgeML client
@@ -48,8 +57,15 @@ class SampleApplication : Application() {
 /**
  * Sample configuration constants.
  *
- * In a real app, these would be in BuildConfig generated from gradle.
- * For the sample, we use placeholder values.
+ * These are fallback values used when BuildConfig fields (from local.properties)
+ * are empty. For real usage, set values in your project's local.properties:
+ *
+ * ```
+ * EDGEML_SERVER_URL=https://your-server.example.com
+ * EDGEML_DEVICE_TOKEN=your-token
+ * EDGEML_ORG_ID=your-org
+ * EDGEML_MODEL_ID=your-model
+ * ```
  */
 object SampleConfig {
     const val DEBUG = true

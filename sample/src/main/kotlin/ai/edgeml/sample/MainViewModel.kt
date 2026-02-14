@@ -4,6 +4,9 @@ import ai.edgeml.client.ClientState
 import ai.edgeml.client.EdgeMLClient
 import ai.edgeml.client.ModelInfo
 import ai.edgeml.models.DownloadState
+import ai.edgeml.training.InMemoryTrainingDataProvider
+import ai.edgeml.training.TrainingConfig
+import ai.edgeml.training.UploadPolicy
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -30,6 +33,9 @@ class MainViewModel : ViewModel() {
 
     private val _modelInfo = MutableStateFlow<ModelInfo?>(null)
     val modelInfo: StateFlow<ModelInfo?> = _modelInfo.asStateFlow()
+
+    private val _trainingState = MutableStateFlow<TrainingStateUI?>(null)
+    val trainingState: StateFlow<TrainingStateUI?> = _trainingState.asStateFlow()
 
     private var client: EdgeMLClient? = null
 
@@ -129,6 +135,93 @@ class MainViewModel : ViewModel() {
     }
 
     /**
+     * Run local training with synthetic data.
+     */
+    fun runTraining() {
+        viewModelScope.launch {
+            val edgemlClient = client ?: return@launch
+
+            val modelInfo = edgemlClient.getModelInfo()
+            if (modelInfo == null) {
+                _trainingState.value = TrainingStateUI(status = "No model loaded")
+                return@launch
+            }
+
+            _trainingState.value = TrainingStateUI(
+                isTraining = true,
+                status = "Preparing synthetic data...",
+            )
+
+            try {
+                val inputSize = modelInfo.inputShape.fold(1) { acc, dim -> acc * dim }
+                val numClasses = 10
+                val numSamples = 10
+
+                // Generate synthetic training data
+                val syntheticData = (0 until numSamples).map {
+                    val input = FloatArray(inputSize) { kotlin.random.Random.nextFloat() }
+                    val label = FloatArray(numClasses).also { arr ->
+                        arr[kotlin.random.Random.nextInt(numClasses)] = 1.0f
+                    }
+                    input to label
+                }
+
+                val dataProvider = InMemoryTrainingDataProvider(syntheticData)
+                val trainingConfig = TrainingConfig(
+                    epochs = 3,
+                    batchSize = 4,
+                    learningRate = 0.001f,
+                )
+
+                _trainingState.value = TrainingStateUI(
+                    isTraining = true,
+                    totalEpochs = trainingConfig.epochs,
+                    status = "Training...",
+                )
+
+                val result = edgemlClient.train(
+                    dataProvider = dataProvider,
+                    trainingConfig = trainingConfig,
+                    uploadPolicy = UploadPolicy.DISABLED,
+                )
+
+                result
+                    .onSuccess { outcome ->
+                        val tr = outcome.trainingResult
+                        _trainingState.value = TrainingStateUI(
+                            isTraining = false,
+                            totalEpochs = trainingConfig.epochs,
+                            currentEpoch = trainingConfig.epochs,
+                            loss = tr.loss,
+                            accuracy = tr.accuracy,
+                            status = if (outcome.degraded) "Completed (degraded)" else "Completed",
+                            completed = true,
+                        )
+                        Timber.i(
+                            "Training completed: loss=%.4f, accuracy=%.4f, degraded=%s",
+                            tr.loss,
+                            tr.accuracy,
+                            outcome.degraded,
+                        )
+                    }
+                    .onFailure { error ->
+                        _trainingState.value = TrainingStateUI(
+                            isTraining = false,
+                            status = "Failed: ${error.message}",
+                        )
+                        Timber.e(error, "Training failed")
+                    }
+            } catch (e: Exception) {
+                _trainingState.value = TrainingStateUI(
+                    isTraining = false,
+                    status = "Error: ${e.message}",
+                )
+                Timber.e(e, "Training error")
+            }
+        }
+    }
+
+    /**
      * Update the model.
      */
     fun updateModel() {
@@ -158,3 +251,16 @@ class MainViewModel : ViewModel() {
         // Don't close the client here as it may be used by other components
     }
 }
+
+/**
+ * UI state for training progress.
+ */
+data class TrainingStateUI(
+    val isTraining: Boolean = false,
+    val currentEpoch: Int = 0,
+    val totalEpochs: Int = 0,
+    val loss: Double? = null,
+    val accuracy: Double? = null,
+    val status: String = "",
+    val completed: Boolean = false,
+)

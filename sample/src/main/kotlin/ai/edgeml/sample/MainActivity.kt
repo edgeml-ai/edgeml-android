@@ -41,6 +41,11 @@ class MainActivity : AppCompatActivity() {
                 viewModel.runSampleInference()
             }
 
+            // Start training button
+            btnStartTraining.setOnClickListener {
+                viewModel.runTraining()
+            }
+
             // Update model button
             btnUpdateModel.setOnClickListener {
                 viewModel.updateModel()
@@ -102,6 +107,13 @@ class MainActivity : AppCompatActivity() {
                         }
                     }
                 }
+
+                // Observe training state
+                launch {
+                    viewModel.trainingState.collectLatest { state ->
+                        updateTrainingStateUI(state)
+                    }
+                }
             }
         }
     }
@@ -119,6 +131,7 @@ class MainActivity : AppCompatActivity() {
         binding.tvClientState.text = "State: $stateText"
         binding.btnInitialize.isEnabled = state == ClientState.UNINITIALIZED || state == ClientState.ERROR
         binding.btnRunInference.isEnabled = state == ClientState.READY
+        binding.btnStartTraining.isEnabled = state == ClientState.READY
         binding.btnUpdateModel.isEnabled = state == ClientState.READY
         binding.btnSync.isEnabled = state == ClientState.READY
     }
@@ -165,6 +178,32 @@ class MainActivity : AppCompatActivity() {
                 """.trimIndent()
         } else {
             binding.tvInferenceResult.text = "No inference result yet"
+        }
+    }
+
+    private fun updateTrainingStateUI(state: TrainingStateUI?) {
+        if (state == null) {
+            binding.tvTrainingStatus.text = "No training started"
+            return
+        }
+
+        val text = buildString {
+            append("Status: ${state.status}")
+            if (state.totalEpochs > 0) {
+                append("\nEpochs: ${state.currentEpoch}/${state.totalEpochs}")
+            }
+            if (state.loss != null) {
+                append("\nLoss: ${String.format("%.4f", state.loss)}")
+            }
+            if (state.accuracy != null) {
+                append("\nAccuracy: ${String.format("%.2f", state.accuracy * 100)}%")
+            }
+        }
+        binding.tvTrainingStatus.text = text
+
+        // Disable training button while training is in progress
+        if (state.isTraining) {
+            binding.btnStartTraining.isEnabled = false
         }
     }
 }
