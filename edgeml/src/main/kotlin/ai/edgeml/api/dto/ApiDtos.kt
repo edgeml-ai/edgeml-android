@@ -31,6 +31,12 @@ data class DeviceRegistrationRequest(
     val appVersion: String? = null,
     @SerialName("capabilities")
     val capabilities: DeviceCapabilities? = null,
+    @SerialName("timezone")
+    val timezone: String? = null,
+    @SerialName("metadata")
+    val metadata: Map<String, String>? = null,
+    @SerialName("device_info")
+    val deviceInfo: DeviceInfoRequest? = null,
 )
 
 /**
@@ -44,6 +50,25 @@ data class DeviceCapabilities(
     val gpuAvailable: Boolean = false,
     @SerialName("nnapi_available")
     val nnapiAvailable: Boolean = false,
+    @SerialName("total_memory_mb")
+    val totalMemoryMb: Long? = null,
+    @SerialName("available_storage_mb")
+    val availableStorageMb: Long? = null,
+)
+
+/**
+ * Device hardware info for registration (nested under device_info).
+ */
+@Serializable
+data class DeviceInfoRequest(
+    @SerialName("manufacturer")
+    val manufacturer: String? = null,
+    @SerialName("model")
+    val model: String? = null,
+    @SerialName("cpu_architecture")
+    val cpuArchitecture: String? = null,
+    @SerialName("gpu_available")
+    val gpuAvailable: Boolean? = null,
     @SerialName("total_memory_mb")
     val totalMemoryMb: Long? = null,
     @SerialName("available_storage_mb")
@@ -86,6 +111,14 @@ data class DeviceRegistrationResponse(
     val updatedAt: String,
     @SerialName("api_token")
     val apiToken: String? = null,
+    @SerialName("app_version")
+    val appVersion: String? = null,
+    @SerialName("timezone")
+    val timezone: String? = null,
+    @SerialName("capabilities")
+    val capabilities: Map<String, String>? = null,
+    @SerialName("heartbeat_interval_seconds")
+    val heartbeatIntervalSeconds: Int? = null,
 )
 
 // =========================================================================
@@ -124,6 +157,14 @@ data class HeartbeatResponse(
     val acknowledged: Boolean,
     @SerialName("server_time")
     val serverTime: String? = null,
+    @SerialName("id")
+    val id: String? = null,
+    @SerialName("device_identifier")
+    val deviceIdentifier: String? = null,
+    @SerialName("status")
+    val status: String? = null,
+    @SerialName("last_heartbeat")
+    val lastHeartbeat: String? = null,
 )
 
 // =========================================================================
@@ -593,6 +634,12 @@ data class SecAggSessionResponse(
     val participantIds: List<String>,
     @SerialName("state")
     val state: String,
+    @SerialName("client_index")
+    val clientIndex: Int? = null,
+    @SerialName("privacy_budget")
+    val privacyBudget: Double? = null,
+    @SerialName("key_length")
+    val keyLength: Int? = null,
 )
 
 /**
@@ -619,4 +666,101 @@ data class SecAggShareSubmitResponse(
     val sessionId: String,
     @SerialName("message")
     val message: String? = null,
+)
+
+// =========================================================================
+// Model Updates
+// =========================================================================
+
+/**
+ * Information about an available model update.
+ */
+@Serializable
+data class ModelUpdateInfo(
+    @SerialName("new_version")
+    val newVersion: String,
+    @SerialName("current_version")
+    val currentVersion: String,
+    @SerialName("is_required")
+    val isRequired: Boolean,
+    @SerialName("release_notes")
+    val releaseNotes: String? = null,
+    @SerialName("update_size")
+    val updateSize: Long,
+)
+
+// =========================================================================
+// Weight Upload
+// =========================================================================
+
+/**
+ * Request to upload trained weights to the server.
+ */
+@Serializable
+data class WeightUploadRequest(
+    @SerialName("model_id")
+    val modelId: String,
+    @SerialName("version")
+    val version: String,
+    @SerialName("device_id")
+    val deviceId: String? = null,
+    @SerialName("weights_data")
+    val weightsData: String,
+    @SerialName("sample_count")
+    val sampleCount: Int,
+    @SerialName("metrics")
+    val metrics: Map<String, Double>? = null,
+    @SerialName("dp_epsilon_used")
+    val dpEpsilonUsed: Double? = null,
+    @SerialName("dp_noise_scale")
+    val dpNoiseScale: Double? = null,
+    @SerialName("dp_mechanism")
+    val dpMechanism: String? = null,
+    @SerialName("dp_clipping_norm")
+    val dpClippingNorm: Double? = null,
+)
+
+// =========================================================================
+// Secure Aggregation Phase 2-3
+// =========================================================================
+
+/**
+ * Request to submit masked model update during SecAgg Phase 2.
+ */
+@Serializable
+data class SecAggMaskedInputRequest(
+    @SerialName("session_id")
+    val sessionId: String,
+    @SerialName("device_id")
+    val deviceId: String,
+    @SerialName("masked_weights_data")
+    val maskedWeightsData: String,
+    @SerialName("sample_count")
+    val sampleCount: Int,
+    @SerialName("metrics")
+    val metrics: Map<String, Double>? = null,
+)
+
+/**
+ * Server response when requesting unmasking info during SecAgg Phase 3.
+ */
+@Serializable
+data class SecAggUnmaskResponse(
+    @SerialName("dropped_client_indices")
+    val droppedClientIndices: List<Int>,
+    @SerialName("unmasking_required")
+    val unmaskingRequired: Boolean,
+)
+
+/**
+ * Request to submit unmasking shares during SecAgg Phase 3.
+ */
+@Serializable
+data class SecAggUnmaskRequest(
+    @SerialName("session_id")
+    val sessionId: String,
+    @SerialName("device_id")
+    val deviceId: String,
+    @SerialName("unmask_data")
+    val unmaskData: String,
 )
