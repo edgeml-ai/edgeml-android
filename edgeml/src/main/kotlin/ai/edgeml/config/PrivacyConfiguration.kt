@@ -1,5 +1,6 @@
 package ai.edgeml.config
 
+import ai.edgeml.privacy.NoiseMechanism
 import kotlinx.serialization.Serializable
 import kotlin.random.Random
 
@@ -62,6 +63,22 @@ data class PrivacyConfiguration(
      * Default: 1e-5 (standard default for most FL applications)
      */
     val dpDelta: Double = 1e-5,
+    /**
+     * Noise mechanism for differential privacy.
+     *
+     * - [NoiseMechanism.GAUSSIAN]: Standard Gaussian mechanism (default).
+     * - [NoiseMechanism.LAPLACE]: Laplace mechanism (better for sparse gradients).
+     */
+    val noiseMechanism: NoiseMechanism = NoiseMechanism.GAUSSIAN,
+    /**
+     * Maximum cumulative epsilon budget for local differential privacy.
+     *
+     * Once the device has consumed this much epsilon across all training rounds,
+     * it will refuse to participate in further rounds until the budget is reset.
+     *
+     * Default: 10.0
+     */
+    val maxLocalEpsilon: Double = 10.0,
 ) {
     /**
      * Compute a random upload delay based on configuration.
@@ -98,6 +115,8 @@ data class PrivacyConfiguration(
                 dpEpsilon = 0.5, // Strong privacy
                 dpClippingNorm = 1.0,
                 dpDelta = 1e-6,
+                noiseMechanism = NoiseMechanism.GAUSSIAN,
+                maxLocalEpsilon = 5.0,
             )
 
         /**
@@ -127,6 +146,8 @@ data class PrivacyConfiguration(
                 dpEpsilon = 1.0, // Moderate privacy
                 dpClippingNorm = 1.0,
                 dpDelta = 1e-5,
+                noiseMechanism = NoiseMechanism.GAUSSIAN,
+                maxLocalEpsilon = 10.0,
             )
     }
 }

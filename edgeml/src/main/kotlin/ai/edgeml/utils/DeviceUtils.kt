@@ -167,6 +167,92 @@ object DeviceUtils {
         }
 
     /**
+     * Get the thermal headroom from PowerManager (API 30+).
+     *
+     * Returns a value between 0.0 (throttled) and 1.0+ (cool).
+     * Returns [Float.NaN] on devices below API 30 or if unavailable.
+     *
+     * @param context Application context.
+     * @param forecastSeconds Seconds to forecast ahead (default: 10).
+     */
+    fun getThermalHeadroom(context: Context, forecastSeconds: Int = 10): Float {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) return Float.NaN
+        return try {
+            val powerManager = context.getSystemService(Context.POWER_SERVICE)
+                as android.os.PowerManager
+            powerManager.getThermalHeadroom(forecastSeconds)
+        } catch (e: Exception) {
+            Timber.w(e, "Failed to get thermal headroom")
+            Float.NaN
+        }
+    }
+
+    /**
+     * Get the current thermal state as a [ai.edgeml.runtime.ThermalState].
+     *
+     * Uses PowerManager on API 30+ with sysfs fallback for older devices.
+     *
+     * @param context Application context.
+     */
+    fun getThermalState(context: Context): ai.edgeml.runtime.ThermalState {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            try {
+                val powerManager = context.getSystemService(Context.POWER_SERVICE)
+                    as android.os.PowerManager
+                return when (powerManager.currentThermalStatus) {
+                    android.os.PowerManager.THERMAL_STATUS_NONE,
+                    android.os.PowerManager.THERMAL_STATUS_LIGHT ->
+                        ai.edgeml.runtime.ThermalState.NOMINAL
+                    android.os.PowerManager.THERMAL_STATUS_MODERATE ->
+                        ai.edgeml.runtime.ThermalState.FAIR
+                    android.os.PowerManager.THERMAL_STATUS_SEVERE ->
+                        ai.edgeml.runtime.ThermalState.SERIOUS
+                    android.os.PowerManager.THERMAL_STATUS_CRITICAL,
+                    android.os.PowerManager.THERMAL_STATUS_EMERGENCY,
+                    android.os.PowerManager.THERMAL_STATUS_SHUTDOWN ->
+                        ai.edgeml.runtime.ThermalState.CRITICAL
+                    else -> ai.edgeml.runtime.ThermalState.NOMINAL
+                }
+            } catch (e: Exception) {
+                Timber.w(e, "PowerManager thermal query failed")
+            }
+        }
+
+        // Sysfs fallback
+        return try {
+            val thermalDir = java.io.File("/sys/class/thermal/")
+            if (!thermalDir.exists()) return ai.edgeml.runtime.ThermalState.NOMINAL
+
+            val zones = thermalDir.listFiles { file ->
+                file.name.startsWith("thermal_zone")
+            } ?: return ai.edgeml.runtime.ThermalState.NOMINAL
+
+            var maxTemp = 0L
+            for (zone in zones) {
+                try {
+                    val tempFile = java.io.File(zone, "temp")
+                    if (tempFile.exists() && tempFile.canRead()) {
+                        val temp = tempFile.readText().trim().toLongOrNull() ?: continue
+                        if (temp > maxTemp) maxTemp = temp
+                    }
+                } catch (_: Exception) {
+                    // Skip unreadable zones
+                }
+            }
+
+            when {
+                maxTemp < 40_000 -> ai.edgeml.runtime.ThermalState.NOMINAL
+                maxTemp < 50_000 -> ai.edgeml.runtime.ThermalState.FAIR
+                maxTemp < 60_000 -> ai.edgeml.runtime.ThermalState.SERIOUS
+                else -> ai.edgeml.runtime.ThermalState.CRITICAL
+            }
+        } catch (e: Exception) {
+            Timber.w(e, "Sysfs thermal read failed")
+            ai.edgeml.runtime.ThermalState.NOMINAL
+        }
+    }
+
+    /**
      * Hash a string using SHA-256.
      */
     private fun hashString(input: String): String {

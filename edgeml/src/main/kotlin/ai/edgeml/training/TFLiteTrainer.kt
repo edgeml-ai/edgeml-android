@@ -4,7 +4,15 @@ import ai.edgeml.config.EdgeMLConfig
 import ai.edgeml.models.CachedModel
 import ai.edgeml.models.InferenceInput
 import ai.edgeml.models.InferenceOutput
+import ai.edgeml.privacy.DPResult
 import ai.edgeml.privacy.DifferentialPrivacy
+import ai.edgeml.privacy.DifferentialPrivacyEngine
+import ai.edgeml.privacy.NoiseMechanism
+import ai.edgeml.privacy.PrivacyBudgetExhaustedException
+import ai.edgeml.runtime.ThermalAdjustments
+import ai.edgeml.runtime.ThermalMonitor
+import ai.edgeml.runtime.ThermalPolicy
+import ai.edgeml.storage.SecureStorage
 import android.content.Context
 import android.os.Build
 import kotlinx.coroutines.CoroutineDispatcher
@@ -466,6 +474,7 @@ class TFLiteTrainer(
     suspend fun train(
         dataProvider: TrainingDataProvider,
         trainingConfig: TrainingConfig = TrainingConfig(),
+        thermalPolicy: ThermalPolicy = ThermalPolicy.ADAPTIVE,
     ): Result<TrainingResult> =
         withContext(defaultDispatcher) {
             mutex.withLock {
@@ -480,6 +489,11 @@ class TFLiteTrainer(
                         IllegalStateException("Interpreter not available."),
                     )
 
+                // Initialize thermal monitor
+                val thermalMonitor = ThermalMonitor(context)
+                thermalMonitor.startMonitoring()
+                thermalMonitor.resetAdjustmentCount()
+
                 try {
                     Timber.i("Starting local training...")
                     val startTime = System.currentTimeMillis()
@@ -488,17 +502,25 @@ class TFLiteTrainer(
                     val sampleCount = trainingData.size
 
                     if (sampleCount == 0) {
+                        thermalMonitor.stopMonitoring()
                         return@withContext Result.failure(
                             IllegalArgumentException("Training data is empty."),
                         )
                     }
 
-                    Timber.i("Training on $sampleCount samples for ${trainingConfig.epochs} epochs")
+                    Timber.i(
+                        "Training on $sampleCount samples for ${trainingConfig.epochs} epochs, " +
+                            "thermal_policy=$thermalPolicy",
+                    )
 
                     val result = if (hasTrainingSignature()) {
-                        trainWithSignature(interp, trainingData, trainingConfig, model)
+                        trainWithSignature(
+                            interp, trainingData, trainingConfig, model,
+                            thermalMonitor, thermalPolicy,
+                        )
                     } else {
                         if (!config.allowDegradedTraining) {
+                            thermalMonitor.stopMonitoring()
                             return@withContext Result.failure(
                                 MissingTrainingSignatureException(getSignatureKeys())
                             )
@@ -506,6 +528,7 @@ class TFLiteTrainer(
                         trainWithForwardPass(interp, trainingData, trainingConfig, model)
                     }
 
+                    thermalMonitor.stopMonitoring()
                     val trainingTime = (System.currentTimeMillis() - startTime) / 1000.0
 
                     val trainingResult = TrainingResult(
@@ -513,12 +536,19 @@ class TFLiteTrainer(
                         loss = result.loss,
                         accuracy = result.accuracy,
                         trainingTime = trainingTime,
-                        metrics = mapOf(
-                            "epochs" to trainingConfig.epochs.toDouble(),
-                            "batch_size" to trainingConfig.batchSize.toDouble(),
-                            "learning_rate" to trainingConfig.learningRate.toDouble(),
-                            "training_method" to if (hasTrainingSignature()) 1.0 else 0.0,
-                        ),
+                        metrics = buildMap {
+                            put("epochs", trainingConfig.epochs.toDouble())
+                            put("epochs_completed", result.epochsCompleted.toDouble())
+                            put("batch_size", trainingConfig.batchSize.toDouble())
+                            put("learning_rate", trainingConfig.learningRate.toDouble())
+                            put("training_method", if (hasTrainingSignature()) 1.0 else 0.0)
+                            put("thermal_adjustments", result.thermalAdjustments.toDouble())
+                            put("thermal_aborted", if (result.thermalAborted) 1.0 else 0.0)
+                            put(
+                                "thermal_state",
+                                thermalMonitor.currentState.ordinal.toDouble(),
+                            )
+                        },
                         updatedModelPath = updatedModelPath,
                     )
 
@@ -526,11 +556,14 @@ class TFLiteTrainer(
                         "Training completed: $sampleCount samples, " +
                             "loss=${String.format(Locale.ROOT, "%.4f", result.loss)}, " +
                             "accuracy=${String.format(Locale.ROOT, "%.4f", result.accuracy)}, " +
-                            "time=${String.format(Locale.ROOT, "%.2f", trainingTime)}s",
+                            "time=${String.format(Locale.ROOT, "%.2f", trainingTime)}s, " +
+                            "thermal_adjustments=${result.thermalAdjustments}, " +
+                            "thermal_aborted=${result.thermalAborted}",
                     )
 
                     Result.success(trainingResult)
                 } catch (e: Exception) {
+                    thermalMonitor.stopMonitoring()
                     Timber.e(e, "Training failed")
                     Result.failure(e)
                 }
@@ -549,6 +582,8 @@ class TFLiteTrainer(
         trainingData: List<Pair<FloatArray, FloatArray>>,
         trainingConfig: TrainingConfig,
         model: CachedModel,
+        thermalMonitor: ThermalMonitor? = null,
+        thermalPolicy: ThermalPolicy = ThermalPolicy.ADAPTIVE,
     ): TrainingMetrics {
         Timber.i("Training via runSignature API")
 
@@ -559,14 +594,46 @@ class TFLiteTrainer(
 
         var totalLoss = 0.0
         var batchCount = 0
+        var thermalAborted = false
+        var epochsCompleted = 0
 
         for (epoch in 0 until trainingConfig.epochs) {
+            // Check thermal state between epochs
+            if (thermalMonitor != null) {
+                val adjustments = thermalMonitor.getAdjustments(thermalPolicy)
+                if (adjustments.shouldAbort) {
+                    Timber.w(
+                        "Thermal abort at epoch ${epoch + 1}/${trainingConfig.epochs}: " +
+                            "state=${thermalMonitor.currentState.displayName}",
+                    )
+                    thermalAborted = true
+                    break
+                }
+
+                // Apply epoch delay for cooldown
+                if (adjustments.epochDelayMs > 0 && epoch > 0) {
+                    Timber.d(
+                        "Thermal cooldown: delaying ${adjustments.epochDelayMs}ms " +
+                            "(state=${thermalMonitor.currentState.displayName})",
+                    )
+                    Thread.sleep(adjustments.epochDelayMs)
+                }
+            }
+
             val shuffled = trainingData.shuffled()
             var epochLoss = 0.0
             var epochBatches = 0
 
-            for (batchStart in shuffled.indices step trainingConfig.batchSize) {
-                val batchEnd = minOf(batchStart + trainingConfig.batchSize, shuffled.size)
+            // Compute effective batch size based on thermal adjustments
+            val thermalAdj = thermalMonitor?.getAdjustments(thermalPolicy)
+            val effectiveBatchSize = if (thermalAdj != null && thermalAdj.batchSizeMultiplier < 1.0) {
+                maxOf(1, (trainingConfig.batchSize * thermalAdj.batchSizeMultiplier).toInt())
+            } else {
+                trainingConfig.batchSize
+            }
+
+            for (batchStart in shuffled.indices step effectiveBatchSize) {
+                val batchEnd = minOf(batchStart + effectiveBatchSize, shuffled.size)
                 val batch = shuffled.subList(batchStart, batchEnd)
 
                 // Prepare batch inputs
@@ -629,6 +696,8 @@ class TFLiteTrainer(
                 batchCount++
             }
 
+            epochsCompleted = epoch + 1
+
             if (epochBatches > 0) {
                 val avgLoss = epochLoss / epochBatches
                 totalLoss += avgLoss
@@ -639,10 +708,17 @@ class TFLiteTrainer(
         // Save updated model
         saveTrainedModel(interp, model)
 
-        val avgLoss = if (batchCount > 0) totalLoss / trainingConfig.epochs else 0.0
+        val effectiveEpochs = if (epochsCompleted > 0) epochsCompleted else 1
+        val avgLoss = if (batchCount > 0) totalLoss / effectiveEpochs else 0.0
         val accuracy = maxOf(0.0, 1.0 - avgLoss).coerceIn(0.0, 1.0)
 
-        return TrainingMetrics(loss = avgLoss, accuracy = accuracy)
+        return TrainingMetrics(
+            loss = avgLoss,
+            accuracy = accuracy,
+            thermalAdjustments = thermalMonitor?.thermalAdjustmentCount ?: 0,
+            thermalAborted = thermalAborted,
+            epochsCompleted = epochsCompleted,
+        )
     }
 
     /**
@@ -798,6 +874,9 @@ class TFLiteTrainer(
     private data class TrainingMetrics(
         val loss: Double,
         val accuracy: Double,
+        val thermalAdjustments: Int = 0,
+        val thermalAborted: Boolean = false,
+        val epochsCompleted: Int = 0,
     )
 
     /**
@@ -813,7 +892,10 @@ class TFLiteTrainer(
      * @param trainingResult Result from training
      * @return Weight update for upload
      */
-    suspend fun extractWeightUpdate(trainingResult: TrainingResult): Result<WeightUpdate> =
+    suspend fun extractWeightUpdate(
+        trainingResult: TrainingResult,
+        secureStorage: SecureStorage? = null,
+    ): Result<WeightUpdate> =
         withContext(ioDispatcher) {
             try {
                 val model =
@@ -832,24 +914,72 @@ class TFLiteTrainer(
 
                 var weightsData: ByteArray
                 var updateFormat: String
+                var dpResult: DPResult? = null
 
                 val privacyConfig = config.privacyConfiguration
+
+                // Create DifferentialPrivacyEngine for budget-tracked DP
+                val dpEngine: DifferentialPrivacyEngine? =
+                    if (privacyConfig.enableDifferentialPrivacy) {
+                        DifferentialPrivacyEngine(privacyConfig, secureStorage).also {
+                            it.loadBudget()
+                        }
+                    } else {
+                        null
+                    }
+
+                // Build the privacy transform using the engine (budget-tracked)
+                // or fall back to the stateless DifferentialPrivacy utility
                 val privacyTransform: ((Map<String, WeightExtractor.TensorData>) -> Map<String, WeightExtractor.TensorData>)? =
-                    if (privacyConfig.enableDifferentialPrivacy) { deltas ->
-                        val sigma = DifferentialPrivacy.calibrateSigma(
-                            clippingNorm = privacyConfig.dpClippingNorm,
-                            epsilon = privacyConfig.dpEpsilon,
-                            delta = privacyConfig.dpDelta,
-                        )
-                        Timber.i(
-                            "Applying differential privacy: epsilon=%.2f, delta=%.1e, sigma=%.4f, clippingNorm=%.2f",
-                            privacyConfig.dpEpsilon,
-                            privacyConfig.dpDelta,
-                            sigma,
-                            privacyConfig.dpClippingNorm,
-                        )
-                        DifferentialPrivacy.apply(deltas, privacyConfig, trainingResult.sampleCount)
-                    } else null
+                    if (dpEngine != null) {
+                        { deltas ->
+                            // Convert TensorData map to FloatArray map for the engine
+                            val floatDeltas = deltas.mapValues { (_, tensor) -> tensor.data }
+
+                            val (noisyFloats, result) = kotlinx.coroutines.runBlocking {
+                                dpEngine.applyDP(floatDeltas)
+                            }
+                            dpResult = result
+
+                            Timber.i(
+                                "Applied DP via engine: epsilon=%.2f, sigma=%.4f, mechanism=%s, budget=%.2f/%.2f",
+                                result.epsilonUsed,
+                                result.noiseScale,
+                                result.mechanism.name,
+                                dpEngine.getBudgetStatus().totalEpsilonUsed,
+                                dpEngine.getBudgetStatus().maxEpsilon,
+                            )
+
+                            // Reconstruct TensorData map with noisy values
+                            deltas.mapValues { (name, tensor) ->
+                                val noisyData = noisyFloats[name] ?: tensor.data
+                                WeightExtractor.TensorData(
+                                    name = tensor.name,
+                                    shape = tensor.shape.copyOf(),
+                                    dataType = tensor.dataType,
+                                    data = noisyData,
+                                )
+                            }
+                        }
+                    } else if (privacyConfig.enableDifferentialPrivacy) {
+                        { deltas ->
+                            // Fallback to stateless DP (no budget tracking)
+                            val sigma = DifferentialPrivacy.calibrateSigma(
+                                clippingNorm = privacyConfig.dpClippingNorm,
+                                epsilon = privacyConfig.dpEpsilon,
+                                delta = privacyConfig.dpDelta,
+                            )
+                            Timber.i(
+                                "Applying differential privacy (stateless): epsilon=%.2f, delta=%.1e, sigma=%.4f",
+                                privacyConfig.dpEpsilon,
+                                privacyConfig.dpDelta,
+                                sigma,
+                            )
+                            DifferentialPrivacy.apply(deltas, privacyConfig, trainingResult.sampleCount)
+                        }
+                    } else {
+                        null
+                    }
 
                 if (originalModelPath != null) {
                     try {
@@ -861,6 +991,8 @@ class TFLiteTrainer(
                             )
                         updateFormat = "delta"
                         Timber.i("Successfully extracted weight delta")
+                    } catch (e: PrivacyBudgetExhaustedException) {
+                        throw e // Propagate budget exhaustion
                     } catch (e: Exception) {
                         Timber.w(e, "Delta extraction failed, falling back to full weights")
                         weightsData =
@@ -880,6 +1012,21 @@ class TFLiteTrainer(
                 val metrics = trainingResult.metrics.toMutableMap()
                 metrics["update_format"] = if (updateFormat == "delta") 1.0 else 0.0
 
+                // Include DP metadata in metrics
+                dpResult?.let { dp ->
+                    metrics["dp_epsilon_used"] = dp.epsilonUsed
+                    metrics["dp_clipping_norm"] = dp.clippingNorm
+                    metrics["dp_noise_scale"] = dp.noiseScale
+                    metrics["dp_mechanism"] =
+                        if (dp.mechanism == NoiseMechanism.GAUSSIAN) 0.0 else 1.0
+                }
+                dpEngine?.let { engine ->
+                    val status = engine.getBudgetStatus()
+                    metrics["dp_total_epsilon_used"] = status.totalEpsilonUsed
+                    metrics["dp_budget_remaining"] = status.remaining
+                    metrics["dp_rounds_participated"] = status.roundsParticipated.toDouble()
+                }
+
                 Timber.i("Weight extraction completed: ${weightsData.size} bytes ($updateFormat)")
 
                 val weightUpdate =
@@ -892,6 +1039,9 @@ class TFLiteTrainer(
                     )
 
                 Result.success(weightUpdate)
+            } catch (e: PrivacyBudgetExhaustedException) {
+                Timber.e(e, "Privacy budget exhausted")
+                Result.failure(e)
             } catch (e: Exception) {
                 Timber.e(e, "Weight extraction failed")
                 Result.failure(e)

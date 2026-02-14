@@ -14,14 +14,19 @@ import ai.edgeml.api.dto.InferenceEventRequest
 import ai.edgeml.api.dto.InferenceEventResponse
 import ai.edgeml.api.dto.ModelDownloadResponse
 import ai.edgeml.api.dto.ModelResponse
+import ai.edgeml.api.dto.ModelUpdateInfo
 import ai.edgeml.api.dto.ModelVersionResponse
 import ai.edgeml.api.dto.RoundAssignment
 import ai.edgeml.api.dto.SecAggKeyExchangeRequest
+import ai.edgeml.api.dto.SecAggMaskedInputRequest
 import ai.edgeml.api.dto.SecAggSessionResponse
 import ai.edgeml.api.dto.SecAggShareSubmitRequest
 import ai.edgeml.api.dto.SecAggShareSubmitResponse
+import ai.edgeml.api.dto.SecAggUnmaskRequest
+import ai.edgeml.api.dto.SecAggUnmaskResponse
 import ai.edgeml.api.dto.TrainingEventRequest
 import ai.edgeml.api.dto.VersionResolutionResponse
+import ai.edgeml.api.dto.WeightUploadRequest
 import okhttp3.ResponseBody
 import retrofit2.Response
 import retrofit2.http.Body
@@ -76,6 +81,14 @@ interface EdgeMLApi {
     suspend fun getDeviceGroups(
         @Path("device_id") deviceId: String,
     ): Response<GroupMembershipsResponse>
+
+    /**
+     * Get full device information from the server.
+     */
+    @GET("api/v1/devices/{device_id}")
+    suspend fun getDeviceInfo(
+        @Path("device_id") deviceId: String,
+    ): Response<DeviceRegistrationResponse>
 
     /**
      * Get the resolved model version for a device.
@@ -154,6 +167,27 @@ interface EdgeMLApi {
         @Path("modelId") modelId: String,
         @Path("deviceType") deviceType: String,
     ): Response<Map<String, Any>>
+
+    /**
+     * Check for model updates.
+     */
+    @GET("api/v1/models/{model_id}/updates")
+    suspend fun checkForUpdates(
+        @Path("model_id") modelId: String,
+        @Query("current_version") currentVersion: String,
+    ): Response<ModelUpdateInfo>
+
+    // =========================================================================
+    // Weight Upload
+    // =========================================================================
+
+    /**
+     * Upload trained weights to the server.
+     */
+    @POST("api/v1/training/weights")
+    suspend fun uploadWeights(
+        @Body request: WeightUploadRequest,
+    ): Response<Unit>
 
     // =========================================================================
     // Training Events & Metrics
@@ -245,6 +279,31 @@ interface EdgeMLApi {
         @Path("session_id") sessionId: String,
         @Body request: SecAggShareSubmitRequest,
     ): Response<SecAggShareSubmitResponse>
+
+    /**
+     * Submit masked model update during SecAgg Phase 2.
+     */
+    @POST("api/v1/secagg/masked-input")
+    suspend fun submitSecAggMaskedInput(
+        @Body request: SecAggMaskedInputRequest,
+    ): Response<Unit>
+
+    /**
+     * Get unmasking info during SecAgg Phase 3.
+     */
+    @GET("api/v1/secagg/unmask")
+    suspend fun getSecAggUnmaskInfo(
+        @Query("session_id") sessionId: String,
+        @Query("device_id") deviceId: String,
+    ): Response<SecAggUnmaskResponse>
+
+    /**
+     * Submit unmasking shares during SecAgg Phase 3.
+     */
+    @POST("api/v1/secagg/unmask")
+    suspend fun submitSecAggUnmask(
+        @Body request: SecAggUnmaskRequest,
+    ): Response<Unit>
 
     // =========================================================================
     // Federated Analytics

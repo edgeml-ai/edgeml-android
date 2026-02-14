@@ -4,8 +4,10 @@ import ai.edgeml.BuildConfig
 import ai.edgeml.api.EdgeMLApi
 import ai.edgeml.api.EdgeMLApiFactory
 import ai.edgeml.api.dto.DeviceRegistrationRequest
+import ai.edgeml.api.dto.DeviceRegistrationResponse
 import ai.edgeml.api.dto.GroupMembership
 import ai.edgeml.api.dto.HeartbeatRequest
+import ai.edgeml.api.dto.ModelUpdateInfo
 import ai.edgeml.api.dto.RoundAssignment
 import ai.edgeml.config.EdgeMLConfig
 import ai.edgeml.models.CachedModel
@@ -28,6 +30,7 @@ import ai.edgeml.training.WarmupResult
 import ai.edgeml.training.WeightUpdate
 import ai.edgeml.utils.BatteryUtils
 import ai.edgeml.utils.DeviceUtils
+import ai.edgeml.utils.NetworkMonitor
 import ai.edgeml.utils.NetworkUtils
 import android.content.Context
 import kotlinx.coroutines.CoroutineDispatcher
@@ -91,6 +94,9 @@ class EdgeMLClient private constructor(
 ) {
     // Store application context to avoid leaking Activity/Service references
     private val context: Context = context.applicationContext
+
+    /** Network connectivity monitor. */
+    val networkMonitor: NetworkMonitor = NetworkMonitor.getInstance(this.context)
 
     // Coroutine scope for background operations
     private val scope = CoroutineScope(SupervisorJob() + mainDispatcher)
@@ -450,6 +456,80 @@ class EdgeMLClient private constructor(
      * Check if the device belongs to a group with a specific name.
      */
     fun isInGroupNamed(groupName: String): Boolean = _groupMemberships.value.any { it.groupName == groupName }
+
+    // =========================================================================
+    // Device Info
+    // =========================================================================
+
+    /**
+     * Get full device information from the server.
+     *
+     * @return The device registration information.
+     */
+    suspend fun getDeviceInfo(): Result<DeviceRegistrationResponse> =
+        withContext(ioDispatcher) {
+            val deviceId = _serverDeviceId.value
+                ?: return@withContext Result.failure(Exception("Device not registered"))
+
+            try {
+                val response = api.getDeviceInfo(deviceId)
+                if (response.isSuccessful) {
+                    val body = response.body()
+                        ?: return@withContext Result.failure(Exception("Empty device info response"))
+                    Result.success(body)
+                } else {
+                    Result.failure(Exception("Failed to get device info: ${response.code()}"))
+                }
+            } catch (e: Exception) {
+                Result.failure(e)
+            }
+        }
+
+    // =========================================================================
+    // Model Updates
+    // =========================================================================
+
+    /**
+     * Check if a model update is available.
+     *
+     * @param modelId Identifier of the model to check.
+     * @return Update information if available, null if up-to-date.
+     */
+    suspend fun checkForUpdates(modelId: String): Result<ModelUpdateInfo?> =
+        withContext(ioDispatcher) {
+            try {
+                val cachedModel = modelManager.getCachedModel(modelId = modelId)
+                    ?: return@withContext Result.success(null)
+
+                val response = api.checkForUpdates(
+                    modelId = modelId,
+                    currentVersion = cachedModel.version,
+                )
+                if (response.isSuccessful) {
+                    Result.success(response.body())
+                } else if (response.code() == 404) {
+                    // No update available
+                    Result.success(null)
+                } else {
+                    Result.failure(Exception("Update check failed: ${response.code()}"))
+                }
+            } catch (e: Exception) {
+                Timber.w(e, "Error checking for updates")
+                Result.failure(e)
+            }
+        }
+
+    // =========================================================================
+    // Cache Management
+    // =========================================================================
+
+    /**
+     * Clear all cached models.
+     */
+    suspend fun clearCache() {
+        modelManager.clearCache()
+        Timber.i("Model cache cleared")
+    }
 
     // =========================================================================
     // Inference
@@ -902,8 +982,12 @@ class EdgeMLClient private constructor(
                     },
                 )
 
-                // Train locally
-                val trainingResult = trainer.train(dataProvider, trainingConfig).getOrThrow()
+                // Train locally with thermal policy from config
+                val trainingResult = trainer.train(
+                    dataProvider,
+                    trainingConfig,
+                    config.thermalPolicy,
+                ).getOrThrow()
 
                 eventQueue.addTrainingEvent(
                     type = EventTypes.TRAINING_COMPLETED,
@@ -926,7 +1010,8 @@ class EdgeMLClient private constructor(
 
                 when (uploadPolicy) {
                     UploadPolicy.AUTO -> {
-                        weightUpdate = trainer.extractWeightUpdate(trainingResult).getOrThrow()
+                        weightUpdate =
+                            trainer.extractWeightUpdate(trainingResult, storage).getOrThrow()
                         val useSecAgg = (config.enableSecureAggregation || roundId != null) &&
                             secAggManager != null && roundId != null
                         usedSecAgg = useSecAgg
@@ -939,7 +1024,8 @@ class EdgeMLClient private constructor(
                         uploaded = uploadResult.isSuccess
                     }
                     UploadPolicy.MANUAL -> {
-                        weightUpdate = trainer.extractWeightUpdate(trainingResult).getOrThrow()
+                        weightUpdate =
+                            trainer.extractWeightUpdate(trainingResult, storage).getOrThrow()
                     }
                     UploadPolicy.DISABLED -> {
                         // No extraction, no upload
@@ -1099,6 +1185,38 @@ class EdgeMLClient private constructor(
                     put("training_method", trainingResult.metrics["training_method"] ?: 0.0)
                     put("client_timestamp_ms", System.currentTimeMillis().toDouble())
                     config.appVersion?.let { put("app_version_hash", it.hashCode().toDouble()) }
+                    // DP metadata from weight extraction
+                    weightUpdate.metrics["dp_epsilon_used"]?.let {
+                        put("dp_epsilon_used", it)
+                    }
+                    weightUpdate.metrics["dp_clipping_norm"]?.let {
+                        put("dp_clipping_norm", it)
+                    }
+                    weightUpdate.metrics["dp_noise_scale"]?.let {
+                        put("dp_noise_scale", it)
+                    }
+                    weightUpdate.metrics["dp_mechanism"]?.let {
+                        put("dp_mechanism", it)
+                    }
+                    weightUpdate.metrics["dp_total_epsilon_used"]?.let {
+                        put("dp_total_epsilon_used", it)
+                    }
+                    weightUpdate.metrics["dp_budget_remaining"]?.let {
+                        put("dp_budget_remaining", it)
+                    }
+                    weightUpdate.metrics["dp_rounds_participated"]?.let {
+                        put("dp_rounds_participated", it)
+                    }
+                    // Thermal metadata from training
+                    trainingResult.metrics["thermal_adjustments"]?.let {
+                        put("thermal_adjustments", it)
+                    }
+                    trainingResult.metrics["thermal_aborted"]?.let {
+                        put("thermal_aborted", it)
+                    }
+                    trainingResult.metrics["thermal_state"]?.let {
+                        put("thermal_state", it)
+                    }
                 },
             ),
         )
@@ -1158,6 +1276,7 @@ class EdgeMLClient private constructor(
      */
     suspend fun close() {
         stopHeartbeat()
+        networkMonitor.stop()
         trainer.close()
         syncManager.cancelAllSync()
         _state.value = ClientState.CLOSED
