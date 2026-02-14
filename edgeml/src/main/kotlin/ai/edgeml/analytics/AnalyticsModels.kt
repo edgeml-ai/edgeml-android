@@ -23,7 +23,7 @@ data class AnalyticsFilter(
 )
 
 @Serializable
-internal data class DescriptiveRequest(
+data class DescriptiveRequest(
     @SerialName("variable")
     val variable: String,
     @SerialName("group_by")
@@ -37,7 +37,7 @@ internal data class DescriptiveRequest(
 )
 
 @Serializable
-internal data class TTestRequest(
+data class TTestRequest(
     @SerialName("variable")
     val variable: String,
     @SerialName("group_a")
@@ -51,7 +51,7 @@ internal data class TTestRequest(
 )
 
 @Serializable
-internal data class ChiSquareRequest(
+data class ChiSquareRequest(
     @SerialName("variable_1")
     val variable1: String,
     @SerialName("variable_2")
@@ -65,7 +65,7 @@ internal data class ChiSquareRequest(
 )
 
 @Serializable
-internal data class AnovaRequest(
+data class AnovaRequest(
     @SerialName("variable")
     val variable: String,
     @SerialName("group_by")
