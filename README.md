@@ -74,6 +74,32 @@ dependencies {
 
 ## Quick Start
 
+### Local Inference — No Server Required
+
+Deploy and benchmark TFLite models locally. No server, no auth, no registration needed:
+
+```kotlin
+import ai.edgeml.EdgeML
+
+// Deploy a model — auto-benchmarks NPU/GPU/CPU delegates, picks fastest
+val model = EdgeML.deploy(context, "MobileNet.tflite")
+
+val result = model.predict(floatArrayOf(1f, 2f, 3f)).getOrThrow()
+
+println(model.name)            // "MobileNet"
+println(model.engine)          // Engine.TFLITE
+println(model.activeDelegate)  // "gpu"
+println(model.warmupResult)    // cold: 62ms, warm: 4ms, cpu: 12ms
+```
+
+Skip benchmarking for faster startup:
+
+```kotlin
+val model = EdgeML.deploy(context, "model.tflite", benchmark = false)
+```
+
+When you're ready to connect to the EdgeML platform, initialize with your API key and the SDK automatically starts reporting metrics.
+
 ### Enterprise Runtime Authentication
 
 For production deployments, use secure token-based authentication:
