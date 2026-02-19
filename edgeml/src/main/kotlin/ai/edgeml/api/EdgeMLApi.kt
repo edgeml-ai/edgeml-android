@@ -420,4 +420,36 @@ interface EdgeMLApi {
         @Path("code") code: String,
         @Body report: ai.edgeml.pairing.BenchmarkReport,
     ): Response<Unit>
+
+    // =========================================================================
+    // Runtime Adaptation
+    // =========================================================================
+
+    /**
+     * Get a server-side adaptation recommendation based on current device state.
+     *
+     * Sent when the device's battery, thermal, or compute conditions change
+     * significantly and the SDK wants server guidance on which executor and
+     * compute units to use.
+     *
+     * @param request Current device state and active executor.
+     */
+    @POST("api/v1/deploy/adapt")
+    suspend fun getAdaptationRecommendation(
+        @Body request: ai.edgeml.runtime.AdaptationRequest,
+    ): Response<ai.edgeml.runtime.AdaptationRecommendation>
+
+    /**
+     * Get a fallback recommendation after a delegate or model format fails.
+     *
+     * Sent when the device cannot load or run a model with its current
+     * configuration and needs guidance on an alternative format/executor
+     * and a download URL for the fallback model.
+     *
+     * @param request Details of the failure.
+     */
+    @POST("api/v1/deploy/fallback")
+    suspend fun getFallback(
+        @Body request: ai.edgeml.runtime.FallbackRequest,
+    ): Response<ai.edgeml.runtime.FallbackRecommendation>
 }
