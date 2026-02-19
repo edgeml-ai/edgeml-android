@@ -376,4 +376,48 @@ interface EdgeMLApi {
     suspend fun downloadModelFile(
         @Url downloadUrl: String,
     ): Response<ResponseBody>
+
+    // =========================================================================
+    // Pairing (no auth required — code is the secret)
+    // =========================================================================
+
+    /**
+     * Get the current state of a pairing session.
+     *
+     * @param code The pairing code from a QR scan.
+     */
+    @GET("api/v1/deploy/pair/{code}")
+    suspend fun getPairingSession(
+        @Path("code") code: String,
+    ): Response<ai.edgeml.pairing.PairingSession>
+
+    /**
+     * Connect this device to a pairing session.
+     *
+     * Sends device hardware metadata so the server can select the optimal model
+     * variant for this device.
+     *
+     * @param code The pairing code from a QR scan.
+     * @param request Device capabilities and metadata.
+     */
+    @POST("api/v1/deploy/pair/{code}/connect")
+    suspend fun connectToPairing(
+        @Path("code") code: String,
+        @Body request: ai.edgeml.pairing.DeviceConnectRequest,
+    ): Response<ai.edgeml.pairing.PairingSession>
+
+    /**
+     * Submit benchmark results for a pairing session.
+     *
+     * Called after model download and benchmark execution to report device
+     * performance metrics back to the dashboard.
+     *
+     * @param code The pairing code.
+     * @param report Benchmark results from on-device model execution.
+     */
+    @POST("api/v1/deploy/pair/{code}/benchmark")
+    suspend fun submitBenchmark(
+        @Path("code") code: String,
+        @Body report: ai.edgeml.pairing.BenchmarkReport,
+    ): Response<Unit>
 }
