@@ -126,6 +126,18 @@ data class BenchmarkReport(
     val batteryLevel: Float? = null,
     @SerialName("thermal_state")
     val thermalState: String? = null,
+    @SerialName("prompt_tokens")
+    val promptTokens: Int? = null,
+    @SerialName("completion_tokens")
+    val completionTokens: Int? = null,
+    @SerialName("context_length")
+    val contextLength: Int? = null,
+    @SerialName("total_tokens")
+    val totalTokens: Int? = null,
+    @SerialName("active_delegate")
+    val activeDelegate: String? = null,
+    @SerialName("disabled_delegates")
+    val disabledDelegates: List<String>? = null,
 )
 
 /**

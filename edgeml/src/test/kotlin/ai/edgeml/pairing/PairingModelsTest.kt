@@ -148,7 +148,7 @@ class PairingModelsTest {
     // =========================================================================
 
     @Test
-    fun `BenchmarkReport serializes all fields`() {
+    fun `BenchmarkReport serializes all fields including token tracking and delegates`() {
         val report = BenchmarkReport(
             modelName = "test-model",
             deviceName = "Google Pixel 8",
@@ -162,18 +162,30 @@ class PairingModelsTest {
             p95LatencyMs = 18.5,
             p99LatencyMs = 22.0,
             memoryPeakBytes = 50_000_000L,
-            inferenceCount = 11,
+            inferenceCount = 60,
             modelLoadTimeMs = 150.0,
             coldInferenceMs = 25.5,
             warmInferenceMs = 12.3,
             batteryLevel = 85.0f,
             thermalState = "none",
+            promptTokens = 128,
+            completionTokens = 256,
+            contextLength = 2048,
+            totalTokens = 384,
+            activeDelegate = "gpu",
+            disabledDelegates = listOf("nnapi"),
         )
 
         val encoded = json.encodeToString(report)
         val decoded = json.decodeFromString<BenchmarkReport>(encoded)
 
         assertEquals(report, decoded)
+        assertEquals(128, decoded.promptTokens)
+        assertEquals(256, decoded.completionTokens)
+        assertEquals(2048, decoded.contextLength)
+        assertEquals(384, decoded.totalTokens)
+        assertEquals("gpu", decoded.activeDelegate)
+        assertEquals(listOf("nnapi"), decoded.disabledDelegates)
     }
 
     @Test
@@ -191,7 +203,7 @@ class PairingModelsTest {
             p95LatencyMs = 45.0,
             p99LatencyMs = 55.0,
             memoryPeakBytes = 30_000_000L,
-            inferenceCount = 11,
+            inferenceCount = 51,
             modelLoadTimeMs = 300.0,
             coldInferenceMs = 50.0,
             warmInferenceMs = 30.0,
@@ -205,6 +217,51 @@ class PairingModelsTest {
         assertEquals(report, decoded)
         assertNull(decoded.batteryLevel)
         assertNull(decoded.thermalState)
+        assertNull(decoded.promptTokens)
+        assertNull(decoded.completionTokens)
+        assertNull(decoded.contextLength)
+        assertNull(decoded.totalTokens)
+        assertNull(decoded.activeDelegate)
+        assertNull(decoded.disabledDelegates)
+    }
+
+    @Test
+    fun `BenchmarkReport token fields use correct serial names`() {
+        val raw = """
+        {
+            "model_name": "llm",
+            "device_name": "Pixel",
+            "chip_family": "tensor",
+            "ram_gb": 8.0,
+            "os_version": "14",
+            "ttft_ms": 10.0,
+            "tpot_ms": 5.0,
+            "tokens_per_second": 200.0,
+            "p50_latency_ms": 5.0,
+            "p95_latency_ms": 7.0,
+            "p99_latency_ms": 9.0,
+            "memory_peak_bytes": 10000000,
+            "inference_count": 60,
+            "model_load_time_ms": 100.0,
+            "cold_inference_ms": 10.0,
+            "warm_inference_ms": 5.0,
+            "prompt_tokens": 64,
+            "completion_tokens": 128,
+            "context_length": 4096,
+            "total_tokens": 192,
+            "active_delegate": "nnapi",
+            "disabled_delegates": ["gpu"]
+        }
+        """.trimIndent()
+
+        val report = json.decodeFromString<BenchmarkReport>(raw)
+
+        assertEquals(64, report.promptTokens)
+        assertEquals(128, report.completionTokens)
+        assertEquals(4096, report.contextLength)
+        assertEquals(192, report.totalTokens)
+        assertEquals("nnapi", report.activeDelegate)
+        assertEquals(listOf("gpu"), report.disabledDelegates)
     }
 
     // =========================================================================
