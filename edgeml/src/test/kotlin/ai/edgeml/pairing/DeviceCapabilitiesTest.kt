@@ -3,12 +3,8 @@ package ai.edgeml.pairing
 import android.app.ActivityManager
 import android.content.ContentResolver
 import android.content.Context
-import android.os.Build
-import android.provider.Settings
 import io.mockk.every
 import io.mockk.mockk
-import io.mockk.mockkStatic
-import io.mockk.unmockkStatic
 import org.junit.After
 import org.junit.Before
 import org.junit.Test
