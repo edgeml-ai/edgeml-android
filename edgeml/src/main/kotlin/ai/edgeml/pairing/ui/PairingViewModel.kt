@@ -39,6 +39,8 @@ sealed class PairingState {
         val modelVersion: String,
         val sizeBytes: Long,
         val runtime: String,
+        /** Model modality (e.g., "text", "vision", "audio", "classification"). Null if unspecified. */
+        val modality: String? = null,
     ) : PairingState()
 
     /** An error occurred during pairing or download. */
@@ -113,6 +115,7 @@ class PairingViewModel(
                     modelVersion = deployment.modelVersion,
                     sizeBytes = deployment.sizeBytes ?: 0L,
                     runtime = formatRuntime(deployment.format),
+                    modality = deployment.modality,
                 )
 
                 Timber.i(
