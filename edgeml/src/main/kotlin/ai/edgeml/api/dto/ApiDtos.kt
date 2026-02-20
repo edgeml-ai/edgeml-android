@@ -1,5 +1,6 @@
 package ai.edgeml.api.dto
 
+import ai.edgeml.models.ServerModelContract
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
@@ -319,6 +320,9 @@ data class ModelVersionResponse(
     val metrics: Map<String, Double>? = null,
     @SerialName("description")
     val description: String? = null,
+    /** Server-extracted model contract (input/output tensor specs). */
+    @SerialName("model_contract")
+    val modelContract: ServerModelContract? = null,
     @SerialName("created_at")
     val createdAt: String,
     @SerialName("updated_at")
@@ -368,6 +372,9 @@ data class ModelDownloadResponse(
     /** Whether the model includes a TFLite "train" signature for on-device training */
     @SerialName("has_training_signature")
     val hasTrainingSignature: Boolean? = null,
+    /** Server-extracted model contract (input/output tensor specs). */
+    @SerialName("model_contract")
+    val modelContract: ServerModelContract? = null,
 )
 
 /**
