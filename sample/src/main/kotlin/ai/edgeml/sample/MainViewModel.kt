@@ -253,6 +253,15 @@ class MainViewModel : ViewModel() {
 }
 
 /**
+ * UI representation of inference result.
+ */
+data class InferenceResultUI(
+    val topClass: Int,
+    val confidence: Float,
+    val inferenceTimeMs: Long,
+)
+
+/**
  * UI state for training progress.
  */
 data class TrainingStateUI(
