@@ -1,8 +1,6 @@
 package ai.edgeml.pairing.ui
 
 import ai.edgeml.api.EdgeMLApi
-import ai.edgeml.pairing.BenchmarkRunner
-import ai.edgeml.pairing.DeploymentInfo
 import ai.edgeml.pairing.PairingException
 import ai.edgeml.pairing.PairingManager
 import android.content.Context

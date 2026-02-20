@@ -1,22 +1,14 @@
 package ai.edgeml.pairing.ui
 
-import ai.edgeml.api.EdgeMLApi
 import ai.edgeml.pairing.BenchmarkReport
-import ai.edgeml.pairing.BenchmarkRunner
 import ai.edgeml.pairing.DeploymentInfo
-import ai.edgeml.pairing.DeviceCapabilities
-import ai.edgeml.pairing.DeviceConnectRequest
 import ai.edgeml.pairing.PairingException
 import ai.edgeml.pairing.PairingManager
 import ai.edgeml.pairing.PairingSession
 import ai.edgeml.pairing.PairingStatus
-import android.content.Context
 import io.mockk.coEvery
 import io.mockk.coVerify
-import io.mockk.every
 import io.mockk.mockk
-import io.mockk.mockkObject
-import io.mockk.unmockkObject
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.StandardTestDispatcher
@@ -27,7 +19,6 @@ import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Before
 import org.junit.Test
-import java.io.File
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertIs
@@ -48,20 +39,6 @@ class PairingViewModelTest {
     private val testDispatcher = StandardTestDispatcher()
 
     private lateinit var pairingManager: PairingManager
-    private lateinit var api: EdgeMLApi
-    private lateinit var context: Context
-    private lateinit var cacheDir: File
-
-    private val testDeviceRequest = DeviceConnectRequest(
-        deviceId = "test-device-id",
-        platform = "android",
-        deviceName = "Test Model",
-        chipFamily = "test-chip",
-        ramGb = 8.0,
-        osVersion = "14",
-        npuAvailable = false,
-        gpuAvailable = true,
-    )
 
     private val connectedSession = PairingSession(
         id = "session-1",
@@ -104,27 +81,12 @@ class PairingViewModelTest {
     @Before
     fun setUp() {
         Dispatchers.setMain(testDispatcher)
-
-        api = mockk<EdgeMLApi>(relaxed = true)
-        context = mockk<Context>(relaxed = true)
-
-        cacheDir = File(System.getProperty("java.io.tmpdir"), "edgeml_vm_test_${System.nanoTime()}")
-        cacheDir.mkdirs()
-
-        every { context.cacheDir } returns cacheDir
-        every { context.applicationContext } returns context
-
-        mockkObject(DeviceCapabilities)
-        every { DeviceCapabilities.collect(any()) } returns testDeviceRequest
-
         pairingManager = mockk<PairingManager>(relaxed = true)
     }
 
     @After
     fun tearDown() {
         Dispatchers.resetMain()
-        unmockkObject(DeviceCapabilities)
-        cacheDir.deleteRecursively()
     }
 
     // =========================================================================
