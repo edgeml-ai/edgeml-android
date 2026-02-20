@@ -3,13 +3,23 @@ package ai.edgeml.sample
 import ai.edgeml.client.EdgeMLClient
 import ai.edgeml.config.EdgeMLConfig
 import ai.edgeml.config.PrivacyConfiguration
+import ai.edgeml.discovery.DiscoveryManager
 import android.app.Application
+import android.provider.Settings
 import timber.log.Timber
 
 /**
- * Sample application demonstrating EdgeML SDK initialization.
+ * Sample application demonstrating EdgeML SDK initialization and network discovery.
+ *
+ * On launch this class:
+ * 1. Initialises the EdgeML SDK client with config from BuildConfig / fallback constants.
+ * 2. Starts mDNS/NSD advertising so the device is discoverable by `edgeml deploy --phone`.
  */
 class SampleApplication : Application() {
+
+    /** High-level manager for local-network device discovery. */
+    val discoveryManager: DiscoveryManager by lazy { DiscoveryManager(this) }
+
     override fun onCreate() {
         super.onCreate()
 
@@ -18,6 +28,14 @@ class SampleApplication : Application() {
 
         // Initialize EdgeML SDK
         initializeEdgeML()
+
+        // Start local network discovery so `edgeml deploy --phone` can find this device
+        startDiscovery()
+    }
+
+    override fun onTerminate() {
+        discoveryManager.stopDiscoverable()
+        super.onTerminate()
     }
 
     private fun initializeEdgeML() {
@@ -51,6 +69,17 @@ class SampleApplication : Application() {
             .build()
 
         Timber.i("EdgeML SDK configured")
+    }
+
+    private fun startDiscovery() {
+        val deviceId = Settings.Secure.getString(contentResolver, Settings.Secure.ANDROID_ID)
+            ?: "unknown"
+        val deviceName = android.os.Build.MODEL
+        discoveryManager.startDiscoverable(
+            deviceId = deviceId,
+            deviceName = deviceName,
+        )
+        Timber.i("Discovery started: deviceId=%s deviceName=%s", deviceId, deviceName)
     }
 }
 
