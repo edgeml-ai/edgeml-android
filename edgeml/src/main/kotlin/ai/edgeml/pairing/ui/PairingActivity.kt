@@ -121,6 +121,7 @@ class PairingActivity : ComponentActivity() {
 
         val config = EdgeMLConfig.Builder()
             .serverUrl(serverUrl)
+            .deviceAccessToken("pairing") // Placeholder — pairing endpoints are unauthenticated
             .orgId("pairing") // Pairing endpoints don't require org auth
             .modelId("pairing") // Placeholder — not used during pairing
             .build()
