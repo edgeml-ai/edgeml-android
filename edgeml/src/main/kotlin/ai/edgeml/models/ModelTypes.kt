@@ -36,6 +36,9 @@ data class CachedModel(
     /** Whether the model has been verified */
     @SerialName("verified")
     val verified: Boolean = false,
+    /** Server-provided model contract (input/output tensor specs). Null if not available. */
+    @SerialName("model_contract")
+    val modelContract: ServerModelContract? = null,
 ) {
     /**
      * Get the model file.

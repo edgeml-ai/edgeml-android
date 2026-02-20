@@ -132,6 +132,7 @@ class ModelManager(
                             format = negotiateModelFormat(),
                             downloadedAt = System.currentTimeMillis(),
                             verified = true,
+                            modelContract = downloadInfo.modelContract,
                         )
 
                     // Update cache

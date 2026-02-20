@@ -4,6 +4,7 @@ import ai.edgeml.config.EdgeMLConfig
 import ai.edgeml.models.CachedModel
 import ai.edgeml.models.InferenceInput
 import ai.edgeml.models.InferenceOutput
+import ai.edgeml.models.ServerModelContract
 import ai.edgeml.privacy.DifferentialPrivacy
 import android.content.Context
 import android.os.Build
@@ -62,6 +63,9 @@ class TFLiteTrainer(
     private var _outputShape: IntArray = intArrayOf()
     private var inputDataType: org.tensorflow.lite.DataType? = null
     private var outputDataType: org.tensorflow.lite.DataType? = null
+
+    // Server-provided model contract for input validation (null = no validation)
+    private var _serverContract: ServerModelContract? = null
 
     // Pooled I/O buffers — allocated once in loadModel, reused across inferences
     private var _pooledInputBuffer: ByteBuffer? = null
@@ -151,6 +155,9 @@ class TFLiteTrainer(
                     interpreter = Interpreter(modelBuffer, options)
                     _currentModel = model
 
+                    // Store server-provided contract for input validation
+                    _serverContract = model.modelContract
+
                     // Snapshot original model bytes for weight delta computation
                     originalModelBytes = modelFile.readBytes()
                     originalModelPath = model.filePath
@@ -201,6 +208,16 @@ class TFLiteTrainer(
                         ?: return@withContext Result.failure(
                             IllegalStateException("No model loaded. Call loadModel() first."),
                         )
+
+                // Validate against server-provided model contract (if available)
+                _serverContract?.let { contract ->
+                    val error = contract.validateInput(input)
+                    if (error != null) {
+                        return@withContext Result.failure(
+                            IllegalArgumentException(error),
+                        )
+                    }
+                }
 
                 try {
                     // Use pooled buffers if available (avoid per-inference allocation)
@@ -401,6 +418,11 @@ class TFLiteTrainer(
      * Get the number of output elements.
      */
     fun getOutputSize(): Int = outputShape.fold(1) { acc, dim -> acc * dim }
+
+    /**
+     * Get the server-provided model contract (if available).
+     */
+    val serverContract: ServerModelContract? get() = _serverContract
 
     /**
      * Get model input/output tensor details.
@@ -1356,6 +1378,7 @@ class TFLiteTrainer(
             _outputShape = intArrayOf()
             _pooledInputBuffer = null
             _pooledOutputBuffer = null
+            _serverContract = null
             _effectiveThreads = config.numThreads
             originalModelPath = null
             originalModelBytes = null

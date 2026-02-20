@@ -1,10 +1,13 @@
 package ai.edgeml.api.dto
 
+import ai.edgeml.models.ServerModelContract
+import ai.edgeml.models.TensorSpec
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import org.junit.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
@@ -357,6 +360,85 @@ class ApiDtoSerializationTest {
     }
 
     @Test
+    fun `ModelVersionResponse roundtrips with model contract`() {
+        val contract = ServerModelContract(
+            inputs = listOf(TensorSpec("input_0", "float32", listOf(null, 224, 224, 3))),
+            outputs = listOf(TensorSpec("output_0", "float32", listOf(null, 1000))),
+        )
+
+        val response = ModelVersionResponse(
+            id = "v1",
+            modelId = "m1",
+            version = "1.0.0",
+            status = "published",
+            storagePath = "s3://bucket/model.tflite",
+            format = "tensorflow_lite",
+            checksum = "abc123",
+            sizeBytes = 1_000_000,
+            modelContract = contract,
+            createdAt = "2024-01-01T00:00:00Z",
+            updatedAt = "2024-01-01T00:00:00Z",
+        )
+
+        val serialized = json.encodeToString(response)
+        val deserialized = json.decodeFromString<ModelVersionResponse>(serialized)
+
+        assertNotNull(deserialized.modelContract)
+        assertEquals(1, deserialized.modelContract!!.inputs.size)
+        assertEquals("input_0", deserialized.modelContract!!.inputs[0].name)
+        assertEquals(listOf(null, 224, 224, 3), deserialized.modelContract!!.inputs[0].shape)
+    }
+
+    @Test
+    fun `ModelVersionResponse handles missing model contract (backwards compat)`() {
+        val jsonStr = """
+            {
+                "id": "v1",
+                "model_id": "m1",
+                "version": "1.0.0",
+                "status": "published",
+                "storage_path": "s3://bucket/model.tflite",
+                "format": "tensorflow_lite",
+                "checksum": "abc123",
+                "size_bytes": 1000000,
+                "created_at": "2024-01-01T00:00:00Z",
+                "updated_at": "2024-01-01T00:00:00Z"
+            }
+        """.trimIndent()
+
+        val response = json.decodeFromString<ModelVersionResponse>(jsonStr)
+        assertNull(response.modelContract)
+    }
+
+    @Test
+    fun `ModelVersionResponse deserializes full server payload with contract`() {
+        val jsonStr = """
+            {
+                "id": "v1",
+                "model_id": "m1",
+                "version": "1.0.0",
+                "status": "published",
+                "storage_path": "s3://bucket/model.tflite",
+                "format": "tensorflow_lite",
+                "checksum": "abc123",
+                "size_bytes": 1000000,
+                "model_contract": {
+                    "inputs": [{"name": "input_0", "dtype": "float32", "shape": [null, 224, 224, 3], "description": null}],
+                    "outputs": [{"name": "output_0", "dtype": "float32", "shape": [null, 1000], "description": null}]
+                },
+                "created_at": "2024-01-01T00:00:00Z",
+                "updated_at": "2024-01-01T00:00:00Z"
+            }
+        """.trimIndent()
+
+        val response = json.decodeFromString<ModelVersionResponse>(jsonStr)
+
+        assertNotNull(response.modelContract)
+        assertEquals(listOf(null, 224, 224, 3), response.modelContract!!.inputs[0].shape)
+        assertEquals(listOf(null, 1000), response.modelContract!!.outputs[0].shape)
+    }
+
+    @Test
     fun `ModelDownloadResponse roundtrips correctly`() {
         val response =
             ModelDownloadResponse(
@@ -371,6 +453,51 @@ class ApiDtoSerializationTest {
 
         assertEquals("https://cdn.example.com/model.tflite", deserialized.downloadUrl)
         assertEquals("sha256:abc123", deserialized.checksum)
+        assertNull(deserialized.modelContract)
+    }
+
+    @Test
+    fun `ModelDownloadResponse roundtrips with model contract`() {
+        val contract = ServerModelContract(
+            inputs = listOf(TensorSpec("input_0", "float32", listOf(null, 28, 28, 1))),
+            outputs = listOf(TensorSpec("output_0", "float32", listOf(null, 10))),
+        )
+
+        val response = ModelDownloadResponse(
+            downloadUrl = "https://cdn.example.com/model.tflite",
+            expiresAt = "2024-01-01T01:00:00Z",
+            checksum = "sha256:abc123",
+            sizeBytes = 5_000_000,
+            modelContract = contract,
+        )
+
+        val serialized = json.encodeToString(response)
+        val deserialized = json.decodeFromString<ModelDownloadResponse>(serialized)
+
+        assertNotNull(deserialized.modelContract)
+        assertEquals(listOf(null, 28, 28, 1), deserialized.modelContract!!.inputs[0].shape)
+        assertEquals(listOf(null, 10), deserialized.modelContract!!.outputs[0].shape)
+    }
+
+    @Test
+    fun `ModelDownloadResponse deserializes server payload with contract`() {
+        val jsonStr = """
+            {
+                "download_url": "https://cdn.example.com/model.tflite",
+                "expires_at": "2024-01-01T01:00:00Z",
+                "checksum": "sha256:abc123",
+                "size_bytes": 5000000,
+                "model_contract": {
+                    "inputs": [{"name": "input_0", "dtype": "float32", "shape": [null, 224, 224, 3]}],
+                    "outputs": [{"name": "output_0", "dtype": "float32", "shape": [null, 1000]}]
+                }
+            }
+        """.trimIndent()
+
+        val response = json.decodeFromString<ModelDownloadResponse>(jsonStr)
+
+        assertNotNull(response.modelContract)
+        assertEquals("input_0", response.modelContract!!.inputs[0].name)
     }
 
     // =========================================================================
