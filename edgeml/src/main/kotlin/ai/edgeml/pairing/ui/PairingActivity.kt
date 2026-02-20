@@ -3,6 +3,7 @@ package ai.edgeml.pairing.ui
 import ai.edgeml.api.EdgeMLApi
 import ai.edgeml.api.EdgeMLApiFactory
 import ai.edgeml.config.EdgeMLConfig
+import ai.edgeml.tryitout.TryItOutActivity
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
@@ -79,7 +80,18 @@ class PairingActivity : ComponentActivity() {
                     viewModel = viewModel,
                     onTryItOut = {
                         Timber.d("PairingActivity: user tapped 'Try it out'")
-                        // Subclasses or host apps can override this behavior
+                        val successState = viewModel.state.value as? PairingState.Success
+                        if (successState != null) {
+                            val tryItOutIntent = TryItOutActivity.createIntent(
+                                context = this@PairingActivity,
+                                modelName = successState.modelName,
+                                modelVersion = successState.modelVersion,
+                                sizeBytes = successState.sizeBytes,
+                                runtime = successState.runtime,
+                                modality = successState.modality,
+                            )
+                            startActivity(tryItOutIntent)
+                        }
                     },
                     onOpenDashboard = {
                         Timber.d("PairingActivity: user tapped 'Open Dashboard'")

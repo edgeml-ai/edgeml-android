@@ -80,6 +80,9 @@ data class DeploymentInfo(
     val executor: String? = null,
     @SerialName("size_bytes")
     val sizeBytes: Long? = null,
+    /** Model modality (e.g., "text", "vision", "audio", "classification"). Null if unspecified. */
+    @SerialName("modality")
+    val modality: String? = null,
 )
 
 /**
