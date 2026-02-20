@@ -1,7 +1,6 @@
 package ai.edgeml.sample
 
 import ai.edgeml.pairing.ui.EdgeMLPairingTheme
-import ai.edgeml.tryitout.InferenceRunner
 import ai.edgeml.tryitout.ModelInfo
 import ai.edgeml.tryitout.TryItOutViewModel
 import android.os.Bundle
