@@ -7,14 +7,12 @@ import org.junit.After
 import org.junit.Before
 import org.junit.Test
 import org.tensorflow.lite.Interpreter
-import org.tensorflow.lite.Tensor
 import java.io.File
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
-import kotlin.test.assertTrue
 
 /**
- * Tests for [EdgeMLWrapper.wrap] — the main entry point for creating wrapped interpreters.
+ * Tests for [EdgeML.wrap] — the main entry point for creating wrapped interpreters.
  */
 class EdgeMLWrapperTest {
 
@@ -42,7 +40,7 @@ class EdgeMLWrapperTest {
     fun `wrap returns a non-null EdgeMLWrappedInterpreter`() {
         val config = EdgeMLWrapperConfig.offline()
 
-        val wrapped = EdgeMLWrapper.wrap(
+        val wrapped = EdgeML.wrap(
             interpreter = mockInterpreter,
             modelId = "classifier",
             config = config,
@@ -54,7 +52,7 @@ class EdgeMLWrapperTest {
 
     @Test
     fun `wrap with default config does not throw`() {
-        val wrapped = EdgeMLWrapper.wrap(
+        val wrapped = EdgeML.wrap(
             interpreter = mockInterpreter,
             modelId = "test-model",
             config = EdgeMLWrapperConfig.default(),
@@ -67,7 +65,7 @@ class EdgeMLWrapperTest {
     @Test
     fun `wrapped interpreter delegates run to original`() {
         val config = EdgeMLWrapperConfig.offline()
-        val wrapped = EdgeMLWrapper.wrap(
+        val wrapped = EdgeML.wrap(
             interpreter = mockInterpreter,
             modelId = "test-model",
             config = config,
@@ -93,7 +91,7 @@ class EdgeMLWrapperTest {
             otaUpdatesEnabled = false,
         )
 
-        val wrapped = EdgeMLWrapper.wrap(
+        val wrapped = EdgeML.wrap(
             interpreter = mockInterpreter,
             modelId = "test-model",
             config = config,
@@ -128,7 +126,7 @@ class EdgeMLWrapperTest {
 
         // This should return immediately even though server is unreachable
         // (async contract fetch and OTA check run in background)
-        val wrapped = EdgeMLWrapper.wrap(
+        val wrapped = EdgeML.wrap(
             interpreter = mockInterpreter,
             modelId = "test-model",
             config = config,
@@ -151,7 +149,7 @@ class EdgeMLWrapperTest {
         every { mockInterpreter.inputTensorCount } returns 1
         every { mockInterpreter.outputTensorCount } returns 2
 
-        val wrapped = EdgeMLWrapper.wrap(
+        val wrapped = EdgeML.wrap(
             interpreter = mockInterpreter,
             modelId = "test-model",
             config = EdgeMLWrapperConfig.offline(),
@@ -168,7 +166,7 @@ class EdgeMLWrapperTest {
 
     @Test
     fun `offline config produces a functioning wrapper`() {
-        val wrapped = EdgeMLWrapper.wrap(
+        val wrapped = EdgeML.wrap(
             interpreter = mockInterpreter,
             modelId = "offline-model",
             config = EdgeMLWrapperConfig.offline(),

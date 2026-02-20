@@ -13,22 +13,28 @@ import java.io.File
  * Main entry point for wrapping a TFLite [Interpreter] with EdgeML telemetry,
  * input validation, and OTA model updates.
  *
+ * Usage requires a single import:
+ * ```kotlin
+ * import ai.edgeml.wrapper.EdgeML
+ * ```
+ *
+ * Then change one line at model load -- zero changes at call sites:
  * ```kotlin
  * // Before
  * val interpreter = Interpreter(modelFile)
  * interpreter.run(input, output)
  *
  * // After
- * val interpreter = EdgeMLWrapper.wrap(Interpreter(modelFile), modelId = "classifier")
+ * val interpreter = EdgeML.wrap(Interpreter(modelFile), modelId = "classifier")
  * interpreter.run(input, output)  // identical API
  * ```
  *
- * The wrapper is intentionally a separate object from [ai.edgeml.EdgeML] to keep
- * the drop-in TFLite wrapper decoupled from the full federated-learning SDK.
+ * This object lives in the `ai.edgeml.wrapper` package to stay decoupled from
+ * the full federated-learning SDK entry point at [ai.edgeml.EdgeML].
  */
-object EdgeMLWrapper {
+object EdgeML {
 
-    private const val TAG = "EdgeMLWrapper"
+    private const val TAG = "EdgeML.wrap"
 
     /**
      * Wrap a TFLite [Interpreter] with EdgeML instrumentation.
@@ -134,7 +140,7 @@ object EdgeMLWrapper {
     private suspend fun fetchModelContract(
         wrapped: EdgeMLWrappedInterpreter,
         modelId: String,
-        config: EdgeMLWrapperConfig,
+        @Suppress("UNUSED_PARAMETER") config: EdgeMLWrapperConfig,
     ) {
         try {
             // TODO: implement real contract fetch from server
