@@ -144,14 +144,14 @@ class NsdAdvertiser(private val context: Context) {
             } catch (e: IllegalArgumentException) {
                 // Listener was not registered or already unregistered
                 Timber.w(e, "Failed to unregister NSD service (already unregistered?)")
-                registered.set(false)
-                registering.set(false)
             }
-        } else {
-            registered.set(false)
-            registering.set(false)
         }
 
+        // Reset state immediately — don't wait for the async callback.
+        // The onServiceUnregistered callback will fire eventually but we
+        // consider the advertiser stopped as soon as stopAdvertising returns.
+        registered.set(false)
+        registering.set(false)
         registrationListener = null
         nsdManager = null
         allocatedPort.set(0)
