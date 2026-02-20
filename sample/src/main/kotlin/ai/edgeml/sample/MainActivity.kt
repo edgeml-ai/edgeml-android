@@ -1,218 +1,90 @@
 package ai.edgeml.sample
 
-import ai.edgeml.client.ClientState
-import ai.edgeml.models.DownloadState
-import ai.edgeml.sample.databinding.ActivityMainBinding
+import ai.edgeml.pairing.ui.EdgeMLPairingTheme
+import ai.edgeml.tryitout.InferenceRunner
+import ai.edgeml.tryitout.ModelInfo
+import ai.edgeml.tryitout.TryItOutViewModel
 import android.os.Bundle
-import android.widget.Toast
-import androidx.activity.viewModels
-import androidx.appcompat.app.AppCompatActivity
-import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.lifecycleScope
-import androidx.lifecycle.repeatOnLifecycle
-import kotlinx.coroutines.flow.collectLatest
-import kotlinx.coroutines.launch
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.setContent
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Build
+import androidx.compose.material.icons.filled.CellTower
+import androidx.compose.material3.Icon
+import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
 
 /**
- * Main activity demonstrating EdgeML SDK usage.
+ * Main launcher activity for the EdgeML pilot reference app.
+ *
+ * Uses Jetpack Compose with bottom navigation exposing two tabs:
+ * - **SDK Demo** -- the original register / inference / training buttons.
+ * - **Paired Model** -- shows the TryItOut screen after a successful `edgeml deploy --phone`
+ *   pairing, or a waiting placeholder before pairing has occurred.
  */
-class MainActivity : AppCompatActivity() {
-    private lateinit var binding: ActivityMainBinding
-    private val viewModel: MainViewModel by viewModels()
+class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        binding = ActivityMainBinding.inflate(layoutInflater)
-        setContentView(binding.root)
-
-        setupUI()
-        observeState()
-    }
-
-    private fun setupUI() {
-        binding.apply {
-            // Initialize button
-            btnInitialize.setOnClickListener {
-                viewModel.initializeSDK()
+        setContent {
+            EdgeMLPairingTheme {
+                MainScreen()
             }
-
-            // Run inference button
-            btnRunInference.setOnClickListener {
-                viewModel.runSampleInference()
-            }
-
-            // Start training button
-            btnStartTraining.setOnClickListener {
-                viewModel.runTraining()
-            }
-
-            // Update model button
-            btnUpdateModel.setOnClickListener {
-                viewModel.updateModel()
-            }
-
-            // Sync button
-            btnSync.setOnClickListener {
-                viewModel.triggerSync()
-                Toast.makeText(this@MainActivity, "Sync triggered", Toast.LENGTH_SHORT).show()
-            }
-        }
-    }
-
-    private fun observeState() {
-        lifecycleScope.launch {
-            repeatOnLifecycle(Lifecycle.State.STARTED) {
-                // Observe client state
-                launch {
-                    viewModel.clientState.collectLatest { state ->
-                        updateClientStateUI(state)
-                    }
-                }
-
-                // Observe download state
-                launch {
-                    viewModel.downloadState.collectLatest { state ->
-                        updateDownloadStateUI(state)
-                    }
-                }
-
-                // Observe inference result
-                launch {
-                    viewModel.inferenceResult.collectLatest { result ->
-                        updateInferenceResultUI(result)
-                    }
-                }
-
-                // Observe device ID
-                launch {
-                    viewModel.deviceId.collectLatest { deviceId ->
-                        binding.tvDeviceId.text = "Device ID: ${deviceId ?: "Not registered"}"
-                    }
-                }
-
-                // Observe model info
-                launch {
-                    viewModel.modelInfo.collectLatest { info ->
-                        if (info != null) {
-                            binding.tvModelInfo.text =
-                                """
-                                Model: ${info.modelId}
-                                Version: ${info.version}
-                                Format: ${info.format}
-                                Size: ${info.sizeBytes / 1024} KB
-                                GPU: ${if (info.usingGpu) "Yes" else "No"}
-                                """.trimIndent()
-                        } else {
-                            binding.tvModelInfo.text = "No model loaded"
-                        }
-                    }
-                }
-
-                // Observe training state
-                launch {
-                    viewModel.trainingState.collectLatest { state ->
-                        updateTrainingStateUI(state)
-                    }
-                }
-            }
-        }
-    }
-
-    private fun updateClientStateUI(state: ClientState) {
-        val stateText =
-            when (state) {
-                ClientState.UNINITIALIZED -> "Uninitialized"
-                ClientState.INITIALIZING -> "Initializing..."
-                ClientState.READY -> "Ready"
-                ClientState.ERROR -> "Error"
-                ClientState.CLOSED -> "Closed"
-            }
-
-        binding.tvClientState.text = "State: $stateText"
-        binding.btnInitialize.isEnabled = state == ClientState.UNINITIALIZED || state == ClientState.ERROR
-        binding.btnRunInference.isEnabled = state == ClientState.READY
-        binding.btnStartTraining.isEnabled = state == ClientState.READY
-        binding.btnUpdateModel.isEnabled = state == ClientState.READY
-        binding.btnSync.isEnabled = state == ClientState.READY
-    }
-
-    private fun updateDownloadStateUI(state: DownloadState?) {
-        val statusText =
-            when (state) {
-                null, DownloadState.Idle -> "Idle"
-                DownloadState.CheckingForUpdates -> "Checking for updates..."
-                is DownloadState.Downloading -> "Downloading: ${state.progress.progress}%"
-                DownloadState.Verifying -> "Verifying..."
-                is DownloadState.Completed -> "Download completed"
-                is DownloadState.Failed -> "Failed: ${state.error.message}"
-                is DownloadState.UpToDate -> "Model up to date"
-            }
-
-        binding.tvDownloadStatus.text = "Download: $statusText"
-
-        // Update progress bar
-        when (state) {
-            is DownloadState.Downloading -> {
-                binding.progressBar.isIndeterminate = false
-                binding.progressBar.progress = state.progress.progress
-            }
-
-            is DownloadState.CheckingForUpdates, DownloadState.Verifying -> {
-                binding.progressBar.isIndeterminate = true
-            }
-
-            else -> {
-                binding.progressBar.isIndeterminate = false
-                binding.progressBar.progress = 0
-            }
-        }
-    }
-
-    private fun updateInferenceResultUI(result: InferenceResultUI?) {
-        if (result != null) {
-            binding.tvInferenceResult.text =
-                """
-                Inference Result:
-                Top prediction: Class ${result.topClass} (${String.format("%.2f", result.confidence * 100)}%)
-                Time: ${result.inferenceTimeMs} ms
-                """.trimIndent()
-        } else {
-            binding.tvInferenceResult.text = "No inference result yet"
-        }
-    }
-
-    private fun updateTrainingStateUI(state: TrainingStateUI?) {
-        if (state == null) {
-            binding.tvTrainingStatus.text = "No training started"
-            return
-        }
-
-        val text = buildString {
-            append("Status: ${state.status}")
-            if (state.totalEpochs > 0) {
-                append("\nEpochs: ${state.currentEpoch}/${state.totalEpochs}")
-            }
-            if (state.loss != null) {
-                append("\nLoss: ${String.format("%.4f", state.loss)}")
-            }
-            if (state.accuracy != null) {
-                append("\nAccuracy: ${String.format("%.2f", state.accuracy * 100)}%")
-            }
-        }
-        binding.tvTrainingStatus.text = text
-
-        // Disable training button while training is in progress
-        if (state.isTraining) {
-            binding.btnStartTraining.isEnabled = false
         }
     }
 }
 
 /**
- * UI representation of inference result.
+ * Root composable with bottom navigation.
  */
-data class InferenceResultUI(
-    val topClass: Int,
-    val confidence: Float,
-    val inferenceTimeMs: Long,
-)
+@Composable
+fun MainScreen() {
+    var selectedTab by remember { mutableIntStateOf(0) }
+
+    // Paired model state -- will be set when a model is deployed via the pairing flow.
+    // In a production app this would be populated by observing PairingActivity results
+    // or a shared repository. For the pilot reference this starts null and can be
+    // populated manually or via deep link.
+    var pairedModelInfo by remember { mutableStateOf<ModelInfo?>(null) }
+    var tryItOutViewModel by remember { mutableStateOf<TryItOutViewModel?>(null) }
+
+    Scaffold(
+        bottomBar = {
+            NavigationBar {
+                NavigationBarItem(
+                    icon = { Icon(Icons.Default.Build, contentDescription = "SDK Demo") },
+                    label = { Text("SDK Demo") },
+                    selected = selectedTab == 0,
+                    onClick = { selectedTab = 0 },
+                )
+                NavigationBarItem(
+                    icon = { Icon(Icons.Default.CellTower, contentDescription = "Paired Model") },
+                    label = { Text("Paired") },
+                    selected = selectedTab == 1,
+                    onClick = { selectedTab = 1 },
+                )
+            }
+        },
+    ) { padding ->
+        Box(modifier = Modifier.padding(padding)) {
+            when (selectedTab) {
+                0 -> SdkDemoContent()
+                1 -> PairedModelContent(
+                    pairedModelInfo = pairedModelInfo,
+                    tryItOutViewModel = tryItOutViewModel,
+                )
+            }
+        }
+    }
+}
