@@ -1,0 +1,208 @@
+plugins {
+    id("com.android.library")
+    id("org.jetbrains.kotlin.plugin.serialization")
+    id("org.jetbrains.kotlin.plugin.compose")
+    id("jacoco")
+    id("maven-publish")
+}
+
+android {
+    namespace = "ai.octomil"
+    compileSdk = 36
+
+    defaultConfig {
+        minSdk = 24
+
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        consumerProguardFiles("consumer-rules.pro")
+
+        buildConfigField("String", "OCTOMIL_VERSION", "\"${project.property("OCTOMIL_VERSION")}\"")
+    }
+
+    buildTypes {
+        release {
+            isMinifyEnabled = false
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro"
+            )
+        }
+        debug {
+            isMinifyEnabled = false
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
+    }
+
+    kotlin {
+        compilerOptions {
+            jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
+            freeCompilerArgs.addAll(listOf(
+                "-opt-in=kotlin.RequiresOptIn",
+                "-opt-in=kotlinx.coroutines.ExperimentalCoroutinesApi",
+                "-opt-in=kotlinx.serialization.ExperimentalSerializationApi"
+            ))
+        }
+    }
+
+    buildFeatures {
+        buildConfig = true
+        compose = true
+    }
+
+    testOptions {
+        unitTests {
+            isIncludeAndroidResources = true
+            isReturnDefaultValues = true
+        }
+    }
+
+    packaging {
+        resources {
+            excludes += "/META-INF/{AL2.0,LGPL2.1}"
+        }
+    }
+
+    publishing {
+        singleVariant("release") {
+            withSourcesJar()
+            withJavadocJar()
+        }
+    }
+}
+
+dependencies {
+    // Kotlin
+    implementation("org.jetbrains.kotlin:kotlin-stdlib:2.3.10")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.10.2")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2")
+    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.10.0")
+
+    // AndroidX
+    implementation("androidx.core:core-ktx:1.17.0")
+    implementation("androidx.appcompat:appcompat:1.7.1")
+    implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.10.0")
+    implementation("androidx.work:work-runtime-ktx:2.11.1")
+
+    // Jetpack Compose
+    implementation(platform("androidx.compose:compose-bom:2025.05.00"))
+    implementation("androidx.compose.ui:ui")
+    implementation("androidx.compose.ui:ui-tooling-preview")
+    implementation("androidx.compose.material3:material3")
+    implementation("androidx.compose.runtime:runtime")
+    implementation("androidx.activity:activity-compose:1.10.1")
+    implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.10.0")
+    debugImplementation("androidx.compose.ui:ui-tooling")
+
+    // Security - EncryptedSharedPreferences
+    implementation("androidx.security:security-crypto:1.1.0")
+
+    // Networking - Retrofit + OkHttp
+    implementation("com.squareup.retrofit2:retrofit:2.11.0")
+    implementation("com.squareup.okhttp3:okhttp:5.3.2")
+    implementation("com.squareup.okhttp3:logging-interceptor:5.3.2")
+    implementation("com.squareup.retrofit2:converter-kotlinx-serialization:2.11.0")
+
+    // TensorFlow Lite — core + GPU delegate
+    // TODO(acceleration): Migrate to LiteRT (google-ai-edge/LiteRT) for newer NPU support.
+    //   Replace these with:
+    //     implementation("com.google.ai.edge.litert:litert:latest")
+    //     implementation("com.google.ai.edge.litert:litert-gpu:latest")
+    //   See: https://github.com/google-ai-edge/LiteRT
+    implementation("org.tensorflow:tensorflow-lite:2.17.0")
+    implementation("org.tensorflow:tensorflow-lite-support:0.5.0")
+    implementation("org.tensorflow:tensorflow-lite-gpu:2.17.0")
+    implementation("org.tensorflow:tensorflow-lite-gpu-api:2.17.0")
+
+    // Optional vendor NPU delegates — loaded via reflection in TFLiteTrainer.
+    // Add the ones relevant to your target devices. The SDK auto-detects the SoC
+    // and uses the delegate if the AAR is on the classpath; no code changes needed.
+    //
+    // Qualcomm QNN (Snapdragon NPU/DSP — replaces deprecated Hexagon):
+    //   implementation("com.qualcomm.qti:qnn-tflite-delegate:2.+")
+    //   // AAR from Qualcomm AI Hub: https://aihub.qualcomm.com/
+    //
+    // Samsung Eden / ENN (Exynos NPU):
+    //   implementation("com.samsung.android:eden-tflite-delegate:1.+")
+    //   // AAR from Samsung Mobile AI SDK: https://developer.samsung.com/neural
+    //
+    // MediaTek NeuroPilot (Dimensity APU):
+    //   implementation("com.mediatek.neuropilot:tflite-neuron-delegate:1.+")
+    //   // AAR from NeuroPilot SDK: https://neuropilot.mediatek.com/
+
+    // Logging
+    implementation("com.jakewharton.timber:timber:5.0.1")
+
+    // Testing
+    testImplementation("org.json:json:20251224")
+    testImplementation("junit:junit:4.13.2")
+    testImplementation("org.jetbrains.kotlin:kotlin-test:2.3.10")
+    testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.10.2")
+    testImplementation("io.mockk:mockk:1.14.9")
+    testImplementation("com.squareup.okhttp3:mockwebserver:5.3.2")
+
+    androidTestImplementation("androidx.test.ext:junit:1.3.0")
+    androidTestImplementation("androidx.test.espresso:espresso-core:3.7.0")
+    androidTestImplementation("androidx.work:work-testing:2.11.1")
+}
+
+// Maven publish to GitHub Packages
+afterEvaluate {
+    publishing {
+        publications {
+            create<MavenPublication>("release") {
+                from(components["release"])
+                groupId = "ai.octomil"
+                artifactId = "octomil"
+                version = project.property("OCTOMIL_VERSION").toString()
+            }
+        }
+        repositories {
+            maven {
+                name = "GitHubPackages"
+                url = uri("https://maven.pkg.github.com/octomil/octomil-android")
+                credentials {
+                    username = System.getenv("GITHUB_ACTOR") ?: ""
+                    password = System.getenv("GITHUB_TOKEN") ?: ""
+                }
+            }
+        }
+    }
+}
+
+// JaCoCo configuration
+tasks.register("jacocoTestReport", JacocoReport::class) {
+    group = "verification"
+    description = "Generates JaCoCo code coverage report from debug unit tests."
+    dependsOn("testDebugUnitTest")
+
+    reports {
+        xml.required.set(true)
+        html.required.set(true)
+        csv.required.set(false)
+    }
+
+    val fileFilter = listOf(
+        "**/R.class",
+        "**/R$*.class",
+        "**/BuildConfig.*",
+        "**/Manifest*.*",
+        "**/*Test*.*",
+        "android/**/*.*"
+    )
+
+    val debugTree = fileTree("${project.layout.buildDirectory.get()}/tmp/kotlin-classes/debug") {
+        exclude(fileFilter)
+    }
+
+    val mainSrc = "${project.projectDir}/src/main/kotlin"
+
+    sourceDirectories.setFrom(files(mainSrc))
+    classDirectories.setFrom(files(debugTree))
+    executionData.setFrom(fileTree("${project.layout.buildDirectory.get()}/jacoco") {
+        include("**/*.exec")
+    })
+}
