@@ -166,10 +166,10 @@ def deserialize_android_weights(data: bytes) -> dict:
 - Use compression (gzip) for additional 30-40% reduction
 
 ```kotlin
-// Enable compression in EdgeMLConfig
-val config = EdgeMLConfig(
+// Enable compression in OctomilConfig
+val config = OctomilConfig(
     apiKey = "your-api-key",
-    serverUrl = "https://api.edgeml.ai",
+    serverUrl = "https://api.octomil.com",
     enableGpuAcceleration = true,
     numThreads = 4,
 )
@@ -345,4 +345,4 @@ if (batteryLevel > 30) {
 - [TensorFlow Lite Documentation](https://www.tensorflow.org/lite)
 - [TensorFlow Lite Model Maker](https://www.tensorflow.org/lite/models/modify/model_maker)
 - [On-Device Training Guide](https://www.tensorflow.org/lite/examples/on_device_training/overview)
-- [EdgeML Federated Learning Guide](../docs/FEDERATED_LEARNING.md)
+- [Octomil Federated Learning Guide](../docs/FEDERATED_LEARNING.md)

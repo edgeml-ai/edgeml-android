@@ -1,21 +1,21 @@
-# EdgeML Android SDK
+# Octomil Android SDK
 
-[![CI](https://github.com/edgeml-ai/edgeml-android/actions/workflows/ci.yml/badge.svg)](https://github.com/edgeml-ai/edgeml-android/actions/workflows/ci.yml)
-[![codecov](https://codecov.io/gh/edgeml-ai/edgeml-android/branch/main/graph/badge.svg)](https://codecov.io/gh/edgeml-ai/edgeml-android)
-[![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=edgeml-ai_edgeml-android&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=edgeml-ai_edgeml-android)
-[![Security Rating](https://sonarcloud.io/api/project_badges/measure?project=edgeml-ai_edgeml-android&metric=security_rating)](https://sonarcloud.io/summary/new_code?id=edgeml-ai_edgeml-android)
-[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/edgeml-ai/edgeml-android/badge)](https://scorecard.dev/viewer/?uri=github.com/edgeml-ai/edgeml-android)
-[![CodeQL](https://github.com/edgeml-ai/edgeml-android/actions/workflows/codeql.yml/badge.svg)](https://github.com/edgeml-ai/edgeml-android/actions/workflows/codeql.yml)
+[![CI](https://github.com/octomil/octomil-android/actions/workflows/ci.yml/badge.svg)](https://github.com/octomil/octomil-android/actions/workflows/ci.yml)
+[![codecov](https://codecov.io/gh/octomil/octomil-android/branch/main/graph/badge.svg)](https://codecov.io/gh/octomil/octomil-android)
+[![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=octomil_octomil-android&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=octomil_octomil-android)
+[![Security Rating](https://sonarcloud.io/api/project_badges/measure?project=octomil_octomil-android&metric=security_rating)](https://sonarcloud.io/summary/new_code?id=octomil_octomil-android)
+[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/octomil/octomil-android/badge)](https://scorecard.dev/viewer/?uri=github.com/octomil/octomil-android)
+[![CodeQL](https://github.com/octomil/octomil-android/actions/workflows/codeql.yml/badge.svg)](https://github.com/octomil/octomil-android/actions/workflows/codeql.yml)
 [![CII Best Practices](https://www.bestpractices.dev/projects/11912/badge)](https://www.bestpractices.dev/projects/11912)
 [![Kotlin](https://img.shields.io/badge/Kotlin-1.9%2B-blue.svg)](https://kotlinlang.org)
-[![Platform](https://img.shields.io/badge/platform-Android%205.0%2B-green.svg)](https://github.com/edgeml-ai/edgeml-android)
+[![Platform](https://img.shields.io/badge/platform-Android%205.0%2B-green.svg)](https://github.com/octomil/octomil-android)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 > Enterprise-grade Android SDK for privacy-preserving federated learning on mobile devices.
 
 ## Overview
 
-The EdgeML Android SDK brings production-ready federated learning to Android smartphones and tablets. Designed with Google's Android security model in mind, it implements real on-device training via TFLite model signatures while maintaining complete data sovereignty.
+The Octomil Android SDK brings production-ready federated learning to Android smartphones and tablets. Designed with Google's Android security model in mind, it implements real on-device training via TFLite model signatures while maintaining complete data sovereignty.
 
 ### Key Features
 
@@ -48,7 +48,7 @@ The EdgeML Android SDK brings production-ready federated learning to Android sma
 
 ```kotlin
 dependencies {
-    implementation("ai.edgeml:edgeml-android:1.0.0")
+    implementation("ai.octomil:octomil-android:1.0.0")
 }
 ```
 
@@ -56,7 +56,7 @@ dependencies {
 
 ```groovy
 dependencies {
-    implementation 'ai.edgeml:edgeml-android:1.0.0'
+    implementation 'ai.octomil:octomil-android:1.0.0'
 }
 ```
 
@@ -79,10 +79,10 @@ dependencies {
 Deploy and benchmark TFLite models locally. No server, no auth, no registration needed:
 
 ```kotlin
-import ai.edgeml.EdgeML
+import ai.octomil.Octomil
 
 // Deploy a model — auto-benchmarks NPU/GPU/CPU delegates, picks fastest
-val model = EdgeML.deploy(context, "MobileNet.tflite")
+val model = Octomil.deploy(context, "MobileNet.tflite")
 
 val result = model.predict(floatArrayOf(1f, 2f, 3f)).getOrThrow()
 
@@ -95,24 +95,24 @@ println(model.warmupResult)    // cold: 62ms, warm: 4ms, cpu: 12ms
 Skip benchmarking for faster startup:
 
 ```kotlin
-val model = EdgeML.deploy(context, "model.tflite", benchmark = false)
+val model = Octomil.deploy(context, "model.tflite", benchmark = false)
 ```
 
-When you're ready to connect to the EdgeML platform, initialize with your API key and the SDK automatically starts reporting metrics.
+When you're ready to connect to the Octomil platform, initialize with your API key and the SDK automatically starts reporting metrics.
 
 ### Enterprise Runtime Authentication
 
 For production deployments, use secure token-based authentication:
 
 ```kotlin
-import ai.edgeml.sdk.DeviceAuthManager
-import ai.edgeml.client.EdgeMLClient
-import ai.edgeml.config.EdgeMLConfig
+import ai.octomil.sdk.DeviceAuthManager
+import ai.octomil.client.OctomilClient
+import ai.octomil.config.OctomilConfig
 
 class MyApplication : Application() {
 
     private lateinit var authManager: DeviceAuthManager
-    private lateinit var edgeMLClient: EdgeMLClient
+    private lateinit var octomilClient: OctomilClient
 
     override fun onCreate() {
         super.onCreate()
@@ -120,7 +120,7 @@ class MyApplication : Application() {
         // Initialize device auth manager
         authManager = DeviceAuthManager(
             context = applicationContext,
-            baseUrl = "https://api.edgeml.io",
+            baseUrl = "https://api.octomil.com",
             orgId = "org_123",
             deviceIdentifier = "android-device-${getDeviceId()}",
         )
@@ -131,28 +131,28 @@ class MyApplication : Application() {
                 bootstrapBearerToken = getBackendBootstrapToken()
             )
 
-            // Initialize EdgeML client
-            initializeEdgeML()
+            // Initialize Octomil client
+            initializeOctomil()
         }
     }
 
-    private suspend fun initializeEdgeML() {
-        val config = EdgeMLConfig.Builder()
-            .serverUrl("https://api.edgeml.io")
+    private suspend fun initializeOctomil() {
+        val config = OctomilConfig.Builder()
+            .serverUrl("https://api.octomil.com")
             .deviceAccessToken(authManager.getAccessToken())
             .orgId("org_123")
             .modelId("recommendation-model")
             .debugMode(BuildConfig.DEBUG)
             .build()
 
-        edgeMLClient = EdgeMLClient.Builder(applicationContext)
+        octomilClient = OctomilClient.Builder(applicationContext)
             .config(config)
             .build()
 
-        edgeMLClient.initialize().onSuccess {
-            Log.i("EdgeML", "Client initialized successfully")
+        octomilClient.initialize().onSuccess {
+            Log.i("Octomil", "Client initialized successfully")
         }.onFailure { error ->
-            Log.e("EdgeML", "Initialization failed", error)
+            Log.e("Octomil", "Initialization failed", error)
         }
     }
 
@@ -168,8 +168,8 @@ class MyApplication : Application() {
 ### Full Integration Example
 
 ```kotlin
-import ai.edgeml.client.EdgeMLClient
-import ai.edgeml.training.TrainingConfig
+import ai.octomil.client.OctomilClient
+import ai.octomil.training.TrainingConfig
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
 
@@ -178,17 +178,17 @@ class FederatedLearningManager(
     private val authManager: DeviceAuthManager
 ) {
 
-    private lateinit var client: EdgeMLClient
+    private lateinit var client: OctomilClient
 
     suspend fun initialize() {
-        val config = EdgeMLConfig.Builder()
-            .serverUrl("https://api.edgeml.io")
+        val config = OctomilConfig.Builder()
+            .serverUrl("https://api.octomil.com")
             .deviceAccessToken(authManager.getAccessToken())
             .orgId("org_123")
             .modelId("sentiment-model")
             .build()
 
-        client = EdgeMLClient.Builder(context)
+        client = OctomilClient.Builder(context)
             .config(config)
             .build()
 
@@ -198,7 +198,7 @@ class FederatedLearningManager(
     suspend fun startTraining() {
         // Check training eligibility
         if (!isEligibleForTraining()) {
-            Log.w("EdgeML", "Device not eligible for training")
+            Log.w("Octomil", "Device not eligible for training")
             return
         }
 
@@ -212,14 +212,14 @@ class FederatedLearningManager(
             .collect { result ->
                 when (result) {
                     is TrainingResult.Progress -> {
-                        Log.i("EdgeML", "Training progress: ${result.progress}%")
+                        Log.i("Octomil", "Training progress: ${result.progress}%")
                     }
                     is TrainingResult.Success -> {
-                        Log.i("EdgeML", "Training completed successfully")
+                        Log.i("Octomil", "Training completed successfully")
                         uploadModelUpdate(result.modelDelta)
                     }
                     is TrainingResult.Error -> {
-                        Log.e("EdgeML", "Training failed", result.error)
+                        Log.e("Octomil", "Training failed", result.error)
                     }
                 }
             }
@@ -287,22 +287,22 @@ The `WeightExtractor` directly parses `.tflite` FlatBuffer binary format to extr
 
 ```bash
 # API Configuration
-export EDGEML_API_BASE="https://api.edgeml.io/api/v1"
-export EDGEML_ORG_ID="your-org-id"
+export OCTOMIL_API_BASE="https://api.octomil.com/api/v1"
+export OCTOMIL_ORG_ID="your-org-id"
 
 # Device Configuration
-export EDGEML_DEVICE_ID="unique-device-identifier"
-export EDGEML_PLATFORM="android"
+export OCTOMIL_DEVICE_ID="unique-device-identifier"
+export OCTOMIL_PLATFORM="android"
 
 # Logging
-export EDGEML_LOG_LEVEL="INFO"  # DEBUG, INFO, WARNING, ERROR
+export OCTOMIL_LOG_LEVEL="INFO"  # DEBUG, INFO, WARNING, ERROR
 ```
 
 ### Advanced Configuration
 
 ```kotlin
-val config = EdgeMLConfig.Builder()
-    .serverUrl("https://api.edgeml.io")
+val config = OctomilConfig.Builder()
+    .serverUrl("https://api.octomil.com")
     .deviceAccessToken(accessToken)
     .orgId("org_123")
     .modelId("recommendation-model")
@@ -445,12 +445,12 @@ fun schedulePeriodicTraining(context: Context) {
 ./gradlew jacocoTestReport
 
 # View coverage report
-open edgeml/build/reports/jacoco/jacocoTestReport/html/index.html
+open octomil/build/reports/jacoco/jacocoTestReport/html/index.html
 ```
 
 ## Documentation
 
-For full SDK documentation, see [https://docs.edgeml.io/sdks/android](https://docs.edgeml.io/sdks/android)
+For full SDK documentation, see [https://docs.octomil.com/sdks/android](https://docs.octomil.com/sdks/android)
 
 ## Contributing
 
@@ -460,8 +460,8 @@ We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) f
 
 ```bash
 # Clone repository
-git clone https://github.com/edgeml-ai/edgeml-android.git
-cd edgeml-android
+git clone https://github.com/octomil/octomil-android.git
+cd octomil-android
 
 # Open in Android Studio
 open -a "Android Studio" .
@@ -540,12 +540,12 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## Support
 
-For issues and feature requests, please use the [GitHub issue tracker](https://github.com/edgeml-ai/edgeml-android/issues).
+For issues and feature requests, please use the [GitHub issue tracker](https://github.com/octomil/octomil-android/issues).
 
-For questions: support@edgeml.io
+For questions: support@octomil.com
 
 ---
 
 <p align="center">
-  <strong>Built with ❤️ by the EdgeML Team</strong>
+  <strong>Built with ❤️ by the Octomil Team</strong>
 </p>

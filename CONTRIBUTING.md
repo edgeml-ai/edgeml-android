@@ -1,6 +1,6 @@
-# Contributing to EdgeML Android SDK
+# Contributing to Octomil Android SDK
 
-Thank you for your interest in contributing to the EdgeML Android SDK! This guide will help you get started.
+Thank you for your interest in contributing to the Octomil Android SDK! This guide will help you get started.
 
 ## Table of Contents
 
@@ -15,7 +15,7 @@ Thank you for your interest in contributing to the EdgeML Android SDK! This guid
 
 ## Reporting Bugs
 
-If you find a bug, please open an issue on [GitHub Issues](https://github.com/edgeml-ai/edgeml-android/issues) with the following information:
+If you find a bug, please open an issue on [GitHub Issues](https://github.com/octomil/octomil-android/issues) with the following information:
 
 - A clear and descriptive title
 - Steps to reproduce the issue
@@ -26,7 +26,7 @@ If you find a bug, please open an issue on [GitHub Issues](https://github.com/ed
 
 ## Requesting Features
 
-Feature requests are welcome! Please open an issue on [GitHub Issues](https://github.com/edgeml-ai/edgeml-android/issues) and include:
+Feature requests are welcome! Please open an issue on [GitHub Issues](https://github.com/octomil/octomil-android/issues) and include:
 
 - A clear description of the feature and the problem it solves
 - Example usage or API design, if applicable
@@ -129,4 +129,4 @@ If you experience or witness unacceptable behavior, please report it by opening 
 
 ---
 
-Thank you for contributing to EdgeML!
+Thank you for contributing to Octomil!

@@ -63,11 +63,11 @@ jobs:
           cache: gradle
 
       - name: Build release AAR
-        run: ./gradlew :edgeml:assembleRelease
+        run: ./gradlew :octomil:assembleRelease
 
       - name: Verify AAR exists
         run: |
-          AAR_PATH="edgeml/build/outputs/aar/edgeml-release.aar"
+          AAR_PATH="octomil/build/outputs/aar/octomil-release.aar"
           if [ ! -f "${AAR_PATH}" ]; then
             echo "ERROR: AAR not found at ${AAR_PATH}"
             exit 1
@@ -77,13 +77,13 @@ jobs:
       - name: Generate subject hash
         id: hash
         run: |
-          echo "hashes=$(sha256sum edgeml/build/outputs/aar/edgeml-release.aar | base64 -w0)" >> "$GITHUB_OUTPUT"
+          echo "hashes=$(sha256sum octomil/build/outputs/aar/octomil-release.aar | base64 -w0)" >> "$GITHUB_OUTPUT"
 
       - name: Upload artifact for provenance
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:
           name: release-aar
-          path: edgeml/build/outputs/aar/edgeml-release.aar
+          path: octomil/build/outputs/aar/octomil-release.aar
           if-no-files-found: error
           retention-days: 1
 
@@ -124,8 +124,8 @@ jobs:
           PROVENANCE: ${{ needs.provenance.outputs.provenance-name }}
         run: |
           gh release create "${VERSION}" \
-            edgeml-release.aar \
+            octomil-release.aar \
             "${PROVENANCE}" \
-            --title "EdgeML Android SDK ${VERSION}" \
+            --title "Octomil Android SDK ${VERSION}" \
             --generate-notes \
             --repo "${GITHUB_REPOSITORY}"

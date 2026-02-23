@@ -14,11 +14,11 @@ val localProperties = Properties().apply {
 }
 
 android {
-    namespace = "ai.edgeml.sample"
+    namespace = "ai.octomil.sample"
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "ai.edgeml.sample"
+        applicationId = "ai.octomil.sample"
         minSdk = 24
         targetSdk = 36
         versionCode = 1
@@ -28,23 +28,23 @@ android {
 
         buildConfigField(
             "String",
-            "EDGEML_SERVER_URL",
-            "\"${localProperties.getProperty("EDGEML_SERVER_URL", "https://api.edgeml.ai")}\"",
+            "OCTOMIL_SERVER_URL",
+            "\"${localProperties.getProperty("OCTOMIL_SERVER_URL", "https://api.octomil.com")}\"",
         )
         buildConfigField(
             "String",
-            "EDGEML_DEVICE_TOKEN",
-            "\"${localProperties.getProperty("EDGEML_DEVICE_TOKEN", "")}\"",
+            "OCTOMIL_DEVICE_TOKEN",
+            "\"${localProperties.getProperty("OCTOMIL_DEVICE_TOKEN", "")}\"",
         )
         buildConfigField(
             "String",
-            "EDGEML_ORG_ID",
-            "\"${localProperties.getProperty("EDGEML_ORG_ID", "")}\"",
+            "OCTOMIL_ORG_ID",
+            "\"${localProperties.getProperty("OCTOMIL_ORG_ID", "")}\"",
         )
         buildConfigField(
             "String",
-            "EDGEML_MODEL_ID",
-            "\"${localProperties.getProperty("EDGEML_MODEL_ID", "")}\"",
+            "OCTOMIL_MODEL_ID",
+            "\"${localProperties.getProperty("OCTOMIL_MODEL_ID", "")}\"",
         )
     }
 
@@ -77,7 +77,7 @@ android {
 }
 
 dependencies {
-    implementation(project(":edgeml"))
+    implementation(project(":octomil"))
 
     implementation("org.jetbrains.kotlin:kotlin-stdlib:2.3.10")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2")
@@ -88,7 +88,7 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.10.0")
     implementation("androidx.lifecycle:lifecycle-viewmodel-ktx:2.10.0")
 
-    // Jetpack Compose — match BOM version from :edgeml module
+    // Jetpack Compose — match BOM version from :octomil module
     implementation(platform("androidx.compose:compose-bom:2025.05.00"))
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.ui:ui-tooling-preview")

@@ -14,6 +14,6 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "edgeml-android"
-include(":edgeml")
+rootProject.name = "octomil-android"
+include(":octomil")
 include(":sample")

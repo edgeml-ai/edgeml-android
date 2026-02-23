@@ -1,4 +1,4 @@
-// Top-level build file for EdgeML Android SDK
+// Top-level build file for Octomil Android SDK
 buildscript {
     repositories {
         google()
@@ -17,9 +17,9 @@ plugins {
 sonarqube {
     properties {
         property("sonar.host.url", "https://sonarcloud.io")
-        property("sonar.organization", "edgeml-ai")
-        property("sonar.projectKey", "edgeml-ai_edgeml-android")
-        property("sonar.projectName", "EdgeML Android SDK")
+        property("sonar.organization", "octomil")
+        property("sonar.projectKey", "octomil_octomil-android")
+        property("sonar.projectName", "Octomil Android SDK")
         property("sonar.sourceEncoding", "UTF-8")
         property("sonar.exclusions", "**/R.java,**/*.xml,**/BuildConfig.java,**/Manifest*.*,**/*Test*.*")
         property("sonar.coverage.exclusions", "**/*Test*.*,**/test/**")
@@ -29,7 +29,7 @@ sonarqube {
 subprojects {
     sonarqube {
         properties {
-            if (project.name == "edgeml") {
+            if (project.name == "octomil") {
                 property("sonar.coverage.jacoco.xmlReportPaths",
                     "${project.layout.buildDirectory.get()}/reports/jacoco/jacocoTestReport/jacocoTestReport.xml")
             }

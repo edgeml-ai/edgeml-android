@@ -1,10 +1,10 @@
 #!/bin/bash -eu
 
 # Fuzz target using only JDK + Jazzer API (no Android SDK needed)
-cat > FuzzEdgeML.java << 'FUZZ'
+cat > FuzzOctomil.java << 'FUZZ'
 import com.code_intelligence.jazzer.api.FuzzedDataProvider;
 
-public class FuzzEdgeML {
+public class FuzzOctomil {
     public static void fuzzerTestOneInput(FuzzedDataProvider data) {
         try {
             String input = data.consumeRemainingAsString();
@@ -32,12 +32,12 @@ public class FuzzEdgeML {
 FUZZ
 
 # Compile and package as _deploy.jar
-javac -cp "$JAZZER_API_PATH" FuzzEdgeML.java
-jar cf "$OUT/FuzzEdgeML_deploy.jar" FuzzEdgeML.class
+javac -cp "$JAZZER_API_PATH" FuzzOctomil.java
+jar cf "$OUT/FuzzOctomil_deploy.jar" FuzzOctomil.class
 
 # Create executable wrapper script (required for fuzz target detection)
 # The build check looks for executable shell scripts containing LLVMFuzzerTestOneInput
-cat > "$OUT/FuzzEdgeML" << WRAPPER
+cat > "$OUT/FuzzOctomil" << WRAPPER
 #!/bin/bash
 # LLVMFuzzerTestOneInput for fuzzer detection.
 this_dir=\$(dirname "\$0")
@@ -48,9 +48,9 @@ else
 fi
 LD_LIBRARY_PATH="$JVM_LD_LIBRARY_PATH":\$this_dir \\
 \$this_dir/jazzer_driver --agent_path=\$this_dir/jazzer_agent_deploy.jar \\
---cp=\$this_dir/FuzzEdgeML_deploy.jar \\
---target_class=FuzzEdgeML \\
+--cp=\$this_dir/FuzzOctomil_deploy.jar \\
+--target_class=FuzzOctomil \\
 --jvm_args="\$mem_settings" \\
 \$@
 WRAPPER
-chmod +x "$OUT/FuzzEdgeML"
+chmod +x "$OUT/FuzzOctomil"

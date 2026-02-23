@@ -1,6 +1,6 @@
 # On-Device Personalization for Android
 
-This guide explains how to implement continuous on-device personalization with the EdgeML Android SDK, enabling adaptive learning similar to Google Keyboard.
+This guide explains how to implement continuous on-device personalization with the Octomil Android SDK, enabling adaptive learning similar to Google Keyboard.
 
 ## Overview
 
@@ -20,13 +20,13 @@ Personalization allows your app to incrementally improve its ML model based on u
 ### 1. Initialize Personalization Manager
 
 ```kotlin
-import ai.edgeml.personalization.PersonalizationManager
-import ai.edgeml.training.TFLiteTrainer
+import ai.octomil.personalization.PersonalizationManager
+import ai.octomil.training.TFLiteTrainer
 
 // Create configuration
-val config = EdgeMLConfig(
+val config = OctomilConfig(
     apiKey = "your-api-key",
-    serverUrl = "https://api.edgeml.ai",
+    serverUrl = "https://api.octomil.com",
     enableGpuAcceleration = true,
     numThreads = 4,
 )
@@ -533,6 +533,6 @@ fun PersonalizationSettingsScreen(
 ## References
 
 - [TensorFlow Lite Documentation](https://www.tensorflow.org/lite)
-- [EdgeML Federated Learning Guide](FEDERATED_LEARNING.md)
+- [Octomil Federated Learning Guide](FEDERATED_LEARNING.md)
 - [Privacy Best Practices](PRIVACY.md)
 - [Android WorkManager](https://developer.android.com/topic/libraries/architecture/workmanager)

@@ -1,11 +1,11 @@
-# Publishing the EdgeML Android SDK
+# Publishing the Octomil Android SDK
 
-This guide explains how to publish the EdgeML Android SDK for distribution.
+This guide explains how to publish the Octomil Android SDK for distribution.
 
 ## Quick Links
 
 - **PR**: https://github.com/sbangalore/fed-learning/pull/new/feat/android-weight-extraction
-- **Docs**: `edgeml-android/Docs/WEIGHT_EXTRACTION.md`
+- **Docs**: `octomil-android/Docs/WEIGHT_EXTRACTION.md`
 
 ## Changes Summary
 
@@ -23,7 +23,7 @@ Maven Central is the standard repository for Android libraries.
 
 #### Step 1: Configure Gradle Publishing
 
-Add to `edgeml-android/edgeml/build.gradle.kts`:
+Add to `octomil-android/octomil/build.gradle.kts`:
 
 ```kotlin
 plugins {
@@ -34,8 +34,8 @@ plugins {
 publishing {
     publications {
         create<MavenPublication>("release") {
-            groupId = "ai.edgeml"
-            artifactId = "edgeml-android"
+            groupId = "ai.octomil"
+            artifactId = "octomil-android"
             version = "1.1.0"
 
             afterEvaluate {
@@ -43,7 +43,7 @@ publishing {
             }
 
             pom {
-                name.set("EdgeML Android SDK")
+                name.set("Octomil Android SDK")
                 description.set("Federated learning SDK for Android with TensorFlow Lite")
                 url.set("https://github.com/sbangalore/fed-learning")
 
@@ -56,9 +56,9 @@ publishing {
 
                 developers {
                     developer {
-                        id.set("edgeml")
-                        name.set("EdgeML Team")
-                        email.set("team@edgeml.ai")
+                        id.set("octomil")
+                        name.set("Octomil Team")
+                        email.set("team@octomil.com")
                     }
                 }
 
@@ -105,7 +105,7 @@ ossrhUsername=YOUR_SONATYPE_USERNAME
 ossrhPassword=YOUR_SONATYPE_PASSWORD
 
 # Publish
-cd edgeml-android
+cd octomil-android
 ./gradlew publishReleasePublicationToOSSRHRepository
 ```
 
@@ -123,7 +123,7 @@ Add to `build.gradle.kts`:
 
 ```kotlin
 dependencies {
-    implementation("ai.edgeml:edgeml-android:1.1.0")
+    implementation("ai.octomil:octomil-android:1.1.0")
 }
 ```
 
@@ -154,10 +154,10 @@ git push origin v1.1.0
 
 1. Go to https://github.com/sbangalore/fed-learning/releases/new
 2. Choose tag: `v1.1.0`
-3. Release title: "EdgeML Android SDK v1.1.0 - Weight Extraction"
+3. Release title: "Octomil Android SDK v1.1.0 - Weight Extraction"
 4. Description:
 ```markdown
-## EdgeML Android SDK v1.1.0
+## Octomil Android SDK v1.1.0
 
 ### New Features
 - ✨ TensorFlow Lite weight/delta extraction for federated learning
@@ -183,7 +183,7 @@ dependencies {
 **Maven Central:**
 ```kotlin
 dependencies {
-    implementation("ai.edgeml:edgeml-android:1.1.0")
+    implementation("ai.octomil:octomil-android:1.1.0")
 }
 ```
 
@@ -199,7 +199,7 @@ client.uploadWeights(update)
 ```
 
 ### Documentation
-- [Weight Extraction Guide](edgeml-android/Docs/WEIGHT_EXTRACTION.md)
+- [Weight Extraction Guide](octomil-android/Docs/WEIGHT_EXTRACTION.md)
 - [API Documentation](#)
 
 ### Breaking Changes
@@ -231,7 +231,7 @@ Add to `build.gradle.kts`:
 
 ```kotlin
 dependencies {
-    implementation("com.github.sbangalore.fed-learning:edgeml-android:1.1.0")
+    implementation("com.github.sbangalore.fed-learning:octomil-android:1.1.0")
 }
 ```
 
@@ -244,29 +244,29 @@ Build an Android Archive (AAR) for manual integration.
 #### Step 1: Build AAR
 
 ```bash
-cd edgeml-android
+cd octomil-android
 
 # Clean
 ./gradlew clean
 
 # Build release AAR
-./gradlew edgeml:assembleRelease
+./gradlew octomil:assembleRelease
 
-# AAR will be at: edgeml/build/outputs/aar/edgeml-release.aar
+# AAR will be at: octomil/build/outputs/aar/octomil-release.aar
 ```
 
 #### Step 2: Attach to GitHub Release
 
-1. Upload `edgeml-release.aar` to GitHub release
+1. Upload `octomil-release.aar` to GitHub release
 2. Add checksum to release notes:
 ```bash
-shasum -a 256 edgeml/build/outputs/aar/edgeml-release.aar
+shasum -a 256 octomil/build/outputs/aar/octomil-release.aar
 ```
 
 ```markdown
 ### Manual Installation
 
-Download [edgeml-release.aar](link-to-release)
+Download [octomil-release.aar](link-to-release)
 
 **Checksum (SHA-256):**
 ```
@@ -278,7 +278,7 @@ abc123...xyz789
 2. Add to `build.gradle.kts`:
 ```kotlin
 dependencies {
-    implementation(files("libs/edgeml-release.aar"))
+    implementation(files("libs/octomil-release.aar"))
     implementation("org.tensorflow:tensorflow-lite:2.14.0")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
     implementation("com.jakewharton.timber:timber:5.0.1")
@@ -333,7 +333,7 @@ bundletool install-apks --apks=app.apks
 - [ ] Documentation is up to date
 - [ ] CHANGELOG.md updated
 - [ ] Version bumped in:
-  - [ ] `edgeml/build.gradle.kts`
+  - [ ] `octomil/build.gradle.kts`
   - [ ] Root `build.gradle.kts` (if applicable)
   - [ ] README.md
 
@@ -389,7 +389,7 @@ repositories {
 }
 
 dependencies {
-    implementation("com.github.sbangalore.fed-learning:edgeml-android:1.1.0")
+    implementation("com.github.sbangalore.fed-learning:octomil-android:1.1.0")
 }
 EOF
 
@@ -476,4 +476,4 @@ After this release (v1.1.0), consider:
 
 - **Issues**: https://github.com/sbangalore/fed-learning/issues
 - **Discussions**: https://github.com/sbangalore/fed-learning/discussions
-- **Email**: team@edgeml.ai (if applicable)
+- **Email**: team@octomil.com (if applicable)
