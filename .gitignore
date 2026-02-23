@@ -1,0 +1,48 @@
+# Android SDK Build Artifacts
+/octomil/build/
+/sample/build/
+/.gradle/
+
+# IDE Files
+/.idea/
+*.iml
+local.properties
+
+# OS Files
+.DS_Store
+Thumbs.db
+
+# Gradle
+.gradle/
+build/
+
+# APK and AAR files
+*.apk
+*.aar
+*.aab
+
+# Log files
+*.log
+
+# Local configuration
+
+# Claude
+.claude/
+
+# Stale directories
+octomil/
+
+# Environment & secrets
+.env
+.env.*
+*.jks
+*.keystore
+*.pem
+*.key
+*.p12
+
+# Heap dumps
+*.hprof
+
+# Android Studio captures
+captures/
