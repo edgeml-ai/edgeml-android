@@ -240,4 +240,64 @@ class InferenceEngineTest {
     fun `all Modality values are present`() {
         assertEquals(4, Modality.entries.size)
     }
+
+    // =========================================================================
+    // Error-path streaming
+    // =========================================================================
+
+    @Test
+    fun `engine that throws mid-stream propagates exception`() = runTest {
+        val failingEngine = StreamingInferenceEngine { _, modality ->
+            kotlinx.coroutines.flow.flow {
+                emit(
+                    InferenceChunk(
+                        index = 0,
+                        data = byteArrayOf(1),
+                        modality = modality,
+                        timestamp = System.currentTimeMillis(),
+                        latencyMs = 0.0,
+                    ),
+                )
+                throw RuntimeException("inference failure mid-stream")
+            }
+        }
+
+        var collected = 0
+        var caughtException: Throwable? = null
+        try {
+            failingEngine.generate("input", Modality.TEXT).collect {
+                collected++
+            }
+        } catch (e: RuntimeException) {
+            caughtException = e
+        }
+
+        assertEquals(1, collected, "Should have emitted one chunk before failing")
+        assertTrue(caughtException is RuntimeException)
+        assertEquals("inference failure mid-stream", caughtException?.message)
+    }
+
+    @Test
+    fun `LLMEngine with empty string input still emits chunks`() = runTest {
+        val engine = LLMEngine(context, maxTokens = 100)
+
+        val chunks = engine.generate("", Modality.TEXT).toList()
+
+        // LLMEngine splits on whitespace; empty string yields no tokens,
+        // but the implementation falls back to emitting ["output"]
+        assertTrue(chunks.isNotEmpty(), "Empty input should still produce output")
+        chunks.forEach { chunk ->
+            assertEquals(Modality.TEXT, chunk.modality)
+            assertTrue(chunk.data.isNotEmpty())
+        }
+    }
+
+    @Test
+    fun `LLMEngine with whitespace-only input still emits chunks`() = runTest {
+        val engine = LLMEngine(context, maxTokens = 100)
+
+        val chunks = engine.generate("   ", Modality.TEXT).toList()
+
+        assertTrue(chunks.isNotEmpty(), "Whitespace-only input should still produce output")
+    }
 }

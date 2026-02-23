@@ -1284,6 +1284,23 @@ class EdgeMLClient private constructor(
     }
 
     /**
+     * Force the client into READY state for testing.
+     *
+     * This bypasses the full initialization sequence (registration, model
+     * download, warmup) which cannot be driven in unit tests due to MockK
+     * limitations with Kotlin default parameters and value classes.
+     *
+     * @param deviceId Optional server-assigned device ID to set.
+     */
+    @androidx.annotation.VisibleForTesting
+    internal fun setReadyForTesting(deviceId: String? = null) {
+        _state.value = ClientState.READY
+        if (deviceId != null) {
+            _serverDeviceId.value = deviceId
+        }
+    }
+
+    /**
      * Check if client is ready for operations.
      */
     private fun checkReady() {

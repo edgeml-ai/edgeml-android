@@ -1,6 +1,10 @@
 package ai.edgeml.pairing
 
 import org.junit.Test
+import retrofit2.Retrofit
+import java.lang.reflect.Proxy
+import java.util.concurrent.TimeUnit
+import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
@@ -14,42 +18,57 @@ import kotlin.test.assertTrue
 class DeepLinkPairingTest {
 
     // =========================================================================
-    // createPairingApi()
+    // createPairingApi() — property verification
     // =========================================================================
 
     @Test
     fun `createPairingApi returns a non-null API instance`() {
         val api = DeepLinkPairing.createPairingApi("https://api.edgeml.ai")
-
         assertNotNull(api)
     }
 
     @Test
-    fun `createPairingApi handles URL without trailing slash`() {
+    fun `createPairingApi base URL matches input without trailing slash`() {
         val api = DeepLinkPairing.createPairingApi("https://api.edgeml.ai")
+        val retrofit = extractRetrofit(api)
 
-        assertNotNull(api)
+        assertEquals("https://api.edgeml.ai/", retrofit.baseUrl().toString())
     }
 
     @Test
-    fun `createPairingApi handles URL with trailing slash`() {
+    fun `createPairingApi base URL matches input with trailing slash`() {
         val api = DeepLinkPairing.createPairingApi("https://api.edgeml.ai/")
+        val retrofit = extractRetrofit(api)
 
-        assertNotNull(api)
+        assertEquals("https://api.edgeml.ai/", retrofit.baseUrl().toString())
     }
 
     @Test
-    fun `createPairingApi handles localhost URL`() {
+    fun `createPairingApi base URL matches localhost`() {
         val api = DeepLinkPairing.createPairingApi("http://localhost:8000")
+        val retrofit = extractRetrofit(api)
 
-        assertNotNull(api)
+        assertEquals("http://localhost:8000/", retrofit.baseUrl().toString())
     }
 
     @Test
-    fun `createPairingApi handles custom port URL`() {
+    fun `createPairingApi base URL matches custom port URL`() {
         val api = DeepLinkPairing.createPairingApi("https://edgeml.internal.company.com:8443")
+        val retrofit = extractRetrofit(api)
 
-        assertNotNull(api)
+        assertEquals("https://edgeml.internal.company.com:8443/", retrofit.baseUrl().toString())
+    }
+
+    @Test
+    fun `createPairingApi configures OkHttpClient timeouts`() {
+        val api = DeepLinkPairing.createPairingApi("https://api.edgeml.ai")
+        val retrofit = extractRetrofit(api)
+        val client = retrofit.callFactory() as okhttp3.OkHttpClient
+
+        assertEquals(30, client.connectTimeoutMillis / 1000)
+        assertEquals(60, client.readTimeoutMillis / 1000)
+        assertEquals(60, client.writeTimeoutMillis / 1000)
+        assertTrue(client.retryOnConnectionFailure)
     }
 
     // =========================================================================
@@ -63,7 +82,24 @@ class DeepLinkPairingTest {
             host = "https://staging.edgeml.ai",
         )
 
-        assertTrue(action.token == "test-token-123")
-        assertTrue(action.host == "https://staging.edgeml.ai")
+        assertEquals("test-token-123", action.token)
+        assertEquals("https://staging.edgeml.ai", action.host)
+    }
+
+    // =========================================================================
+    // Helpers
+    // =========================================================================
+
+    /**
+     * Extract the Retrofit instance backing a Retrofit-generated API proxy.
+     *
+     * Retrofit creates JDK dynamic proxies whose InvocationHandler holds a
+     * reference to the Retrofit instance that created them.
+     */
+    private fun extractRetrofit(api: Any): Retrofit {
+        val handler = Proxy.getInvocationHandler(api)
+        val retrofitField = handler.javaClass.getDeclaredField("retrofit")
+        retrofitField.isAccessible = true
+        return retrofitField.get(handler) as Retrofit
     }
 }

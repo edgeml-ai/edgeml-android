@@ -174,7 +174,8 @@ object EdgeMLApiFactory {
     /**
      * Build a CertificatePinner from config. Returns null if no pins configured.
      */
-    private fun buildCertificatePinner(config: EdgeMLConfig): CertificatePinner? {
+    @androidx.annotation.VisibleForTesting
+    internal fun buildCertificatePinner(config: EdgeMLConfig): CertificatePinner? {
         if (config.certificatePins.isEmpty() || config.pinnedHostname.isBlank()) {
             return null
         }
