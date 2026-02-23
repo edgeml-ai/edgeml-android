@@ -255,18 +255,19 @@ class OctomilApiIntegrationTest {
             val body =
                 json.encodeToString(
                     ModelVersionResponse(
-                        "v1",
-                        "m1",
-                        "1.0.0",
-                        "published",
-                        "s3://path",
-                        "tensorflow_lite",
-                        "abc",
-                        1000,
-                        null,
-                        null,
-                        "2024-01-01T00:00:00Z",
-                        "2024-01-01T00:00:00Z",
+                        id = "v1",
+                        modelId = "m1",
+                        version = "1.0.0",
+                        status = "published",
+                        storagePath = "s3://path",
+                        format = "tensorflow_lite",
+                        checksum = "abc",
+                        sizeBytes = 1000,
+                        metrics = null,
+                        description = null,
+                        modelContract = null,
+                        createdAt = "2024-01-01T00:00:00Z",
+                        updatedAt = "2024-01-01T00:00:00Z",
                     ),
                 )
             server.enqueue(MockResponse().setBody(body).setResponseCode(200))
@@ -447,18 +448,19 @@ class OctomilApiIntegrationTest {
             val body =
                 json.encodeToString(
                     ModelVersionResponse(
-                        "v1",
-                        "m1",
-                        "2.0.0",
-                        "published",
-                        "s3://path",
-                        "tensorflow_lite",
-                        "abc",
-                        1000,
-                        null,
-                        null,
-                        "2024-01-01T00:00:00Z",
-                        "2024-01-01T00:00:00Z",
+                        id = "v1",
+                        modelId = "m1",
+                        version = "2.0.0",
+                        status = "published",
+                        storagePath = "s3://path",
+                        format = "tensorflow_lite",
+                        checksum = "abc",
+                        sizeBytes = 1000,
+                        metrics = null,
+                        description = null,
+                        modelContract = null,
+                        createdAt = "2024-01-01T00:00:00Z",
+                        updatedAt = "2024-01-01T00:00:00Z",
                     ),
                 )
             server.enqueue(MockResponse().setBody(body).setResponseCode(200))
