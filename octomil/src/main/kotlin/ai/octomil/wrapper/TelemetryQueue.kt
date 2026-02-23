@@ -77,11 +77,12 @@ class TelemetryQueue internal constructor(
      * Start the periodic flush timer. Call once after construction.
      */
     fun start() {
-        if (flushIntervalMs <= 0) return
-        flushJob = scope.launch {
-            while (isActive) {
-                delay(flushIntervalMs)
-                flush()
+        if (flushIntervalMs > 0) {
+            flushJob = scope.launch {
+                while (isActive) {
+                    delay(flushIntervalMs)
+                    flush()
+                }
             }
         }
         // Attempt to load and resend any persisted events from a previous session

@@ -46,7 +46,7 @@ class DiscoveryManager(
      */
     fun startDiscoverable(
         deviceId: String,
-        deviceName: String = Build.MODEL,
+        deviceName: String = Build.MODEL ?: "Android Device",
     ) {
         Timber.i("Making device discoverable: id=%s name=%s", deviceId, deviceName)
         advertiser.startAdvertising(deviceId = deviceId, deviceName = deviceName)
