@@ -83,7 +83,7 @@ class NsdAdvertiser(private val context: Context) {
     @Synchronized
     fun startAdvertising(
         deviceId: String,
-        deviceName: String = Build.MODEL,
+        deviceName: String = Build.MODEL ?: "Android Device",
         port: Int = 0,
     ) {
         if (registered.get() || registering.get()) {
