@@ -98,8 +98,14 @@ class DeepLinkPairingTest {
      */
     private fun extractRetrofit(api: Any): Retrofit {
         val handler = Proxy.getInvocationHandler(api)
-        val retrofitField = handler.javaClass.getDeclaredField("retrofit")
-        retrofitField.isAccessible = true
-        return retrofitField.get(handler) as Retrofit
+        val field = handler.javaClass.declaredFields.firstOrNull { f ->
+            Retrofit::class.java.isAssignableFrom(f.type)
+        } ?: throw NoSuchFieldException(
+            "No Retrofit field found in ${handler.javaClass.name}; fields: ${
+                handler.javaClass.declaredFields.map { it.name }
+            }"
+        )
+        field.isAccessible = true
+        return field.get(handler) as Retrofit
     }
 }
