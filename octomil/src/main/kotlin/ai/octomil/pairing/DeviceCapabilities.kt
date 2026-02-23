@@ -21,13 +21,15 @@ object DeviceCapabilities {
      * @return Populated request with hardware metadata.
      */
     fun collect(context: Context): DeviceConnectRequest {
+        val manufacturer = Build.MANUFACTURER ?: "Unknown"
+        val model = Build.MODEL ?: "Device"
         return DeviceConnectRequest(
             deviceId = getDeviceId(context),
             platform = "android",
-            deviceName = "${Build.MANUFACTURER} ${Build.MODEL}",
+            deviceName = "$manufacturer $model",
             chipFamily = getChipFamily(),
             ramGb = getRAMGb(context),
-            osVersion = Build.VERSION.RELEASE,
+            osVersion = Build.VERSION.RELEASE ?: "unknown",
             npuAvailable = hasNNAPI(),
             gpuAvailable = true, // Most Android devices have GPU compute
         )
@@ -60,9 +62,10 @@ object DeviceCapabilities {
      */
     internal fun getChipFamily(): String {
         return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            Build.SOC_MODEL.ifBlank { Build.HARDWARE }
+            val socModel = Build.SOC_MODEL
+            if (!socModel.isNullOrBlank()) socModel else (Build.HARDWARE ?: "unknown")
         } else {
-            Build.HARDWARE
+            Build.HARDWARE ?: "unknown"
         }
     }
 
@@ -72,7 +75,8 @@ object DeviceCapabilities {
     internal fun getRAMGb(context: Context): Double {
         return try {
             val activityManager =
-                context.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
+                context.getSystemService(Context.ACTIVITY_SERVICE) as? ActivityManager
+                    ?: return 0.0
             val memInfo = ActivityManager.MemoryInfo()
             activityManager.getMemoryInfo(memInfo)
             memInfo.totalMem.toDouble() / (1024.0 * 1024.0 * 1024.0)
