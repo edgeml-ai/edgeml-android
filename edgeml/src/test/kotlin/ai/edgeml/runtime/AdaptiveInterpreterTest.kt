@@ -3,6 +3,7 @@ package ai.edgeml.runtime
 import io.mockk.mockk
 import org.junit.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /**
@@ -80,12 +81,7 @@ class AdaptiveInterpreterTest {
         val interpreter = createTestInterpreter()
         val result = interpreter.tryLoadDelegate("nnapi")
         // Should be null because NnApiDelegate class isn't on the test classpath
-        // (or if it is, it can't load native libs)
-        // This is expected behaviour — the fallback chain handles it
-        assertTrue(
-            result == null || result != null,
-            "tryLoadDelegate should not throw, whether or not the delegate loads",
-        )
+        assertNull(result, "Expected null when native delegates are unavailable on JVM")
     }
 
     // =========================================================================
