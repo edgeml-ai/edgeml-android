@@ -266,9 +266,6 @@ class BenchmarkRunnerTest {
         )
 
         // 51 = 1 cold + 50 warm (the new default)
-        assertTrue(
-            report.inferenceCount >= 51,
-            "Inference count should be at least 51 (1 cold + 50 warm), was ${report.inferenceCount}",
-        )
+        assertEquals(51, report.inferenceCount, "BenchmarkReport should store the provided inferenceCount")
     }
 }
