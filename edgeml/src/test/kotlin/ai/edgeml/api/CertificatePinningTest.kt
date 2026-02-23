@@ -37,13 +37,7 @@ class CertificatePinningTest {
     @Test
     fun `buildCertificatePinner returns null when no pins configured`() {
         val config = baseConfigBuilder().build()
-        // Access through reflection since buildCertificatePinner is private
-        val method = EdgeMLApiFactory::class.java.getDeclaredMethod(
-            "buildCertificatePinner",
-            EdgeMLConfig::class.java
-        )
-        method.isAccessible = true
-        val pinner = method.invoke(EdgeMLApiFactory, config)
+        val pinner = EdgeMLApiFactory.buildCertificatePinner(config)
         assertNull("No pinner should be created when no pins configured", pinner)
     }
 
@@ -54,12 +48,7 @@ class CertificatePinningTest {
             .pinnedHostname("api.edgeml.ai")
             .build()
 
-        val method = EdgeMLApiFactory::class.java.getDeclaredMethod(
-            "buildCertificatePinner",
-            EdgeMLConfig::class.java
-        )
-        method.isAccessible = true
-        val pinner = method.invoke(EdgeMLApiFactory, config)
+        val pinner = EdgeMLApiFactory.buildCertificatePinner(config)
         assertNotNull("Pinner should be created when pins are configured", pinner)
         assertTrue(pinner is CertificatePinner)
     }
@@ -70,12 +59,7 @@ class CertificatePinningTest {
             .certificatePins(listOf("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="))
             .build()
 
-        val method = EdgeMLApiFactory::class.java.getDeclaredMethod(
-            "buildCertificatePinner",
-            EdgeMLConfig::class.java
-        )
-        method.isAccessible = true
-        val pinner = method.invoke(EdgeMLApiFactory, config)
+        val pinner = EdgeMLApiFactory.buildCertificatePinner(config)
         assertNull("No pinner when hostname is blank", pinner)
     }
 }

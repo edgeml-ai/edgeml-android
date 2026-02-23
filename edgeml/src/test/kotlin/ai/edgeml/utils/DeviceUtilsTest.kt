@@ -10,6 +10,7 @@ import io.mockk.mockk
 import io.mockk.mockkStatic
 import io.mockk.unmockkStatic
 import org.junit.After
+import org.junit.Assume
 import org.junit.Before
 import org.junit.Test
 import java.lang.reflect.Field
@@ -97,22 +98,24 @@ class DeviceUtilsTest {
 
     @Test
     fun `getManufacturer returns string`() {
-        try {
-            val manufacturer = DeviceUtils.getManufacturer()
-            assertNotNull(manufacturer)
-        } catch (_: NullPointerException) {
-            // Build.MANUFACTURER is null on CI JVM when reflection fails (Java 17+)
-        }
+        Assume.assumeTrue(
+            "Cannot set Build.MANUFACTURER via reflection on this JDK",
+            buildFieldWasSet("MANUFACTURER"),
+        )
+        val manufacturer = DeviceUtils.getManufacturer()
+        assertNotNull(manufacturer)
+        assertEquals("TestManufacturer", manufacturer)
     }
 
     @Test
     fun `getModel returns string`() {
-        try {
-            val model = DeviceUtils.getModel()
-            assertNotNull(model)
-        } catch (_: NullPointerException) {
-            // Build.MODEL is null on CI JVM when reflection fails (Java 17+)
-        }
+        Assume.assumeTrue(
+            "Cannot set Build.MODEL via reflection on this JDK",
+            buildFieldWasSet("MODEL"),
+        )
+        val model = DeviceUtils.getModel()
+        assertNotNull(model)
+        assertEquals("TestModel", model)
     }
 
     // =========================================================================
@@ -142,13 +145,13 @@ class DeviceUtilsTest {
 
     @Test
     fun `getCpuArchitecture returns string`() {
-        try {
-            val arch = DeviceUtils.getCpuArchitecture()
-            // Reflection to set SUPPORTED_ABIS may fail on Java 17+
-            assertNotNull(arch)
-        } catch (_: NullPointerException) {
-            // Build.SUPPORTED_ABIS is null on CI JVM when reflection fails (Java 17+)
-        }
+        Assume.assumeTrue(
+            "Cannot set Build.SUPPORTED_ABIS via reflection on this JDK",
+            buildFieldWasSet("SUPPORTED_ABIS"),
+        )
+        val arch = DeviceUtils.getCpuArchitecture()
+        assertNotNull(arch)
+        assertEquals("arm64-v8a", arch)
     }
 
     // =========================================================================
@@ -249,6 +252,20 @@ class DeviceUtilsTest {
             field.set(null, value)
         } catch (_: Exception) {
             // Reflection may not work on all JVM versions; tests will adapt
+        }
+    }
+
+    /**
+     * Check whether a Build field was successfully set via reflection.
+     * Returns false when the field is still null (JDK 17+ blocks final-field mutation).
+     */
+    private fun buildFieldWasSet(fieldName: String): Boolean {
+        return try {
+            val field = Build::class.java.getDeclaredField(fieldName)
+            field.isAccessible = true
+            field.get(null) != null
+        } catch (_: Exception) {
+            false
         }
     }
 }

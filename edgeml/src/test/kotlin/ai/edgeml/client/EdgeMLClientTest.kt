@@ -28,7 +28,6 @@ import io.mockk.unmockkObject
 import io.mockk.verify
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
@@ -121,7 +120,7 @@ class EdgeMLClientTest {
     }
 
     /**
-     * Force the client into READY state via reflection.
+     * Force the client into READY state using the @VisibleForTesting helper.
      *
      * MockK 1.14.9 cannot reliably stub ModelManager methods that use default
      * parameters referencing instance state (config.modelId) and return
@@ -130,17 +129,7 @@ class EdgeMLClientTest {
      * This helper bypasses full initialization for tests that just need READY.
      */
     private fun setClientReady(deviceId: String? = null) {
-        val stateField = EdgeMLClient::class.java.getDeclaredField("_state")
-        stateField.isAccessible = true
-        @Suppress("UNCHECKED_CAST")
-        (stateField.get(client) as MutableStateFlow<ClientState>).value = ClientState.READY
-
-        if (deviceId != null) {
-            val deviceField = EdgeMLClient::class.java.getDeclaredField("_serverDeviceId")
-            deviceField.isAccessible = true
-            @Suppress("UNCHECKED_CAST")
-            (deviceField.get(client) as MutableStateFlow<String?>).value = deviceId
-        }
+        client.setReadyForTesting(deviceId)
     }
 
     // =========================================================================
