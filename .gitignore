@@ -25,7 +25,24 @@ build/
 *.log
 
 # Local configuration
-local.properties
 
 # Claude
 .claude/
+
+# Stale directories
+edgeml/
+
+# Environment & secrets
+.env
+.env.*
+*.jks
+*.keystore
+*.pem
+*.key
+*.p12
+
+# Heap dumps
+*.hprof
+
+# Android Studio captures
+captures/
