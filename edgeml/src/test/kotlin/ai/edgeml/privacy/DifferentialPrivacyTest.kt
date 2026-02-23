@@ -3,6 +3,7 @@ package ai.edgeml.privacy
 import ai.edgeml.config.PrivacyConfiguration
 import ai.edgeml.training.WeightExtractor
 import org.junit.Test
+import kotlin.math.abs
 import kotlin.math.sqrt
 import kotlin.test.assertEquals
 import kotlin.test.assertNotEquals
@@ -128,6 +129,18 @@ class DifferentialPrivacyTest {
         assertEquals(1.0f, data[0], 1e-7f)
         assertEquals(2.0f, data[1], 1e-7f)
         assertEquals(3.0f, data[2], 1e-7f)
+    }
+
+    @Test
+    fun `addGaussianNoise has zero mean`() {
+        // Use 10_000 samples for SE = sigma / sqrt(n) = 1.0 / 100 = 0.01
+        val data = FloatArray(10_000) { 0.0f }
+        val tensors = mapOf("w" to tensor("w", *data))
+
+        val noisy = DifferentialPrivacy.addGaussianNoise(tensors, sigma = 1.0)
+        val mean = noisy["w"]!!.data.map { it.toDouble() }.average()
+
+        assertTrue(abs(mean) < 0.1, "Mean of noise should be approximately 0, got $mean")
     }
 
     // =========================================================================
