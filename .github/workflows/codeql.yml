@@ -1,0 +1,50 @@
+name: CodeQL
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+  schedule:
+    - cron: "0 6 * * 1"
+
+jobs:
+  analyze:
+    name: Analyze
+    runs-on: ubuntu-latest
+    # CodeQL extractor is incompatible with Kotlin 2.3.10 (github/codeql#20661).
+    # Allow failures until a compatible CodeQL version is released.
+    continue-on-error: true
+    permissions:
+      security-events: write
+
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Set up JDK
+        uses: actions/setup-java@be666c2fcd27ec809703dec50e508c2fdc7f6654 # v5.2.0
+        with:
+          java-version: "17"
+          distribution: "temurin"
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@9da17a5aa4abec2340d6e6c8d8efb0770b1c9cb8 # v4.32.3
+        with:
+          languages: java-kotlin
+          tools: latest
+
+      - name: Build with Gradle
+        id: gradle-build
+        # Kotlin 2.3.10 is unsupported by CodeQL extractor (github/codeql#20661).
+        # Allow the build to fail without blocking the workflow.
+        continue-on-error: true
+        run: ./gradlew assembleDebug --no-daemon
+
+      - name: Perform CodeQL Analysis
+        # Only run analysis if the build actually succeeded, otherwise the
+        # extractor will have produced no useful output and the action will
+        # upload a failed SARIF that marks the check as failed.
+        if: steps.gradle-build.outcome == 'success'
+        uses: github/codeql-action/analyze@9da17a5aa4abec2340d6e6c8d8efb0770b1c9cb8 # v4.32.3
+        with:
+          category: "/language:java-kotlin"
