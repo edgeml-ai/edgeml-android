@@ -65,7 +65,13 @@ class DiscoveryManagerTest {
 
         discoveryManager.startDiscoverable(deviceId = "test-device-id")
 
-        verify { advertiser.startAdvertising(deviceId = "test-device-id", deviceName = any()) }
+        verify {
+            advertiser.startAdvertising(
+                deviceId = "test-device-id",
+                deviceName = any(),
+                port = any(),
+            )
+        }
     }
 
     @Test
@@ -81,6 +87,7 @@ class DiscoveryManagerTest {
             advertiser.startAdvertising(
                 deviceId = "test-device-id",
                 deviceName = "My Pixel",
+                port = any(),
             )
         }
     }

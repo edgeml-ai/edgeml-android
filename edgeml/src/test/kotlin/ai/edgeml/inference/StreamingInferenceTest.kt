@@ -6,29 +6,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertNotEquals
 
 class StreamingInferenceTest {
-    // =========================================================================
-    // Modality
-    // =========================================================================
-
-    @Test
-    fun `Modality value returns lowercase name`() {
-        assertEquals("text", Modality.TEXT.value)
-        assertEquals("image", Modality.IMAGE.value)
-        assertEquals("audio", Modality.AUDIO.value)
-        assertEquals("video", Modality.VIDEO.value)
-    }
-
-    @Test
-    fun `Modality has exactly four values`() {
-        assertEquals(4, Modality.entries.size)
-    }
-
-    @Test
-    fun `Modality valueOf round-trips correctly`() {
-        for (modality in Modality.entries) {
-            assertEquals(modality, Modality.valueOf(modality.name))
-        }
-    }
+    // Note: Modality enum tests live in InferenceEngineTest.kt (single source of truth).
 
     // =========================================================================
     // InferenceChunk
