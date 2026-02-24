@@ -3,6 +3,7 @@ package ai.octomil.models
 import ai.octomil.api.OctomilApi
 import ai.octomil.config.OctomilConfig
 import ai.octomil.storage.SecureStorage
+import ai.octomil.wrapper.TelemetryQueue
 import android.content.Context
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
@@ -155,6 +156,17 @@ class ModelManager(
                     }
 
                     _downloadState.value = DownloadState.Completed(newCachedModel)
+
+                    try {
+                        TelemetryQueue.shared?.reportFunnelEvent(
+                            stage = "first_deploy",
+                            success = true,
+                            modelId = modelId,
+                        )
+                    } catch (_: Exception) {
+                        // Never break model download flow
+                    }
+
                     Result.success(newCachedModel)
                 } catch (e: ModelDownloadException) {
                     Timber.e(e, "Model download failed")

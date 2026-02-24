@@ -1,6 +1,7 @@
 package ai.octomil.pairing
 
 import ai.octomil.api.OctomilApi
+import ai.octomil.wrapper.TelemetryQueue
 import android.content.Context
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
@@ -93,6 +94,17 @@ class PairingManager(
             "Connected to pairing session: id=%s model=%s status=%s",
             session.id, session.modelName, session.status,
         )
+
+        try {
+            TelemetryQueue.shared?.reportFunnelEvent(
+                stage = "app_pair",
+                success = true,
+                deviceId = deviceInfo.deviceId,
+                platform = "android",
+            )
+        } catch (_: Exception) {
+            // Never break pairing flow
+        }
 
         return session
     }
