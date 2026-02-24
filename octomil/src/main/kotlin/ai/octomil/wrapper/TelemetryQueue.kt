@@ -11,6 +11,7 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
@@ -71,6 +72,15 @@ class TelemetryQueue internal constructor(
         private const val TAG = "TelemetryQueue"
         private const val PERSIST_DIR_NAME = "octomil_telemetry"
         private const val MAX_PERSISTED_FILES = 100
+
+        /**
+         * Shared instance used for funnel event reporting from classes that don't hold
+         * a direct TelemetryQueue reference (PairingManager, ModelManager, BenchmarkRunner).
+         * Set automatically when the first TelemetryQueue is started with a sender.
+         */
+        @Volatile
+        var shared: TelemetryQueue? = null
+            private set
     }
 
     /**
@@ -87,6 +97,10 @@ class TelemetryQueue internal constructor(
         }
         // Attempt to load and resend any persisted events from a previous session
         scope.launch { loadPersistedEvents() }
+
+        if (sender != null && shared == null) {
+            shared = this
+        }
     }
 
     /**
@@ -201,8 +215,70 @@ class TelemetryQueue internal constructor(
             persistEvents(remaining)
         }
         scope.cancel()
+        if (shared === this) {
+            shared = null
+        }
+    }
+
+    /**
+     * Report a funnel analytics event. Fire-and-forget via coroutine scope.
+     */
+    fun reportFunnelEvent(
+        stage: String,
+        success: Boolean = true,
+        deviceId: String? = null,
+        modelId: String? = null,
+        rolloutId: String? = null,
+        sessionId: String? = null,
+        failureReason: String? = null,
+        failureCategory: String? = null,
+        durationMs: Int? = null,
+        platform: String? = "android",
+        metadata: Map<String, String>? = null,
+    ) {
+        scope.launch {
+            try {
+                val event = FunnelEvent(
+                    stage = stage,
+                    success = success,
+                    deviceId = deviceId,
+                    modelId = modelId,
+                    rolloutId = rolloutId,
+                    sessionId = sessionId,
+                    failureReason = failureReason,
+                    failureCategory = failureCategory,
+                    durationMs = durationMs,
+                    sdkVersion = "1.0.0",
+                    platform = platform,
+                    metadata = metadata,
+                )
+                sender?.sendFunnelEvent(event)
+            } catch (e: Exception) {
+                Timber.d(e, "Funnel event reporting failed")
+            }
+        }
     }
 }
+
+/**
+ * A single funnel analytics event.
+ */
+@Serializable
+data class FunnelEvent(
+    val stage: String,
+    val success: Boolean = true,
+    val source: String = "sdk_android",
+    @SerialName("device_id") val deviceId: String? = null,
+    @SerialName("model_id") val modelId: String? = null,
+    @SerialName("rollout_id") val rolloutId: String? = null,
+    @SerialName("session_id") val sessionId: String? = null,
+    @SerialName("failure_reason") val failureReason: String? = null,
+    @SerialName("failure_category") val failureCategory: String? = null,
+    @SerialName("duration_ms") val durationMs: Int? = null,
+    @SerialName("sdk_version") val sdkVersion: String? = null,
+    val platform: String? = "android",
+    val metadata: Map<String, String>? = null,
+)
 
 /**
  * Abstraction for sending telemetry batches to the server.
@@ -210,11 +286,20 @@ class TelemetryQueue internal constructor(
  * Implementations should throw on failure so the queue can fall back to
  * disk persistence.
  */
-fun interface TelemetrySender {
+interface TelemetrySender {
     /**
      * Send a batch of telemetry events.
      *
      * @throws Exception if the send fails (events will be persisted to disk).
      */
     suspend fun send(events: List<InferenceTelemetryEvent>)
+
+    /**
+     * Send a single funnel event. Default implementation is a no-op.
+     *
+     * @throws Exception if the send fails (silently ignored by caller).
+     */
+    suspend fun sendFunnelEvent(event: FunnelEvent) {
+        // Default no-op; implementations override to POST to /api/v1/funnel/events
+    }
 }
