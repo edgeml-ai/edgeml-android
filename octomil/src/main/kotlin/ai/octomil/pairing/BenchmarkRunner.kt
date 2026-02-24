@@ -1,5 +1,6 @@
 package ai.octomil.pairing
 
+import ai.octomil.wrapper.TelemetryQueue
 import android.content.Context
 import android.os.BatteryManager
 import android.os.Build
@@ -132,7 +133,7 @@ class BenchmarkRunner(
                     modelLoadTimeMs, coldInferenceMs, avgWarmMs, p50, p95, activeDelegate,
                 )
 
-                return BenchmarkReport(
+                val report = BenchmarkReport(
                     modelName = modelName,
                     deviceName = deviceInfo.deviceName,
                     chipFamily = deviceInfo.chipFamily ?: Build.HARDWARE,
@@ -154,6 +155,18 @@ class BenchmarkRunner(
                     activeDelegate = activeDelegate,
                     disabledDelegates = disabledDelegates.ifEmpty { null },
                 )
+
+                try {
+                    TelemetryQueue.shared?.reportFunnelEvent(
+                        stage = "first_inference",
+                        success = true,
+                        modelId = modelName,
+                    )
+                } catch (_: Exception) {
+                    // Never break benchmark flow
+                }
+
+                return report
             } finally {
                 if (benchInterpreter !== interpreter) {
                     closeInterpreter(benchInterpreter)
