@@ -122,13 +122,24 @@ object Octomil {
         // TODO: implement real HTTP sender using OkHttp/Retrofit
         // For now, return a sender that logs events (production implementation
         // would POST to $serverUrl/api/v1/inference/telemetry with bearer $apiKey)
-        return TelemetrySender { events ->
-            Timber.d(
-                "%s: Would send %d telemetry events to %s",
-                TAG,
-                events.size,
-                serverUrl,
-            )
+        return object : TelemetrySender {
+            override suspend fun send(events: List<InferenceTelemetryEvent>) {
+                Timber.d(
+                    "%s: Would send %d telemetry events to %s",
+                    TAG,
+                    events.size,
+                    serverUrl,
+                )
+            }
+
+            override suspend fun sendFunnelEvent(event: FunnelEvent) {
+                Timber.d(
+                    "%s: Would send funnel event '%s' to %s/api/v1/funnel/events",
+                    TAG,
+                    event.stage,
+                    serverUrl,
+                )
+            }
         }
     }
 
