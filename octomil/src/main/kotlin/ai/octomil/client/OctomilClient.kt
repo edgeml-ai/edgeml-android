@@ -20,10 +20,13 @@ import ai.octomil.storage.SecureStorage
 import ai.octomil.sync.EventQueue
 import ai.octomil.sync.EventTypes
 import ai.octomil.sync.WorkManagerSync
+import ai.octomil.runtime.DeviceStateMonitor
+import ai.octomil.training.EligibilityResult
 import ai.octomil.training.TFLiteTrainer
 import ai.octomil.training.MissingTrainingSignatureException
 import ai.octomil.training.TrainingConfig
 import ai.octomil.training.TrainingDataProvider
+import ai.octomil.training.TrainingEligibility
 import ai.octomil.training.TrainingOutcome
 import ai.octomil.training.UploadPolicy
 import ai.octomil.training.WarmupResult
@@ -1072,6 +1075,46 @@ class OctomilClient private constructor(
                 Result.failure(e)
             }
         }
+
+    /**
+     * Train only if the device is eligible (battery, thermal, network).
+     *
+     * Checks device state via [DeviceStateMonitor] and network state via
+     * [NetworkMonitor] before delegating to [train]. If the device is
+     * ineligible, returns an [EligibilityResult] explaining why training
+     * was skipped — no training is attempted and no resources are consumed.
+     *
+     * @param dataProvider Provider for local training data.
+     * @param deviceStateMonitor Monitor for battery, thermal, and power state.
+     * @param trainingConfig Training hyperparameters.
+     * @param uploadPolicy Controls weight extraction and upload.
+     * @param roundId Optional federated learning round ID.
+     * @return A pair of (eligibility check result, training outcome or null if skipped).
+     */
+    suspend fun trainIfEligible(
+        dataProvider: TrainingDataProvider,
+        deviceStateMonitor: DeviceStateMonitor,
+        trainingConfig: TrainingConfig = TrainingConfig(),
+        uploadPolicy: UploadPolicy = UploadPolicy.AUTO,
+        roundId: String? = null,
+    ): Pair<EligibilityResult, Result<TrainingOutcome>?> {
+        val deviceState = deviceStateMonitor.deviceState.value
+        val eligibility = TrainingEligibility.checkEligibility(
+            deviceState = deviceState,
+            isConnected = networkMonitor.isConnected.value,
+            isMetered = networkMonitor.isMetered.value,
+            minBatteryLevel = config.minBatteryLevel,
+            requireUnmeteredNetwork = config.requireUnmeteredNetwork,
+        )
+
+        if (!eligibility.eligible) {
+            Timber.i("Training skipped: ${eligibility.reason}")
+            return eligibility to null
+        }
+
+        val outcome = train(dataProvider, trainingConfig, uploadPolicy, roundId)
+        return eligibility to outcome
+    }
 
     // =========================================================================
     // Round Management
