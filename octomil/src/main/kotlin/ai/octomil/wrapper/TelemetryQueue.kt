@@ -286,7 +286,7 @@ data class FunnelEvent(
  * Implementations should throw on failure so the queue can fall back to
  * disk persistence.
  */
-interface TelemetrySender {
+fun interface TelemetrySender {
     /**
      * Send a batch of telemetry events.
      *
