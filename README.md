@@ -15,7 +15,7 @@
 
 ```kotlin
 dependencies {
-    implementation("ai.octomil:octomil-android:1.0.0")
+    implementation("ai.octomil:octomil-android:1.1.0")
 }
 ```
 
