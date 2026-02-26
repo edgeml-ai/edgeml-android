@@ -25,6 +25,10 @@ data class OctomilWrapperConfig(
     val serverUrl: String? = null,
     /** API key for server authentication. Null means offline-only mode. */
     val apiKey: String? = null,
+    /** Organization ID included in the v2 telemetry resource envelope. */
+    val orgId: String? = null,
+    /** Device identifier included in the v2 telemetry resource envelope. */
+    val deviceId: String? = null,
     /** Maximum number of telemetry events to buffer before flushing. */
     val telemetryBatchSize: Int = 50,
     /** Interval in milliseconds between automatic telemetry flushes. */
