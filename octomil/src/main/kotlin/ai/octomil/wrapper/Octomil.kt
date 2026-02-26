@@ -1,13 +1,25 @@
 package ai.octomil.wrapper
 
+import ai.octomil.BuildConfig
+import ai.octomil.api.OctomilApi
+import ai.octomil.api.dto.TelemetryBatchRequest
+import ai.octomil.api.dto.TelemetryEventDto
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
+import kotlinx.serialization.json.Json
+import okhttp3.Interceptor
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.OkHttpClient
 import org.tensorflow.lite.Interpreter
+import retrofit2.Retrofit
+import retrofit2.converter.kotlinx.serialization.asConverterFactory
 import timber.log.Timber
 import java.io.File
+import java.io.IOException
+import java.util.concurrent.TimeUnit
 
 /**
  * Main entry point for wrapping a TFLite [Interpreter] with Octomil telemetry,
@@ -119,28 +131,81 @@ object Octomil {
         val serverUrl = config.serverUrl ?: return null
         val apiKey = config.apiKey ?: return null
 
-        // TODO: implement real HTTP sender using OkHttp/Retrofit
-        // For now, return a sender that logs events (production implementation
-        // would POST to $serverUrl/api/v1/inference/telemetry with bearer $apiKey)
+        val api = buildTelemetryApi(serverUrl, apiKey)
+
         return object : TelemetrySender {
             override suspend fun send(events: List<InferenceTelemetryEvent>) {
+                Timber.d("%s: Sending %d telemetry events to %s", TAG, events.size, serverUrl)
+
+                val request = TelemetryBatchRequest(
+                    events = events.map { e ->
+                        TelemetryEventDto(
+                            modelId = e.modelId,
+                            latencyMs = e.latencyMs,
+                            timestampMs = e.timestampMs,
+                            success = e.success,
+                            errorMessage = e.errorMessage,
+                        )
+                    },
+                    modelId = events.firstOrNull()?.modelId,
+                    sdkVersion = BuildConfig.OCTOMIL_VERSION,
+                )
+
+                val response = api.sendTelemetryBatch(request)
+                if (!response.isSuccessful) {
+                    throw IOException(
+                        "Telemetry batch upload failed: HTTP ${response.code()} ${response.message()}",
+                    )
+                }
                 Timber.d(
-                    "%s: Would send %d telemetry events to %s",
+                    "%s: Telemetry batch accepted: %d events",
                     TAG,
-                    events.size,
-                    serverUrl,
+                    response.body()?.accepted ?: events.size,
                 )
             }
 
             override suspend fun sendFunnelEvent(event: FunnelEvent) {
-                Timber.d(
-                    "%s: Would send funnel event '%s' to %s/api/v1/funnel/events",
-                    TAG,
-                    event.stage,
-                    serverUrl,
-                )
+                Timber.d("%s: Sending funnel event '%s' to %s", TAG, event.stage, serverUrl)
+
+                val response = api.sendFunnelEvent(event)
+                if (!response.isSuccessful) {
+                    throw IOException(
+                        "Funnel event upload failed: HTTP ${response.code()} ${response.message()}",
+                    )
+                }
+                Timber.d("%s: Funnel event '%s' accepted", TAG, event.stage)
             }
         }
+    }
+
+    /**
+     * Build a minimal [OctomilApi] Retrofit instance for telemetry POSTs.
+     * Uses the wrapper's serverUrl and apiKey rather than a full [ai.octomil.config.OctomilConfig].
+     */
+    internal fun buildTelemetryApi(serverUrl: String, apiKey: String): OctomilApi {
+        val json = Json {
+            ignoreUnknownKeys = true
+            encodeDefaults = true
+            explicitNulls = false
+        }
+        val okHttp = OkHttpClient.Builder()
+            .connectTimeout(15, TimeUnit.SECONDS)
+            .readTimeout(30, TimeUnit.SECONDS)
+            .writeTimeout(30, TimeUnit.SECONDS)
+            .addInterceptor(Interceptor { chain ->
+                val request = chain.request().newBuilder()
+                    .addHeader("Authorization", "Bearer $apiKey")
+                    .addHeader("Content-Type", "application/json")
+                    .build()
+                chain.proceed(request)
+            })
+            .build()
+        val retrofit = Retrofit.Builder()
+            .baseUrl("$serverUrl/")
+            .client(okHttp)
+            .addConverterFactory(json.asConverterFactory("application/json".toMediaType()))
+            .build()
+        return retrofit.create(OctomilApi::class.java)
     }
 
     /**
