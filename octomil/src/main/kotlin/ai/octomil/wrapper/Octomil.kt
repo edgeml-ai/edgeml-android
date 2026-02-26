@@ -69,6 +69,8 @@ object Octomil {
             persistDir = telemetryDir,
             sender = sender,
             dispatcher = dispatcher,
+            orgId = config.orgId,
+            deviceId = config.deviceId,
         )
 
         if (config.telemetryEnabled) {
@@ -121,25 +123,14 @@ object Octomil {
 
         // TODO: implement real HTTP sender using OkHttp/Retrofit
         // For now, return a sender that logs events (production implementation
-        // would POST to $serverUrl/api/v1/inference/telemetry with bearer $apiKey)
-        return object : TelemetrySender {
-            override suspend fun send(events: List<InferenceTelemetryEvent>) {
-                Timber.d(
-                    "%s: Would send %d telemetry events to %s",
-                    TAG,
-                    events.size,
-                    serverUrl,
-                )
-            }
-
-            override suspend fun sendFunnelEvent(event: FunnelEvent) {
-                Timber.d(
-                    "%s: Would send funnel event '%s' to %s/api/v1/funnel/events",
-                    TAG,
-                    event.stage,
-                    serverUrl,
-                )
-            }
+        // would POST to $serverUrl/api/v2/telemetry/events with bearer $apiKey)
+        return TelemetrySender { batch ->
+            Timber.d(
+                "%s: Would send %d telemetry events to %s/api/v2/telemetry/events",
+                TAG,
+                batch.events.size,
+                serverUrl,
+            )
         }
     }
 
