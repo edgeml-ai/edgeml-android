@@ -15,6 +15,7 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+import ai.octomil.BuildConfig
 import timber.log.Timber
 import java.io.Closeable
 import java.io.File
@@ -248,7 +249,7 @@ class TelemetryQueue internal constructor(
                     failureReason = failureReason,
                     failureCategory = failureCategory,
                     durationMs = durationMs,
-                    sdkVersion = "1.0.0",
+                    sdkVersion = BuildConfig.OCTOMIL_VERSION,
                     platform = platform,
                     metadata = metadata,
                 )
