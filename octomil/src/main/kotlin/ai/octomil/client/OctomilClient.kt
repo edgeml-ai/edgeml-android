@@ -9,6 +9,10 @@ import ai.octomil.api.dto.GroupMembership
 import ai.octomil.api.dto.HeartbeatRequest
 import ai.octomil.api.dto.ModelUpdateInfo
 import ai.octomil.api.dto.RoundAssignment
+import ai.octomil.api.dto.TelemetryAttributes
+import ai.octomil.api.dto.TelemetryV2BatchRequest
+import ai.octomil.api.dto.TelemetryV2Event
+import ai.octomil.api.dto.TelemetryV2Resource
 import ai.octomil.config.OctomilConfig
 import ai.octomil.models.CachedModel
 import ai.octomil.models.DownloadState
@@ -631,20 +635,14 @@ class OctomilClient private constructor(
             val latencies = mutableListOf<Double>()
             var chunkCount = 0
 
-            deviceId?.let { id ->
-                reportStreamingEventSafely(
-                    ai.octomil.api.dto.InferenceEventRequest(
-                        deviceId = id,
-                        modelId = resolvedModelId,
-                        version = resolvedVersion,
-                        modality = modality.value,
-                        sessionId = sessionId,
-                        eventType = "generation_started",
-                        timestampMs = sessionStart,
-                        orgId = config.orgId,
-                    ),
-                )
-            }
+            emitStreamingV2Event(
+                name = "inference.started",
+                timestampMs = sessionStart,
+                modelId = resolvedModelId,
+                version = resolvedVersion,
+                modality = modality.value,
+                sessionId = sessionId,
+            )
 
             eventQueue.addTrainingEvent(
                 type = ai.octomil.sync.EventTypes.GENERATION_STARTED,
@@ -699,27 +697,20 @@ class OctomilClient private constructor(
                 metadata = mapOf("session_id" to sessionId),
             )
 
-            deviceId?.let { id ->
-                reportStreamingEventSafely(
-                    ai.octomil.api.dto.InferenceEventRequest(
-                        deviceId = id,
-                        modelId = resolvedModelId,
-                        version = resolvedVersion,
-                        modality = modality.value,
-                        sessionId = sessionId,
-                        eventType = "generation_completed",
-                        timestampMs = sessionEnd,
-                        metrics =
-                            ai.octomil.api.dto.InferenceEventMetrics(
-                                ttfcMs = ttfcMs,
-                                totalChunks = chunkCount,
-                                totalDurationMs = totalDurationMs,
-                                throughput = throughput,
-                            ),
-                        orgId = config.orgId,
-                    ),
-                )
-            }
+            emitStreamingV2Event(
+                name = "inference.completed",
+                timestampMs = sessionEnd,
+                modelId = resolvedModelId,
+                version = resolvedVersion,
+                modality = modality.value,
+                sessionId = sessionId,
+                extraAttrs = TelemetryAttributes.of(
+                    "inference.ttfc_ms" to ttfcMs,
+                    "inference.total_chunks" to chunkCount,
+                    "inference.total_duration_ms" to totalDurationMs,
+                    "inference.throughput" to throughput,
+                ),
+            )
         }
     }
 
@@ -729,11 +720,43 @@ class OctomilClient private constructor(
     ): ai.octomil.inference.StreamingInferenceEngine =
         engine ?: ai.octomil.inference.EngineRegistry.resolve(modality, context = context)
 
-    private suspend fun reportStreamingEventSafely(request: ai.octomil.api.dto.InferenceEventRequest) {
+    private suspend fun emitStreamingV2Event(
+        name: String,
+        timestampMs: Long,
+        modelId: String,
+        version: String,
+        modality: String,
+        sessionId: String,
+        extraAttrs: Map<String, kotlinx.serialization.json.JsonPrimitive> = emptyMap(),
+    ) {
         try {
-            api.reportInferenceEvent(request)
+            val attrs = TelemetryAttributes.of(
+                "model.id" to modelId,
+                "model.version" to version,
+                "inference.modality" to modality,
+                "inference.session_id" to sessionId,
+            ) + extraAttrs
+
+            val event = TelemetryV2Event(
+                name = name,
+                timestamp = java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", java.util.Locale.US).apply {
+                    timeZone = java.util.TimeZone.getTimeZone("UTC")
+                }.format(java.util.Date(timestampMs)),
+                attributes = attrs,
+            )
+
+            val resource = TelemetryV2Resource(
+                sdk = "android",
+                sdkVersion = BuildConfig.OCTOMIL_VERSION,
+                deviceId = _serverDeviceId.value,
+                platform = "android",
+                orgId = config.orgId,
+            )
+
+            val batch = TelemetryV2BatchRequest(resource = resource, events = listOf(event))
+            api.sendTelemetryV2(batch)
         } catch (e: Exception) {
-            Timber.w(e, "Failed to report ${request.eventType} event")
+            Timber.w(e, "Failed to emit v2 $name event")
         }
     }
 

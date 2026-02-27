@@ -1,5 +1,7 @@
 package ai.octomil.wrapper
 
+import ai.octomil.api.dto.TelemetryAttributes
+import ai.octomil.api.dto.TelemetryV2Event
 import ai.octomil.client.RoutingClient
 import ai.octomil.client.RoutingConfig
 import ai.octomil.client.RoutingDeviceCapabilities
@@ -120,6 +122,7 @@ class OctomilWrappedInterpreter internal constructor(
         }
 
         validateIfFloatArray(input)
+        emitInferenceStarted()
         val startNs = System.nanoTime()
         var success = true
         var errorMsg: String? = null
@@ -148,6 +151,7 @@ class OctomilWrappedInterpreter internal constructor(
         if (inputs.isNotEmpty()) {
             validateIfFloatArray(inputs[0])
         }
+        emitInferenceStarted()
         val startNs = System.nanoTime()
         var success = true
         var errorMsg: String? = null
@@ -244,6 +248,25 @@ class OctomilWrappedInterpreter internal constructor(
                 )
             }
         }
+    }
+
+    /**
+     * Emit an `inference.started` event before delegating to the interpreter.
+     */
+    private fun emitInferenceStarted() {
+        if (!config.telemetryEnabled) return
+
+        val event = TelemetryV2Event(
+            name = "inference.started",
+            timestamp = telemetryQueue.formatTimestamp(),
+            attributes = TelemetryAttributes.of(
+                "model.id" to modelId,
+                "inference.modality" to "on_device",
+                "device.compute_unit" to "cpu",
+                "model.format" to "tflite",
+            ),
+        )
+        telemetryQueue.enqueueV2Event(event)
     }
 
     /**
