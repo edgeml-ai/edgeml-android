@@ -16,9 +16,16 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import ai.octomil.BuildConfig
+import ai.octomil.api.dto.TelemetryV2BatchRequest
+import ai.octomil.api.dto.TelemetryV2Event
+import ai.octomil.api.dto.TelemetryV2Resource
 import timber.log.Timber
 import java.io.Closeable
 import java.io.File
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+import java.util.TimeZone
 import java.util.concurrent.ConcurrentLinkedQueue
 
 /**
@@ -58,6 +65,8 @@ class TelemetryQueue internal constructor(
     private val persistDir: File?,
     private val sender: TelemetrySender?,
     private val dispatcher: CoroutineDispatcher = Dispatchers.IO,
+    private val orgId: String? = null,
+    private val deviceId: String? = null,
 ) : Closeable {
     private val queue = ConcurrentLinkedQueue<InferenceTelemetryEvent>()
     private val flushMutex = Mutex()
@@ -67,6 +76,10 @@ class TelemetryQueue internal constructor(
     private val json = Json {
         ignoreUnknownKeys = true
         encodeDefaults = true
+    }
+
+    private val isoFormatter = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US).apply {
+        timeZone = TimeZone.getTimeZone("UTC")
     }
 
     companion object {
@@ -133,7 +146,8 @@ class TelemetryQueue internal constructor(
 
             if (sender != null) {
                 try {
-                    sender.send(events)
+                    val batch = buildV2Batch(events)
+                    sender.sendBatch(batch)
                     Timber.d("Telemetry flush succeeded: %d events", events.size)
                 } catch (e: Exception) {
                     Timber.w(e, "Telemetry flush failed, persisting %d events to disk", events.size)
@@ -144,6 +158,73 @@ class TelemetryQueue internal constructor(
                 persistEvents(events)
             }
         }
+    }
+
+    /**
+     * Build a v2 OTLP batch request from a list of inference telemetry events.
+     */
+    internal fun buildV2Batch(events: List<InferenceTelemetryEvent>): TelemetryV2BatchRequest {
+        val resource = TelemetryV2Resource(
+            sdk = "android",
+            sdkVersion = BuildConfig.OCTOMIL_VERSION,
+            deviceId = deviceId,
+            platform = "android",
+            orgId = orgId,
+        )
+
+        val v2Events = events.map { event ->
+            val attrs = mutableMapOf(
+                "model.id" to event.modelId,
+                "inference.duration_ms" to event.latencyMs.toString(),
+                "inference.modality" to "on_device",
+                "device.compute_unit" to "cpu",
+                "model.format" to "tflite",
+                "inference.success" to event.success.toString(),
+            )
+            if (event.errorMessage != null) {
+                attrs["error.message"] = event.errorMessage
+            }
+
+            TelemetryV2Event(
+                name = "inference.completed",
+                timestamp = isoFormatter.format(Date(event.timestampMs)),
+                attributes = attrs,
+            )
+        }
+
+        return TelemetryV2BatchRequest(resource = resource, events = v2Events)
+    }
+
+    /**
+     * Build a v2 OTLP batch request for a single funnel event.
+     */
+    internal fun buildV2FunnelBatch(event: FunnelEvent): TelemetryV2BatchRequest {
+        val resource = TelemetryV2Resource(
+            sdk = "android",
+            sdkVersion = event.sdkVersion ?: BuildConfig.OCTOMIL_VERSION,
+            deviceId = event.deviceId ?: deviceId,
+            platform = "android",
+            orgId = orgId,
+        )
+
+        val attrs = mutableMapOf<String, String>()
+        attrs["funnel.success"] = event.success.toString()
+        attrs["funnel.source"] = event.source
+        event.modelId?.let { attrs["model.id"] = it }
+        event.rolloutId?.let { attrs["funnel.rollout_id"] = it }
+        event.sessionId?.let { attrs["funnel.session_id"] = it }
+        event.failureReason?.let { attrs["error.message"] = it }
+        event.failureCategory?.let { attrs["error.category"] = it }
+        event.durationMs?.let { attrs["funnel.duration_ms"] = it.toString() }
+        event.metadata?.forEach { (k, v) -> attrs["funnel.metadata.$k"] = v }
+
+        val v2Event = TelemetryV2Event(
+            name = "funnel.${event.stage}",
+            timestamp = isoFormatter.format(Date()),
+            attributes = attrs,
+        )
+
+        return TelemetryV2BatchRequest(resource = resource, events = listOf(v2Event))
     }
 
     /**
@@ -194,7 +275,8 @@ class TelemetryQueue internal constructor(
         for (file in files) {
             try {
                 val events: List<InferenceTelemetryEvent> = json.decodeFromString(file.readText())
-                sender.send(events)
+                val batch = buildV2Batch(events)
+                sender.sendBatch(batch)
                 file.delete()
                 Timber.d("Resent %d persisted events from %s", events.size, file.name)
             } catch (e: Exception) {
@@ -253,7 +335,8 @@ class TelemetryQueue internal constructor(
                     platform = platform,
                     metadata = metadata,
                 )
-                sender?.sendFunnelEvent(event)
+                val batch = buildV2FunnelBatch(event)
+                sender?.sendBatch(batch)
             } catch (e: Exception) {
                 Timber.d(e, "Funnel event reporting failed")
             }
@@ -282,25 +365,16 @@ data class FunnelEvent(
 )
 
 /**
- * Abstraction for sending telemetry batches to the server.
+ * Abstraction for sending telemetry to the server via the v2 OTLP envelope.
  *
  * Implementations should throw on failure so the queue can fall back to
  * disk persistence.
  */
 fun interface TelemetrySender {
     /**
-     * Send a batch of telemetry events.
+     * Send a v2 OTLP telemetry batch to POST /api/v2/telemetry/events.
      *
      * @throws Exception if the send fails (events will be persisted to disk).
      */
-    suspend fun send(events: List<InferenceTelemetryEvent>)
-
-    /**
-     * Send a single funnel event. Default implementation is a no-op.
-     *
-     * @throws Exception if the send fails (silently ignored by caller).
-     */
-    suspend fun sendFunnelEvent(event: FunnelEvent) {
-        // Default no-op; implementations override to POST to /api/v1/funnel/events
-    }
+    suspend fun sendBatch(batch: TelemetryV2BatchRequest)
 }

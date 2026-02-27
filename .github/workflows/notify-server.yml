@@ -13,16 +13,23 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Generate app token
+        id: app-token
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ secrets.VERSION_BOT_APP_ID }}
+          private-key: ${{ secrets.VERSION_BOT_PRIVATE_KEY }}
+          owner: octomil
+          repositories: octomil-server
+
       - name: Get version
         id: version
-        run: |
-          VERSION=$(grep -oP '(?<=OCTOMIL_VERSION=)[0-9.]+' gradle.properties)
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
+        run: echo "version=$(grep OCTOMIL_VERSION gradle.properties | cut -d= -f2)" >> $GITHUB_OUTPUT
 
       - name: Dispatch to server
         uses: peter-evans/repository-dispatch@v3
         with:
-          token: ${{ secrets.CROSS_REPO_TOKEN }}
+          token: ${{ steps.app-token.outputs.token }}
           repository: octomil/octomil-server
           event-type: sdk-release
           client-payload: '{"sdk": "android", "version": "${{ steps.version.outputs.version }}"}'

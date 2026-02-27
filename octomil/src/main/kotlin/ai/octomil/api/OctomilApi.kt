@@ -2,6 +2,7 @@ package ai.octomil.api
 
 import ai.octomil.api.dto.TelemetryBatchRequest
 import ai.octomil.api.dto.TelemetryBatchResponse
+import ai.octomil.api.dto.TelemetryV2BatchRequest
 import ai.octomil.api.dto.AssignmentRequest
 import ai.octomil.api.dto.DevicePolicyResponse
 import ai.octomil.api.dto.DeviceRegistrationRequest
@@ -243,6 +244,18 @@ interface OctomilApi {
     @POST("api/v1/funnel/events")
     suspend fun sendFunnelEvent(
         @Body event: ai.octomil.wrapper.FunnelEvent,
+    ): Response<Unit>
+
+    // =========================================================================
+    // Telemetry V2 (OTLP envelope)
+    // =========================================================================
+
+    /**
+     * Send telemetry events in the v2 OTLP envelope format.
+     */
+    @POST("api/v2/telemetry/events")
+    suspend fun sendTelemetryV2(
+        @Body request: TelemetryV2BatchRequest,
     ): Response<Unit>
 
     // =========================================================================

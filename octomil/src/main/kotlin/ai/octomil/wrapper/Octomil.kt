@@ -81,6 +81,8 @@ object Octomil {
             persistDir = telemetryDir,
             sender = sender,
             dispatcher = dispatcher,
+            orgId = config.orgId,
+            deviceId = config.deviceId,
         )
 
         if (config.telemetryEnabled) {
