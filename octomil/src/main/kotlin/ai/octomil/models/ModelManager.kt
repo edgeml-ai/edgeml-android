@@ -3,8 +3,6 @@ package ai.octomil.models
 import ai.octomil.api.OctomilApi
 import ai.octomil.config.OctomilConfig
 import ai.octomil.storage.SecureStorage
-import ai.octomil.api.dto.TelemetryAttributes
-import ai.octomil.api.dto.TelemetryV2Event
 import ai.octomil.wrapper.TelemetryQueue
 import android.content.Context
 import kotlinx.coroutines.CoroutineDispatcher
@@ -23,10 +21,6 @@ import timber.log.Timber
 import java.io.File
 import java.io.FileOutputStream
 import java.security.MessageDigest
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
-import java.util.TimeZone
 import java.util.concurrent.TimeUnit
 
 /**
@@ -121,16 +115,7 @@ class ModelManager(
                     // Emit deploy.started telemetry
                     val deployStartNanos = System.nanoTime()
                     try {
-                        TelemetryQueue.shared?.enqueueV2Event(
-                            TelemetryV2Event(
-                                name = "deploy.started",
-                                timestamp = isoNow(),
-                                attributes = TelemetryAttributes.of(
-                                    "model.id" to modelId,
-                                    "model.version" to version,
-                                ),
-                            ),
-                        )
+                        TelemetryQueue.shared?.reportDeployStarted(modelId, version)
                     } catch (_: Exception) {
                         // Telemetry must never crash the app
                     }
@@ -182,18 +167,8 @@ class ModelManager(
 
                     // Emit deploy.completed telemetry
                     try {
-                        val deployDurationMs = (System.nanoTime() - deployStartNanos) / 1_000_000
-                        TelemetryQueue.shared?.enqueueV2Event(
-                            TelemetryV2Event(
-                                name = "deploy.completed",
-                                timestamp = isoNow(),
-                                attributes = TelemetryAttributes.of(
-                                    "model.id" to modelId,
-                                    "model.version" to version,
-                                    "deploy.duration_ms" to deployDurationMs,
-                                ),
-                            ),
-                        )
+                        val deployDurationMs = (System.nanoTime() - deployStartNanos) / 1_000_000.0
+                        TelemetryQueue.shared?.reportDeployCompleted(modelId, version, deployDurationMs)
                     } catch (_: Exception) {
                         // Telemetry must never crash the app
                     }
@@ -213,16 +188,10 @@ class ModelManager(
                     Timber.e(e, "Model download failed")
                     _downloadState.value = DownloadState.Failed(e)
                     try {
-                        TelemetryQueue.shared?.enqueueV2Event(
-                            TelemetryV2Event(
-                                name = "deploy.failed",
-                                timestamp = isoNow(),
-                                attributes = TelemetryAttributes.of(
-                                    "model.id" to modelId,
-                                    "error.message" to (e.message ?: "unknown"),
-                                    "error.code" to e.errorCode.name,
-                                ),
-                            ),
+                        TelemetryQueue.shared?.reportDeployFailed(
+                            modelId,
+                            e.errorCode.name,
+                            e.message ?: "unknown",
                         )
                     } catch (_: Exception) {
                         // Telemetry must never crash the app
@@ -267,18 +236,13 @@ class ModelManager(
                 ?: throw ModelDownloadException("Empty version response")
 
         // Emit experiment.assigned if the server assigned this device to an experiment
-        if (resolvedVersion.experimentId != null) {
+        val experimentId = resolvedVersion.experimentId
+        if (experimentId != null) {
             try {
-                TelemetryQueue.shared?.enqueueV2Event(
-                    TelemetryV2Event(
-                        name = "experiment.assigned",
-                        timestamp = isoNow(),
-                        attributes = TelemetryAttributes.of(
-                            "model.id" to modelId,
-                            "experiment.id" to resolvedVersion.experimentId,
-                            "experiment.source" to resolvedVersion.source,
-                        ),
-                    ),
+                TelemetryQueue.shared?.reportExperimentAssigned(
+                    modelId = modelId,
+                    experimentId = experimentId,
+                    variant = resolvedVersion.source,
                 )
             } catch (_: Exception) {
                 // Telemetry must never crash the app
@@ -438,12 +402,6 @@ class ModelManager(
     // =========================================================================
     // Private Implementation
     // =========================================================================
-
-    private val isoFormatter = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US).apply {
-        timeZone = TimeZone.getTimeZone("UTC")
-    }
-
-    private fun isoNow(): String = isoFormatter.format(Date())
 
     private fun getCacheKey(
         modelId: String,
