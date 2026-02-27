@@ -1,5 +1,6 @@
 package ai.octomil.client
 
+import android.content.Context
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
@@ -9,6 +10,7 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import timber.log.Timber
+import java.io.File
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.TimeUnit
 
@@ -45,6 +47,10 @@ data class RoutingDecision(
     val format: String,
     val engine: String,
     @SerialName("fallback_target") val fallbackTarget: RoutingFallbackTarget? = null,
+    /** `true` when loaded from persistent cache (server was unreachable). */
+    val cached: Boolean = false,
+    /** `true` when this is a synthetic offline-default decision. */
+    val offline: Boolean = false,
 )
 
 /** Fallback target from routing response. */
@@ -91,14 +97,23 @@ data class RoutingConfig(
 // RoutingClient
 // =============================================================================
 
+/** Persistent cache file format. */
+@Serializable
+private data class PersistentCacheFile(
+    val entries: MutableMap<String, RoutingDecision> = mutableMapOf(),
+)
+
 /**
  * Calls the Octomil routing API to decide whether inference should run
  * on-device or in the cloud. Caches decisions with a configurable TTL.
+ * On network failure, falls back to persistent cache, then to a synthetic device decision.
  *
  * Thread-safe: uses [ConcurrentHashMap] for cache and [OkHttpClient]
  * for HTTP (which is also thread-safe).
+ *
+ * @param context Android context used for persistent cache storage.
  */
-class RoutingClient(private val config: RoutingConfig) {
+class RoutingClient(private val config: RoutingConfig, context: Context? = null) {
 
     private val json = Json {
         ignoreUnknownKeys = true
@@ -119,6 +134,15 @@ class RoutingClient(private val config: RoutingConfig) {
 
     private val serverUrl = config.serverUrl.trimEnd('/')
 
+    private val persistentCacheFile: File? = context?.cacheDir?.let {
+        File(it, "octomil_routing_cache.json")
+    }
+
+    /** Whether the last [route] call was answered from offline fallback. */
+    @Volatile
+    var lastRouteWasOffline: Boolean = false
+        private set
+
     // =========================================================================
     // Public API
     // =========================================================================
@@ -127,12 +151,15 @@ class RoutingClient(private val config: RoutingConfig) {
      * Ask the routing API whether to run on-device or in the cloud.
      *
      * Returns a cached decision when available and not expired.
-     * Returns `null` on any failure so the caller can fall back to local inference.
+     * On network failure, returns a persistent-cached decision or a synthetic device decision.
+     * Never returns `null` — always provides a usable decision.
      */
     fun route(
         modelId: String,
         deviceCapabilities: RoutingDeviceCapabilities,
-    ): RoutingDecision? {
+    ): RoutingDecision {
+        lastRouteWasOffline = false
+
         val cached = cache[modelId]
         if (cached != null && cached.expiresAt > System.currentTimeMillis()) {
             return cached.decision
@@ -158,20 +185,21 @@ class RoutingClient(private val config: RoutingConfig) {
         return try {
             httpClient.newCall(request).execute().use { response ->
                 if (!response.isSuccessful) {
-                    Timber.w("Routing API returned ${response.code}, falling back to device")
-                    return null
+                    Timber.w("Routing API returned ${response.code}, using offline fallback")
+                    return offlineFallback(modelId)
                 }
-                val responseBody = response.body?.string() ?: return null
+                val responseBody = response.body?.string() ?: return offlineFallback(modelId)
                 val decision = json.decodeFromString(RoutingDecision.serializer(), responseBody)
                 cache[modelId] = CacheEntry(
                     decision = decision,
                     expiresAt = System.currentTimeMillis() + config.cacheTtlMs,
                 )
+                persistToDisk(modelId, decision)
                 decision
             }
         } catch (e: Exception) {
-            Timber.w(e, "Routing request failed, falling back to device")
-            null
+            Timber.w(e, "Routing request failed, using offline fallback")
+            offlineFallback(modelId)
         }
     }
 
@@ -210,14 +238,75 @@ class RoutingClient(private val config: RoutingConfig) {
         }
     }
 
-    /** Invalidate all cached routing decisions. */
+    /** Invalidate all cached routing decisions (in-memory and persistent). */
     fun clearCache() {
         cache.clear()
+        persistentCacheFile?.delete()
     }
 
     /** Invalidate the cached routing decision for a specific model. */
     fun invalidate(modelId: String) {
         cache.remove(modelId)
+        val file = loadPersistentCache()
+        file.entries.remove(modelId)
+        savePersistentCache(file)
+    }
+
+    // =========================================================================
+    // Offline Fallback
+    // =========================================================================
+
+    private fun offlineFallback(modelId: String): RoutingDecision {
+        lastRouteWasOffline = true
+
+        // Try persistent cache.
+        val persistent = loadPersistentCache()
+        persistent.entries[modelId]?.let { persisted ->
+            Timber.i("Returning persistent-cached routing decision for $modelId")
+            return persisted.copy(cached = true, offline = false)
+        }
+
+        // No cache — return synthetic device decision.
+        Timber.i("No cached decision for $modelId, returning offline device default")
+        return RoutingDecision(
+            id = "offline-$modelId",
+            target = "device",
+            format = "tflite",
+            engine = "tflite",
+            fallbackTarget = null,
+            cached = false,
+            offline = true,
+        )
+    }
+
+    // =========================================================================
+    // Persistent Cache I/O
+    // =========================================================================
+
+    private fun persistToDisk(modelId: String, decision: RoutingDecision) {
+        val file = loadPersistentCache()
+        file.entries[modelId] = decision
+        savePersistentCache(file)
+    }
+
+    private fun loadPersistentCache(): PersistentCacheFile {
+        val f = persistentCacheFile ?: return PersistentCacheFile()
+        if (!f.exists()) return PersistentCacheFile()
+        return try {
+            json.decodeFromString(PersistentCacheFile.serializer(), f.readText())
+        } catch (e: Exception) {
+            Timber.w(e, "Failed to read persistent routing cache")
+            PersistentCacheFile()
+        }
+    }
+
+    private fun savePersistentCache(cacheFile: PersistentCacheFile) {
+        val f = persistentCacheFile ?: return
+        try {
+            f.writeText(json.encodeToString(PersistentCacheFile.serializer(), cacheFile))
+        } catch (e: Exception) {
+            Timber.w(e, "Failed to write persistent routing cache")
+        }
     }
 
     companion object {
