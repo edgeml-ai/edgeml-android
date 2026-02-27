@@ -1,5 +1,6 @@
 package ai.octomil.wrapper
 
+import ai.octomil.api.dto.TelemetryV2BatchRequest
 import io.mockk.Runs
 import io.mockk.every
 import io.mockk.just
@@ -8,6 +9,7 @@ import io.mockk.slot
 import io.mockk.verify
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.runTest
 import org.junit.After
 import org.junit.Before
 import org.junit.Test
@@ -201,7 +203,10 @@ class OctomilWrappedInterpreterTest {
 
         wrapper.run(floatArrayOf(1.0f), floatArrayOf(0.0f))
 
+        // 1 inference event in the inference queue
         assertEquals(1, queue.pendingCount)
+        // 1 inference.started in the v2 queue
+        assertEquals(1, queue.pendingV2Count)
         wrapper.close()
     }
 
@@ -219,6 +224,7 @@ class OctomilWrappedInterpreterTest {
         }
 
         assertEquals(1, queue.pendingCount)
+        assertEquals(1, queue.pendingV2Count) // inference.started was emitted before failure
         wrapper.close()
     }
 
@@ -231,6 +237,7 @@ class OctomilWrappedInterpreterTest {
         wrapper.run(floatArrayOf(1.0f), floatArrayOf(0.0f))
 
         assertEquals(0, queue.pendingCount)
+        assertEquals(0, queue.pendingV2Count)
         wrapper.close()
     }
 
@@ -245,6 +252,40 @@ class OctomilWrappedInterpreterTest {
         )
 
         assertEquals(1, queue.pendingCount)
+        assertEquals(1, queue.pendingV2Count) // inference.started
+        wrapper.close()
+    }
+
+    // =========================================================================
+    // inference.started emission
+    // =========================================================================
+
+    @Test
+    fun `inference_started emitted before inference`() = runTest(testDispatcher) {
+        val batches = mutableListOf<TelemetryV2BatchRequest>()
+        val sender = TelemetrySender { batch -> batches.add(batch) }
+        val queue = createQueue(sender = sender)
+        val wrapper = createWrapper(queue = queue, modelId = "my-model")
+
+        wrapper.run(floatArrayOf(1.0f), floatArrayOf(0.0f))
+
+        queue.flush()
+
+        assertEquals(1, batches.size)
+        val events = batches[0].events
+        // Should contain both the inference.completed and inference.started events
+        val names = events.map { it.name }
+        assertTrue("inference.started" in names, "Expected inference.started, got: $names")
+        assertTrue("inference.completed" in names, "Expected inference.completed, got: $names")
+
+        // inference.started should appear in the batch (order may vary since
+        // they're in separate queues, but both must be present)
+        val startedEvent = events.first { it.name == "inference.started" }
+        assertEquals(
+            kotlinx.serialization.json.JsonPrimitive("my-model"),
+            startedEvent.attributes["model.id"],
+        )
+
         wrapper.close()
     }
 
@@ -405,6 +446,7 @@ class OctomilWrappedInterpreterTest {
         wrapper.run(floatArrayOf(3.0f), floatArrayOf(0.0f))
 
         assertEquals(3, queue.pendingCount)
+        assertEquals(3, queue.pendingV2Count) // 3 inference.started events
         wrapper.close()
     }
 }
