@@ -727,12 +727,7 @@ class OctomilClient private constructor(
         engine: ai.octomil.inference.StreamingInferenceEngine?,
         modality: ai.octomil.inference.Modality,
     ): ai.octomil.inference.StreamingInferenceEngine =
-        engine ?: when (modality) {
-            ai.octomil.inference.Modality.TEXT -> ai.octomil.inference.LLMEngine(context)
-            ai.octomil.inference.Modality.IMAGE -> ai.octomil.inference.ImageEngine(context)
-            ai.octomil.inference.Modality.AUDIO -> ai.octomil.inference.AudioEngine(context)
-            ai.octomil.inference.Modality.VIDEO -> ai.octomil.inference.VideoEngine(context)
-        }
+        engine ?: ai.octomil.inference.EngineRegistry.resolve(modality, context = context)
 
     private suspend fun reportStreamingEventSafely(request: ai.octomil.api.dto.InferenceEventRequest) {
         try {

@@ -2,8 +2,7 @@ package ai.octomil.wrapper
 
 import ai.octomil.BuildConfig
 import ai.octomil.api.OctomilApi
-import ai.octomil.api.dto.TelemetryBatchRequest
-import ai.octomil.api.dto.TelemetryEventDto
+import ai.octomil.api.dto.TelemetryV2BatchRequest
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -135,48 +134,20 @@ object Octomil {
 
         val api = buildTelemetryApi(serverUrl, apiKey)
 
-        return object : TelemetrySender {
-            override suspend fun send(events: List<InferenceTelemetryEvent>) {
-                Timber.d("%s: Sending %d telemetry events to %s", TAG, events.size, serverUrl)
+        return TelemetrySender { batch: TelemetryV2BatchRequest ->
+            Timber.d("%s: Sending v2 telemetry batch (%d events) to %s", TAG, batch.events.size, serverUrl)
 
-                val request = TelemetryBatchRequest(
-                    events = events.map { e ->
-                        TelemetryEventDto(
-                            modelId = e.modelId,
-                            latencyMs = e.latencyMs,
-                            timestampMs = e.timestampMs,
-                            success = e.success,
-                            errorMessage = e.errorMessage,
-                        )
-                    },
-                    modelId = events.firstOrNull()?.modelId,
-                    sdkVersion = BuildConfig.OCTOMIL_VERSION,
-                )
-
-                val response = api.sendTelemetryBatch(request)
-                if (!response.isSuccessful) {
-                    throw IOException(
-                        "Telemetry batch upload failed: HTTP ${response.code()} ${response.message()}",
-                    )
-                }
-                Timber.d(
-                    "%s: Telemetry batch accepted: %d events",
-                    TAG,
-                    response.body()?.accepted ?: events.size,
+            val response = api.sendTelemetryV2(batch)
+            if (!response.isSuccessful) {
+                throw IOException(
+                    "Telemetry v2 batch upload failed: HTTP ${response.code()} ${response.message()}",
                 )
             }
-
-            override suspend fun sendFunnelEvent(event: FunnelEvent) {
-                Timber.d("%s: Sending funnel event '%s' to %s", TAG, event.stage, serverUrl)
-
-                val response = api.sendFunnelEvent(event)
-                if (!response.isSuccessful) {
-                    throw IOException(
-                        "Funnel event upload failed: HTTP ${response.code()} ${response.message()}",
-                    )
-                }
-                Timber.d("%s: Funnel event '%s' accepted", TAG, event.stage)
-            }
+            Timber.d(
+                "%s: Telemetry v2 batch accepted: %d events",
+                TAG,
+                batch.events.size,
+            )
         }
     }
 
