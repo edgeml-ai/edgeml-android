@@ -1007,17 +1007,9 @@ class OctomilClient private constructor(
                 // Emit training.started v2 telemetry
                 val trainingStartNanos = System.nanoTime()
                 try {
-                    TelemetryQueue.shared?.enqueueV2Event(
-                        TelemetryV2Event(
-                            name = "training.started",
-                            timestamp = isoNow(),
-                            attributes = TelemetryAttributes.of(
-                                "model.id" to config.modelId,
-                                "training.upload_policy" to uploadPolicy.name,
-                                "training.degraded" to isDegraded,
-                                "training.round_id" to roundId,
-                            ),
-                        ),
+                    TelemetryQueue.shared?.reportTrainingStarted(
+                        modelId = config.modelId,
+                        roundId = roundId ?: "",
                     )
                 } catch (_: Exception) {
                     // Telemetry must never crash the app
@@ -1045,21 +1037,14 @@ class OctomilClient private constructor(
 
                 // Emit training.completed v2 telemetry
                 try {
-                    val trainingDurationMs = (System.nanoTime() - trainingStartNanos) / 1_000_000
-                    TelemetryQueue.shared?.enqueueV2Event(
-                        TelemetryV2Event(
-                            name = "training.completed",
-                            timestamp = isoNow(),
-                            attributes = TelemetryAttributes.of(
-                                "model.id" to config.modelId,
-                                "training.duration_ms" to trainingDurationMs,
-                                "training.loss" to trainingResult.loss,
-                                "training.accuracy" to trainingResult.accuracy,
-                                "training.sample_count" to trainingResult.sampleCount,
-                                "training.round_id" to roundId,
-                                "training.degraded" to isDegraded,
-                            ),
-                        ),
+                    val trainingDurationMs = (System.nanoTime() - trainingStartNanos) / 1_000_000.0
+                    TelemetryQueue.shared?.reportTrainingCompleted(
+                        modelId = config.modelId,
+                        durationMs = trainingDurationMs,
+                        loss = trainingResult.loss,
+                        accuracy = trainingResult.accuracy,
+                        sampleCount = trainingResult.sampleCount,
+                        roundId = roundId ?: "",
                     )
                 } catch (_: Exception) {
                     // Telemetry must never crash the app
@@ -1134,15 +1119,9 @@ class OctomilClient private constructor(
                 )
                 // Emit training.failed v2 telemetry
                 try {
-                    TelemetryQueue.shared?.enqueueV2Event(
-                        TelemetryV2Event(
-                            name = "training.failed",
-                            timestamp = isoNow(),
-                            attributes = TelemetryAttributes.of(
-                                "model.id" to config.modelId,
-                                "error.message" to (e.message ?: "unknown"),
-                            ),
-                        ),
+                    TelemetryQueue.shared?.reportTrainingFailed(
+                        config.modelId,
+                        e.message ?: "unknown",
                     )
                 } catch (_: Exception) {
                     // Telemetry must never crash the app
@@ -1356,17 +1335,11 @@ class OctomilClient private constructor(
         return if (response.isSuccessful) {
             // Emit training.weight_upload v2 telemetry
             try {
-                TelemetryQueue.shared?.enqueueV2Event(
-                    TelemetryV2Event(
-                        name = "training.weight_upload",
-                        timestamp = isoNow(),
-                        attributes = TelemetryAttributes.of(
-                            "model.id" to weightUpdate.modelId,
-                            "training.round_id" to roundId,
-                            "training.secure_aggregation" to true,
-                            "training.sample_count" to weightUpdate.sampleCount,
-                        ),
-                    ),
+                TelemetryQueue.shared?.reportWeightUpload(
+                    modelId = weightUpdate.modelId,
+                    roundId = roundId,
+                    sampleCount = weightUpdate.sampleCount,
+                    secureAggregation = true,
                 )
             } catch (_: Exception) {
                 // Telemetry must never crash the app
@@ -1392,17 +1365,11 @@ class OctomilClient private constructor(
             return if (response.isSuccessful) {
                 // Emit training.weight_upload v2 telemetry
                 try {
-                    TelemetryQueue.shared?.enqueueV2Event(
-                        TelemetryV2Event(
-                            name = "training.weight_upload",
-                            timestamp = isoNow(),
-                            attributes = TelemetryAttributes.of(
-                                "model.id" to weightUpdate.modelId,
-                                "training.round_id" to roundId,
-                                "training.secure_aggregation" to false,
-                                "training.sample_count" to weightUpdate.sampleCount,
-                            ),
-                        ),
+                    TelemetryQueue.shared?.reportWeightUpload(
+                        modelId = weightUpdate.modelId,
+                        roundId = roundId,
+                        sampleCount = weightUpdate.sampleCount,
+                        secureAggregation = false,
                     )
                 } catch (_: Exception) {
                     // Telemetry must never crash the app
