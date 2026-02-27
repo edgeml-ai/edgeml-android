@@ -381,6 +381,205 @@ class TelemetryQueue internal constructor(
         }
     }
 
+    // =========================================================================
+    // Named convenience methods — cross-SDK convention: report{EventName}
+    // =========================================================================
+
+    // ---- Deploy ----
+
+    /**
+     * Report that a model deploy has started.
+     */
+    fun reportDeployStarted(modelId: String, version: String) {
+        enqueueV2Event(
+            TelemetryV2Event(
+                name = "deploy.started",
+                timestamp = formatTimestamp(),
+                attributes = TelemetryAttributes.of(
+                    "model.id" to modelId,
+                    "model.version" to version,
+                ),
+            ),
+        )
+    }
+
+    /**
+     * Report that a model deploy completed successfully.
+     */
+    fun reportDeployCompleted(modelId: String, version: String, durationMs: Double) {
+        enqueueV2Event(
+            TelemetryV2Event(
+                name = "deploy.completed",
+                timestamp = formatTimestamp(),
+                attributes = TelemetryAttributes.of(
+                    "model.id" to modelId,
+                    "model.version" to version,
+                    "deploy.duration_ms" to durationMs,
+                ),
+            ),
+        )
+    }
+
+    /**
+     * Report that a model deploy failed.
+     */
+    fun reportDeployFailed(modelId: String, errorType: String, errorMessage: String) {
+        enqueueV2Event(
+            TelemetryV2Event(
+                name = "deploy.failed",
+                timestamp = formatTimestamp(),
+                attributes = TelemetryAttributes.of(
+                    "model.id" to modelId,
+                    "error.message" to errorMessage,
+                    "error.code" to errorType,
+                ),
+            ),
+        )
+    }
+
+    // ---- Training ----
+
+    /**
+     * Report that on-device training has started.
+     */
+    fun reportTrainingStarted(modelId: String, version: String = "", roundId: String = "") {
+        enqueueV2Event(
+            TelemetryV2Event(
+                name = "training.started",
+                timestamp = formatTimestamp(),
+                attributes = TelemetryAttributes.of(
+                    "model.id" to modelId,
+                    "model.version" to version,
+                    "training.round_id" to roundId,
+                ),
+            ),
+        )
+    }
+
+    /**
+     * Report that on-device training completed successfully.
+     */
+    fun reportTrainingCompleted(
+        modelId: String,
+        version: String = "",
+        durationMs: Double,
+        loss: Double? = null,
+        accuracy: Double? = null,
+        sampleCount: Int? = null,
+        roundId: String = "",
+    ) {
+        enqueueV2Event(
+            TelemetryV2Event(
+                name = "training.completed",
+                timestamp = formatTimestamp(),
+                attributes = TelemetryAttributes.of(
+                    "model.id" to modelId,
+                    "model.version" to version,
+                    "training.duration_ms" to durationMs,
+                    "training.loss" to loss,
+                    "training.accuracy" to accuracy,
+                    "training.sample_count" to sampleCount,
+                    "training.round_id" to roundId,
+                ),
+            ),
+        )
+    }
+
+    /**
+     * Report that on-device training failed.
+     */
+    fun reportTrainingFailed(modelId: String, errorMessage: String) {
+        enqueueV2Event(
+            TelemetryV2Event(
+                name = "training.failed",
+                timestamp = formatTimestamp(),
+                attributes = TelemetryAttributes.of(
+                    "model.id" to modelId,
+                    "error.message" to errorMessage,
+                ),
+            ),
+        )
+    }
+
+    /**
+     * Report a weight upload after training.
+     */
+    fun reportWeightUpload(
+        modelId: String,
+        roundId: String,
+        sampleCount: Int? = null,
+        secureAggregation: Boolean = false,
+    ) {
+        enqueueV2Event(
+            TelemetryV2Event(
+                name = "training.weight_upload",
+                timestamp = formatTimestamp(),
+                attributes = TelemetryAttributes.of(
+                    "model.id" to modelId,
+                    "training.round_id" to roundId,
+                    "training.secure_aggregation" to secureAggregation,
+                    "training.sample_count" to sampleCount,
+                ),
+            ),
+        )
+    }
+
+    // ---- Experiment ----
+
+    /**
+     * Report that a device was assigned to an experiment variant.
+     */
+    fun reportExperimentAssigned(modelId: String, experimentId: String, variant: String = "") {
+        enqueueV2Event(
+            TelemetryV2Event(
+                name = "experiment.assigned",
+                timestamp = formatTimestamp(),
+                attributes = TelemetryAttributes.of(
+                    "model.id" to modelId,
+                    "experiment.id" to experimentId,
+                    "experiment.source" to variant,
+                ),
+            ),
+        )
+    }
+
+    /**
+     * Report an experiment metric observation.
+     */
+    fun reportExperimentMetric(experimentId: String, metricName: String, metricValue: Double) {
+        enqueueV2Event(
+            TelemetryV2Event(
+                name = "experiment.metric",
+                timestamp = formatTimestamp(),
+                attributes = TelemetryAttributes.of(
+                    "experiment.id" to experimentId,
+                    "experiment.metric_name" to metricName,
+                    "experiment.metric_value" to metricValue,
+                ),
+            ),
+        )
+    }
+
+    // ---- Inference ----
+
+    /**
+     * Report that an inference has started.
+     */
+    fun reportInferenceStarted(modelId: String) {
+        enqueueV2Event(
+            TelemetryV2Event(
+                name = "inference.started",
+                timestamp = formatTimestamp(),
+                attributes = TelemetryAttributes.of(
+                    "model.id" to modelId,
+                    "inference.modality" to "on_device",
+                    "device.compute_unit" to "cpu",
+                    "model.format" to "tflite",
+                ),
+            ),
+        )
+    }
+
     /**
      * Report a funnel analytics event. Fire-and-forget via coroutine scope.
      */
