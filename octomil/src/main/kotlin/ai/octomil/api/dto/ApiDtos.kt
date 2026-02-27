@@ -771,3 +771,51 @@ data class SecAggUnmaskRequest(
     @SerialName("unmask_data")
     val unmaskData: String,
 )
+
+// =========================================================================
+// Telemetry Batch
+// =========================================================================
+
+/**
+ * Request body for POST /api/v1/telemetry/events.
+ * Wraps a batch of inference telemetry events with device context.
+ */
+@Serializable
+data class TelemetryBatchRequest(
+    @SerialName("events")
+    val events: List<TelemetryEventDto>,
+    @SerialName("device_id")
+    val deviceId: String? = null,
+    @SerialName("model_id")
+    val modelId: String? = null,
+    @SerialName("sdk_version")
+    val sdkVersion: String? = null,
+)
+
+/**
+ * A single telemetry event within a batch request.
+ */
+@Serializable
+data class TelemetryEventDto(
+    @SerialName("model_id")
+    val modelId: String,
+    @SerialName("latency_ms")
+    val latencyMs: Double,
+    @SerialName("timestamp_ms")
+    val timestampMs: Long,
+    @SerialName("success")
+    val success: Boolean,
+    @SerialName("error_message")
+    val errorMessage: String? = null,
+)
+
+/**
+ * Response from POST /api/v1/telemetry/events.
+ */
+@Serializable
+data class TelemetryBatchResponse(
+    @SerialName("status")
+    val status: String,
+    @SerialName("accepted")
+    val accepted: Int,
+)
