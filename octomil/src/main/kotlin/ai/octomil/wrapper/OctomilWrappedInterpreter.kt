@@ -1,5 +1,8 @@
 package ai.octomil.wrapper
 
+import ai.octomil.client.RoutingClient
+import ai.octomil.client.RoutingConfig
+import ai.octomil.client.RoutingDeviceCapabilities
 import org.tensorflow.lite.Interpreter
 import org.tensorflow.lite.Tensor
 import timber.log.Timber
@@ -43,8 +46,47 @@ class OctomilWrappedInterpreter internal constructor(
     @Volatile
     internal var serverContract: ServerModelContract? = null
 
+    /**
+     * Optional routing client for device/cloud inference decisions.
+     * When set, `run()` consults the routing API before local inference.
+     * Set via [configureRouting].
+     */
+    @Volatile
+    var routingClient: RoutingClient? = null
+        private set
+
+    /**
+     * Device capabilities for routing requests. Must be set via
+     * [configureRouting] with a [RoutingDeviceCapabilities] instance.
+     */
+    @Volatile
+    private var deviceCapabilities: RoutingDeviceCapabilities? = null
+
     companion object {
         private const val TAG = "OctomilWrappedInterpreter"
+    }
+
+    // =========================================================================
+    // Routing configuration
+    // =========================================================================
+
+    /**
+     * Enable cloud routing for this interpreter.
+     *
+     * When configured, each [run] call first consults the routing API.
+     * If the server recommends cloud execution, inference is sent to
+     * `POST /api/v1/inference`. On any routing or cloud failure, the SDK
+     * falls back to local TFLite inference silently.
+     */
+    fun configureRouting(config: RoutingConfig, capabilities: RoutingDeviceCapabilities) {
+        routingClient = RoutingClient(config)
+        deviceCapabilities = capabilities
+    }
+
+    /** Disable cloud routing, reverting to local-only inference. */
+    fun disableRouting() {
+        routingClient = null
+        deviceCapabilities = null
     }
 
     // =========================================================================
@@ -58,6 +100,25 @@ class OctomilWrappedInterpreter internal constructor(
      * as the underlying TFLite Interpreter (ByteBuffer, float arrays, etc.).
      */
     fun run(input: Any, output: Any) {
+        // Attempt cloud routing if configured.
+        val router = routingClient
+        val caps = deviceCapabilities
+        if (router != null && caps != null) {
+            try {
+                val decision = router.route(modelId, caps)
+                if (decision != null && decision.target == "cloud") {
+                    val inputJson = kotlinx.serialization.json.JsonPrimitive(input.toString())
+                    val response = router.cloudInfer(modelId, inputJson)
+                    Timber.d("%s: Cloud inference completed via %s", TAG, response.provider)
+                    recordTelemetry(System.nanoTime(), true, null)
+                    return
+                }
+            } catch (e: Exception) {
+                Timber.w(e, "%s: Cloud routing/inference failed, falling back to local", TAG)
+                // Fall through to local inference
+            }
+        }
+
         validateIfFloatArray(input)
         val startNs = System.nanoTime()
         var success = true
