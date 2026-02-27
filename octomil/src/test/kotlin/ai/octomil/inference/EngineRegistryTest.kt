@@ -61,12 +61,6 @@ class EngineRegistryTest {
         assertIs<VideoEngine>(engine)
     }
 
-    @Test
-    fun `default TIME_SERIES modality resolves to LLMEngine`() {
-        val engine = EngineRegistry.resolve(Modality.TIME_SERIES, context = context)
-        assertIs<LLMEngine>(engine)
-    }
-
     // =========================================================================
     // Exact match beats modality default
     // =========================================================================
@@ -136,13 +130,8 @@ class EngineRegistryTest {
     }
 
     @Test
-    fun `engineFromFilename returns MEDIAPIPE for task extension`() {
-        assertEquals(Engine.MEDIAPIPE, EngineRegistry.engineFromFilename("gemma.task"))
-    }
-
-    @Test
-    fun `engineFromFilename returns MEDIAPIPE case insensitive`() {
-        assertEquals(Engine.MEDIAPIPE, EngineRegistry.engineFromFilename("gemma.TASK"))
+    fun `engineFromFilename returns null for task extension`() {
+        assertNull(EngineRegistry.engineFromFilename("gemma.task"))
     }
 
     @Test
@@ -194,17 +183,6 @@ class EngineRegistryTest {
         }
         jobs.forEach { it.join() }
         // If we get here without ConcurrentModificationException, the test passes.
-    }
-
-    // =========================================================================
-    // MediaPipe TEXT registration
-    // =========================================================================
-
-    @Test
-    fun `TEXT with MEDIAPIPE engine resolves to MediaPipeLLMEngine`() {
-        val modelFile = File("/tmp/test.task")
-        val engine = EngineRegistry.resolve(Modality.TEXT, Engine.MEDIAPIPE, context, modelFile)
-        assertIs<MediaPipeLLMEngine>(engine)
     }
 
     // =========================================================================

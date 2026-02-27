@@ -73,12 +73,11 @@ object EngineRegistry {
     /**
      * Detect the engine type from a model filename extension.
      *
-     * @return [Engine.TFLITE] for `.tflite`, [Engine.MEDIAPIPE] for `.task`, null otherwise.
+     * @return [Engine.TFLITE] for `.tflite`, null for unrecognised extensions.
      */
     fun engineFromFilename(filename: String): Engine? =
         when {
             filename.endsWith(".tflite", ignoreCase = true) -> Engine.TFLITE
-            filename.endsWith(".task", ignoreCase = true) -> Engine.MEDIAPIPE
             else -> null
         }
 
@@ -103,9 +102,5 @@ object EngineRegistry {
         register(Modality.IMAGE) { ctx, _ -> ImageEngine(ctx) }
         register(Modality.AUDIO) { ctx, _ -> AudioEngine(ctx) }
         register(Modality.VIDEO) { ctx, _ -> VideoEngine(ctx) }
-        register(Modality.TIME_SERIES) { ctx, _ -> LLMEngine(ctx) }
-        register(Modality.TEXT, Engine.MEDIAPIPE) { ctx, modelFile ->
-            MediaPipeLLMEngine(ctx, modelFile!!)
-        }
     }
 }
