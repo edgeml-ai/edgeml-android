@@ -2,6 +2,7 @@ package ai.octomil.api.dto
 
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonPrimitive
 
 /**
  * V2 OTLP-style telemetry envelope for POST /api/v2/telemetry/events.
@@ -37,7 +38,10 @@ data class TelemetryV2Resource(
 
 /**
  * A single event in the v2 OTLP envelope. Uses dot-notation event names
- * (e.g. "inference.completed", "funnel.pairing_started") and flat attributes.
+ * (e.g. "inference.completed", "funnel.pairing_started") and typed attributes.
+ *
+ * Attributes use [JsonPrimitive] values so numbers and booleans serialize as
+ * native JSON types (e.g. `12.5` instead of `"12.5"`).
  */
 @Serializable
 data class TelemetryV2Event(
@@ -46,5 +50,35 @@ data class TelemetryV2Event(
     @SerialName("timestamp")
     val timestamp: String,
     @SerialName("attributes")
-    val attributes: Map<String, String> = emptyMap(),
+    val attributes: Map<String, JsonPrimitive> = emptyMap(),
+    @SerialName("trace_id")
+    val traceId: String? = null,
+    @SerialName("span_id")
+    val spanId: String? = null,
 )
+
+/**
+ * Helper for building typed attribute maps from heterogeneous key-value pairs.
+ *
+ * Usage:
+ * ```kotlin
+ * val attrs = TelemetryAttributes.of(
+ *     "model.id" to "classifier",
+ *     "inference.duration_ms" to 12.5,
+ *     "inference.success" to true,
+ * )
+ * ```
+ */
+object TelemetryAttributes {
+    fun of(vararg pairs: Pair<String, Any?>): Map<String, JsonPrimitive> {
+        return pairs.mapNotNull { (key, value) ->
+            when (value) {
+                null -> null
+                is String -> key to JsonPrimitive(value)
+                is Number -> key to JsonPrimitive(value)
+                is Boolean -> key to JsonPrimitive(value)
+                else -> key to JsonPrimitive(value.toString())
+            }
+        }.toMap()
+    }
+}
