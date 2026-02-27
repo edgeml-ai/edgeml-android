@@ -1,7 +1,5 @@
 package ai.octomil.api
 
-import ai.octomil.api.dto.TelemetryBatchRequest
-import ai.octomil.api.dto.TelemetryBatchResponse
 import ai.octomil.api.dto.TelemetryV2BatchRequest
 import ai.octomil.api.dto.AssignmentRequest
 import ai.octomil.api.dto.DevicePolicyResponse
@@ -225,26 +223,6 @@ interface OctomilApi {
     suspend fun reportInferenceEvent(
         @Body request: InferenceEventRequest,
     ): Response<InferenceEventResponse>
-
-    // =========================================================================
-    // Telemetry
-    // =========================================================================
-
-    /**
-     * Send a batch of inference telemetry events.
-     */
-    @POST("api/v1/telemetry/events")
-    suspend fun sendTelemetryBatch(
-        @Body request: TelemetryBatchRequest,
-    ): Response<TelemetryBatchResponse>
-
-    /**
-     * Send a single funnel analytics event.
-     */
-    @POST("api/v1/funnel/events")
-    suspend fun sendFunnelEvent(
-        @Body event: ai.octomil.wrapper.FunnelEvent,
-    ): Response<Unit>
 
     // =========================================================================
     // Telemetry V2 (OTLP envelope)

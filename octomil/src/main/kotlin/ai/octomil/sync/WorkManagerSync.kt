@@ -2,7 +2,11 @@ package ai.octomil.sync
 
 import ai.octomil.api.OctomilApi
 import ai.octomil.api.OctomilApiFactory
-import ai.octomil.api.dto.TrainingEventRequest
+import ai.octomil.api.dto.TelemetryAttributes
+import ai.octomil.api.dto.TelemetryV2BatchRequest
+import ai.octomil.api.dto.TelemetryV2Event
+import ai.octomil.api.dto.TelemetryV2Resource
+import ai.octomil.BuildConfig
 import ai.octomil.config.OctomilConfig
 import ai.octomil.models.ModelManager
 import ai.octomil.storage.SecureStorage
@@ -24,6 +28,7 @@ import androidx.work.workDataOf
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonPrimitive
 import timber.log.Timber
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -155,30 +160,45 @@ class OctomilSyncWorker(
         }
 
         val deviceId = storage.getServerDeviceId() ?: return
-        val experimentId = storage.getExperimentId() ?: "default"
+        val version = storage.getCurrentModelVersion() ?: "unknown"
         var successCount = 0
 
-        for (event in events) {
-            try {
-                val request =
-                    TrainingEventRequest(
-                        deviceId = deviceId,
-                        modelId = config.modelId,
-                        version = storage.getCurrentModelVersion() ?: "unknown",
-                        eventType = event.type,
-                        timestamp = formatIso8601(event.timestamp),
-                        metrics = event.metrics,
-                        metadata = event.metadata,
-                    )
+        // Build v2 events from the queued training events
+        val v2Events = events.map { event ->
+            val attrs = mutableMapOf<String, JsonPrimitive>(
+                "model.id" to JsonPrimitive(config.modelId),
+                "model.version" to JsonPrimitive(version),
+                "device.id" to JsonPrimitive(deviceId),
+            )
+            event.metrics?.forEach { (k, v) -> attrs["training.$k"] = JsonPrimitive(v) }
+            event.metadata?.forEach { (k, v) -> attrs["training.$k"] = JsonPrimitive(v) }
 
-                val response = api.reportTrainingEvent(experimentId, request)
-                if (response.isSuccessful) {
+            TelemetryV2Event(
+                name = "training.${event.type}",
+                timestamp = formatIso8601(event.timestamp),
+                attributes = attrs,
+            )
+        }
+
+        // Send as a single v2 batch
+        try {
+            val resource = TelemetryV2Resource(
+                sdk = "android",
+                sdkVersion = BuildConfig.OCTOMIL_VERSION,
+                deviceId = deviceId,
+                platform = "android",
+                orgId = config.orgId,
+            )
+            val batch = TelemetryV2BatchRequest(resource = resource, events = v2Events)
+            val response = api.sendTelemetryV2(batch)
+            if (response.isSuccessful) {
+                for (event in events) {
                     eventQueue.removeEvent(event.id)
-                    successCount++
                 }
-            } catch (e: Exception) {
-                Timber.w(e, "Failed to sync event ${event.id}")
+                successCount = events.size
             }
+        } catch (e: Exception) {
+            Timber.w(e, "Failed to sync training events via v2")
         }
 
         Timber.i("Synced $successCount/${events.size} events")
