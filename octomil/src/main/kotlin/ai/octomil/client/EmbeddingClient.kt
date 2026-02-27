@@ -135,13 +135,13 @@ private fun buildPayload(
     batchInput: List<String>?,
 ): String {
     val parts = mutableListOf<String>()
-    parts.add(""""model_id":${Json.encodeToString(kotlinx.serialization.builtins.serializer<String>(), modelId)}""")
+    parts.add(""""model_id":${Json.encodeToString(modelId)}""")
     if (singleInput != null) {
-        parts.add(""""input":${Json.encodeToString(kotlinx.serialization.builtins.serializer<String>(), singleInput)}""")
+        parts.add(""""input":${Json.encodeToString(singleInput)}""")
     }
     if (batchInput != null) {
         val inputsJson = batchInput.joinToString(",", "[", "]") { str ->
-            Json.encodeToString(kotlinx.serialization.builtins.serializer<String>(), str)
+            Json.encodeToString(str)
         }
         parts.add(""""input":$inputsJson""")
     }

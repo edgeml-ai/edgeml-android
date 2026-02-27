@@ -159,14 +159,14 @@ private fun buildPayload(
     parameters: Map<String, Any>?,
 ): String {
     val parts = mutableListOf<String>()
-    parts.add(""""model_id":${Json.encodeToString(kotlinx.serialization.builtins.serializer<String>(), modelId)}""")
+    parts.add(""""model_id":${Json.encodeToString(modelId)}""")
     if (inputData != null) {
-        parts.add(""""input_data":${Json.encodeToString(kotlinx.serialization.builtins.serializer<String>(), inputData)}""")
+        parts.add(""""input_data":${Json.encodeToString(inputData)}""")
     }
     if (messages != null) {
         val msgsJson = messages.joinToString(",", "[", "]") { msg ->
             msg.entries.joinToString(",", "{", "}") { (k, v) ->
-                """"$k":${Json.encodeToString(kotlinx.serialization.builtins.serializer<String>(), v)}"""
+                """"$k":${Json.encodeToString(v)}"""
             }
         }
         parts.add(""""messages":$msgsJson""")
