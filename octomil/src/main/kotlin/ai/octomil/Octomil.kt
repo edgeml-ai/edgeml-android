@@ -1,5 +1,6 @@
 package ai.octomil
 
+import ai.octomil.inference.EngineRegistry
 import ai.octomil.models.CachedModel
 import ai.octomil.training.TFLiteTrainer
 import android.content.Context
@@ -141,10 +142,7 @@ object Octomil {
 
     private fun resolveEngine(filename: String, engine: Engine): Engine {
         if (engine != Engine.AUTO) return engine
-        return when {
-            filename.endsWith(".tflite", ignoreCase = true) -> Engine.TFLITE
-            else -> Engine.TFLITE  // Default to TFLite on Android
-        }
+        return EngineRegistry.engineFromFilename(filename) ?: Engine.TFLITE
     }
 
     /**
