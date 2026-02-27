@@ -15,7 +15,9 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonPrimitive
 import ai.octomil.BuildConfig
+import ai.octomil.api.dto.TelemetryAttributes
 import ai.octomil.api.dto.TelemetryV2BatchRequest
 import ai.octomil.api.dto.TelemetryV2Event
 import ai.octomil.api.dto.TelemetryV2Resource
@@ -68,7 +70,8 @@ class TelemetryQueue internal constructor(
     private val orgId: String? = null,
     private val deviceId: String? = null,
 ) : Closeable {
-    private val queue = ConcurrentLinkedQueue<InferenceTelemetryEvent>()
+    private val inferenceQueue = ConcurrentLinkedQueue<InferenceTelemetryEvent>()
+    private val v2Queue = ConcurrentLinkedQueue<TelemetryV2Event>()
     private val flushMutex = Mutex()
     private val scope = CoroutineScope(SupervisorJob() + dispatcher)
     private var flushJob: Job? = null
@@ -118,20 +121,42 @@ class TelemetryQueue internal constructor(
     }
 
     /**
-     * Enqueue a telemetry event. Non-blocking. If the queue reaches [batchSize],
-     * a flush is triggered asynchronously.
+     * Enqueue an inference telemetry event. Non-blocking. If the combined queue
+     * size reaches [batchSize], a flush is triggered asynchronously.
      */
     fun enqueue(event: InferenceTelemetryEvent) {
-        queue.add(event)
-        if (queue.size >= batchSize) {
+        inferenceQueue.add(event)
+        if (totalPendingCount >= batchSize) {
             scope.launch { flush() }
         }
     }
 
     /**
-     * The number of events currently buffered (not yet flushed).
+     * Enqueue a generic v2 telemetry event. Non-blocking. Enables training,
+     * experiment, deploy, and inference.started events to flow through the
+     * same pipeline.
      */
-    val pendingCount: Int get() = queue.size
+    fun enqueueV2Event(event: TelemetryV2Event) {
+        v2Queue.add(event)
+        if (totalPendingCount >= batchSize) {
+            scope.launch { flush() }
+        }
+    }
+
+    /**
+     * The number of inference events currently buffered (not yet flushed).
+     */
+    val pendingCount: Int get() = inferenceQueue.size
+
+    /**
+     * The number of generic v2 events currently buffered.
+     */
+    val pendingV2Count: Int get() = v2Queue.size
+
+    /**
+     * Total number of events buffered across both queues.
+     */
+    private val totalPendingCount: Int get() = inferenceQueue.size + v2Queue.size
 
     /**
      * Flush all buffered events. Sends to the server if a [TelemetrySender] is
@@ -139,60 +164,77 @@ class TelemetryQueue internal constructor(
      */
     suspend fun flush() {
         flushMutex.withLock {
-            val events = drainQueue()
-            if (events.isEmpty()) return
+            val inferenceEvents = drainInferenceQueue()
+            val genericEvents = drainV2Queue()
+            if (inferenceEvents.isEmpty() && genericEvents.isEmpty()) return
 
-            Timber.d("Flushing %d telemetry events", events.size)
+            val totalCount = inferenceEvents.size + genericEvents.size
+            Timber.d("Flushing %d telemetry events", totalCount)
 
             if (sender != null) {
                 try {
-                    val batch = buildV2Batch(events)
+                    val batch = buildMergedBatch(inferenceEvents, genericEvents)
                     sender.sendBatch(batch)
-                    Timber.d("Telemetry flush succeeded: %d events", events.size)
+                    Timber.d("Telemetry flush succeeded: %d events", totalCount)
                 } catch (e: Exception) {
-                    Timber.w(e, "Telemetry flush failed, persisting %d events to disk", events.size)
-                    persistEvents(events)
+                    Timber.w(e, "Telemetry flush failed, persisting %d events to disk", totalCount)
+                    persistV2Events(buildMergedEvents(inferenceEvents, genericEvents))
                 }
             } else {
                 // No sender configured -- persist locally for later retrieval
-                persistEvents(events)
+                persistV2Events(buildMergedEvents(inferenceEvents, genericEvents))
             }
         }
+    }
+
+    /**
+     * Build a v2 OTLP batch request from inference events and generic v2 events,
+     * merging them into a single batch.
+     */
+    internal fun buildMergedBatch(
+        inferenceEvents: List<InferenceTelemetryEvent>,
+        genericEvents: List<TelemetryV2Event>,
+    ): TelemetryV2BatchRequest {
+        val resource = buildResource()
+        val allEvents = buildMergedEvents(inferenceEvents, genericEvents)
+        return TelemetryV2BatchRequest(resource = resource, events = allEvents)
+    }
+
+    /**
+     * Build merged list of v2 events from inference events and generic v2 events.
+     */
+    private fun buildMergedEvents(
+        inferenceEvents: List<InferenceTelemetryEvent>,
+        genericEvents: List<TelemetryV2Event>,
+    ): List<TelemetryV2Event> {
+        val converted = inferenceEvents.map { event ->
+            val name = if (event.success) "inference.completed" else "inference.failed"
+            val attrs = mutableMapOf<String, JsonPrimitive>(
+                "model.id" to JsonPrimitive(event.modelId),
+                "inference.duration_ms" to JsonPrimitive(event.latencyMs),
+                "inference.modality" to JsonPrimitive("on_device"),
+                "device.compute_unit" to JsonPrimitive("cpu"),
+                "model.format" to JsonPrimitive("tflite"),
+                "inference.success" to JsonPrimitive(event.success),
+            )
+            if (event.errorMessage != null) {
+                attrs["error.message"] = JsonPrimitive(event.errorMessage)
+            }
+
+            TelemetryV2Event(
+                name = name,
+                timestamp = isoFormatter.format(Date(event.timestampMs)),
+                attributes = attrs,
+            )
+        }
+        return converted + genericEvents
     }
 
     /**
      * Build a v2 OTLP batch request from a list of inference telemetry events.
      */
     internal fun buildV2Batch(events: List<InferenceTelemetryEvent>): TelemetryV2BatchRequest {
-        val resource = TelemetryV2Resource(
-            sdk = "android",
-            sdkVersion = BuildConfig.OCTOMIL_VERSION,
-            deviceId = deviceId,
-            platform = "android",
-            orgId = orgId,
-        )
-
-        val v2Events = events.map { event ->
-            val attrs = mutableMapOf(
-                "model.id" to event.modelId,
-                "inference.duration_ms" to event.latencyMs.toString(),
-                "inference.modality" to "on_device",
-                "device.compute_unit" to "cpu",
-                "model.format" to "tflite",
-                "inference.success" to event.success.toString(),
-            )
-            if (event.errorMessage != null) {
-                attrs["error.message"] = event.errorMessage
-            }
-
-            TelemetryV2Event(
-                name = "inference.completed",
-                timestamp = isoFormatter.format(Date(event.timestampMs)),
-                attributes = attrs,
-            )
-        }
-
-        return TelemetryV2BatchRequest(resource = resource, events = v2Events)
+        return buildMergedBatch(events, emptyList())
     }
 
     /**
@@ -207,16 +249,16 @@ class TelemetryQueue internal constructor(
             orgId = orgId,
         )
 
-        val attrs = mutableMapOf<String, String>()
-        attrs["funnel.success"] = event.success.toString()
-        attrs["funnel.source"] = event.source
-        event.modelId?.let { attrs["model.id"] = it }
-        event.rolloutId?.let { attrs["funnel.rollout_id"] = it }
-        event.sessionId?.let { attrs["funnel.session_id"] = it }
-        event.failureReason?.let { attrs["error.message"] = it }
-        event.failureCategory?.let { attrs["error.category"] = it }
-        event.durationMs?.let { attrs["funnel.duration_ms"] = it.toString() }
-        event.metadata?.forEach { (k, v) -> attrs["funnel.metadata.$k"] = v }
+        val attrs = mutableMapOf<String, JsonPrimitive>()
+        attrs["funnel.success"] = JsonPrimitive(event.success)
+        attrs["funnel.source"] = JsonPrimitive(event.source)
+        event.modelId?.let { attrs["model.id"] = JsonPrimitive(it) }
+        event.rolloutId?.let { attrs["funnel.rollout_id"] = JsonPrimitive(it) }
+        event.sessionId?.let { attrs["funnel.session_id"] = JsonPrimitive(it) }
+        event.failureReason?.let { attrs["error.message"] = JsonPrimitive(it) }
+        event.failureCategory?.let { attrs["error.category"] = JsonPrimitive(it) }
+        event.durationMs?.let { attrs["funnel.duration_ms"] = JsonPrimitive(it) }
+        event.metadata?.forEach { (k, v) -> attrs["funnel.metadata.$k"] = JsonPrimitive(v) }
 
         val v2Event = TelemetryV2Event(
             name = "funnel.${event.stage}",
@@ -228,21 +270,53 @@ class TelemetryQueue internal constructor(
     }
 
     /**
-     * Drain all events from the concurrent queue into a list.
+     * Build the resource block for v2 batches.
      */
-    private fun drainQueue(): List<InferenceTelemetryEvent> {
+    private fun buildResource(): TelemetryV2Resource {
+        return TelemetryV2Resource(
+            sdk = "android",
+            sdkVersion = BuildConfig.OCTOMIL_VERSION,
+            deviceId = deviceId,
+            platform = "android",
+            orgId = orgId,
+        )
+    }
+
+    /**
+     * Format current time as ISO 8601.
+     */
+    internal fun formatTimestamp(epochMs: Long = System.currentTimeMillis()): String {
+        return isoFormatter.format(Date(epochMs))
+    }
+
+    /**
+     * Drain all events from the inference queue into a list.
+     */
+    private fun drainInferenceQueue(): List<InferenceTelemetryEvent> {
         val events = mutableListOf<InferenceTelemetryEvent>()
         while (true) {
-            val event = queue.poll() ?: break
+            val event = inferenceQueue.poll() ?: break
             events.add(event)
         }
         return events
     }
 
     /**
-     * Persist events to disk so they survive process restarts.
+     * Drain all events from the generic v2 queue into a list.
      */
-    private fun persistEvents(events: List<InferenceTelemetryEvent>) {
+    private fun drainV2Queue(): List<TelemetryV2Event> {
+        val events = mutableListOf<TelemetryV2Event>()
+        while (true) {
+            val event = v2Queue.poll() ?: break
+            events.add(event)
+        }
+        return events
+    }
+
+    /**
+     * Persist v2 events to disk so they survive process restarts.
+     */
+    private fun persistV2Events(events: List<TelemetryV2Event>) {
         val dir = persistDir ?: return
         try {
             dir.mkdirs()
@@ -263,6 +337,9 @@ class TelemetryQueue internal constructor(
 
     /**
      * Load previously persisted events and attempt to send them.
+     *
+     * Events are now stored as `List<TelemetryV2Event>`. Files persisted in the
+     * old `List<InferenceTelemetryEvent>` format are discarded on parse failure.
      */
     private suspend fun loadPersistedEvents() {
         val dir = persistDir ?: return
@@ -274,15 +351,15 @@ class TelemetryQueue internal constructor(
 
         for (file in files) {
             try {
-                val events: List<InferenceTelemetryEvent> = json.decodeFromString(file.readText())
-                val batch = buildV2Batch(events)
+                val events: List<TelemetryV2Event> = json.decodeFromString(file.readText())
+                val batch = TelemetryV2BatchRequest(resource = buildResource(), events = events)
                 sender.sendBatch(batch)
                 file.delete()
                 Timber.d("Resent %d persisted events from %s", events.size, file.name)
             } catch (e: Exception) {
-                Timber.w(e, "Failed to resend persisted events from %s", file.name)
-                // Leave the file for the next cycle
-                break
+                Timber.w(e, "Failed to load/resend persisted events from %s, discarding", file.name)
+                // Old format or corrupt -- discard gracefully
+                file.delete()
             }
         }
     }
@@ -293,9 +370,10 @@ class TelemetryQueue internal constructor(
     override fun close() {
         flushJob?.cancel()
         // Best-effort synchronous drain: persist any remaining events
-        val remaining = drainQueue()
-        if (remaining.isNotEmpty()) {
-            persistEvents(remaining)
+        val remainingInference = drainInferenceQueue()
+        val remainingV2 = drainV2Queue()
+        if (remainingInference.isNotEmpty() || remainingV2.isNotEmpty()) {
+            persistV2Events(buildMergedEvents(remainingInference, remainingV2))
         }
         scope.cancel()
         if (shared === this) {

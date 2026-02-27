@@ -9,6 +9,7 @@ import io.mockk.coVerify
 import io.mockk.mockk
 import io.mockk.slot
 import kotlinx.coroutines.test.runTest
+import kotlinx.serialization.json.JsonPrimitive
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
 import org.junit.After
@@ -55,9 +56,9 @@ class TelemetrySenderTest {
                 name = eventName,
                 timestamp = "2026-02-27T14:00:00.000Z",
                 attributes = mapOf(
-                    "model.id" to "model-$i",
-                    "inference.duration_ms" to "${5.0 + i}",
-                    "inference.success" to "true",
+                    "model.id" to JsonPrimitive("model-$i"),
+                    "inference.duration_ms" to JsonPrimitive(5.0 + i),
+                    "inference.success" to JsonPrimitive(true),
                 ),
             )
         }
