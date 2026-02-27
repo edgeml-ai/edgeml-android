@@ -2,6 +2,7 @@ package ai.octomil.inference
 
 import ai.octomil.Engine
 import android.content.Context
+import androidx.annotation.VisibleForTesting
 import java.io.File
 import java.util.concurrent.ConcurrentHashMap
 
@@ -87,6 +88,14 @@ object EngineRegistry {
     fun reset() {
         factories.clear()
         registerDefaults()
+    }
+
+    /**
+     * Clear all registrations without re-registering defaults. For testing only.
+     */
+    @VisibleForTesting
+    fun clearAll() {
+        factories.clear()
     }
 
     private fun registerDefaults() {
