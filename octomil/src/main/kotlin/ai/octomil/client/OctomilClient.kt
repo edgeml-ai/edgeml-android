@@ -35,6 +35,7 @@ import ai.octomil.training.TrainingOutcome
 import ai.octomil.training.UploadPolicy
 import ai.octomil.training.WarmupResult
 import ai.octomil.training.WeightUpdate
+import ai.octomil.wrapper.TelemetryQueue
 import ai.octomil.utils.BatteryUtils
 import ai.octomil.utils.DeviceUtils
 import ai.octomil.utils.NetworkMonitor
@@ -1003,6 +1004,25 @@ class OctomilClient private constructor(
                     },
                 )
 
+                // Emit training.started v2 telemetry
+                val trainingStartNanos = System.nanoTime()
+                try {
+                    TelemetryQueue.shared?.enqueueV2Event(
+                        TelemetryV2Event(
+                            name = "training.started",
+                            timestamp = isoNow(),
+                            attributes = TelemetryAttributes.of(
+                                "model.id" to config.modelId,
+                                "training.upload_policy" to uploadPolicy.name,
+                                "training.degraded" to isDegraded,
+                                "training.round_id" to roundId,
+                            ),
+                        ),
+                    )
+                } catch (_: Exception) {
+                    // Telemetry must never crash the app
+                }
+
                 // Train locally
                 val trainingResult = trainer.train(
                     dataProvider,
@@ -1022,6 +1042,28 @@ class OctomilClient private constructor(
                         put("degraded", isDegraded.toString())
                     },
                 )
+
+                // Emit training.completed v2 telemetry
+                try {
+                    val trainingDurationMs = (System.nanoTime() - trainingStartNanos) / 1_000_000
+                    TelemetryQueue.shared?.enqueueV2Event(
+                        TelemetryV2Event(
+                            name = "training.completed",
+                            timestamp = isoNow(),
+                            attributes = TelemetryAttributes.of(
+                                "model.id" to config.modelId,
+                                "training.duration_ms" to trainingDurationMs,
+                                "training.loss" to trainingResult.loss,
+                                "training.accuracy" to trainingResult.accuracy,
+                                "training.sample_count" to trainingResult.sampleCount,
+                                "training.round_id" to roundId,
+                                "training.degraded" to isDegraded,
+                            ),
+                        ),
+                    )
+                } catch (_: Exception) {
+                    // Telemetry must never crash the app
+                }
 
                 // Handle weight extraction and upload based on policy
                 var weightUpdate: WeightUpdate? = null
@@ -1090,6 +1132,21 @@ class OctomilClient private constructor(
                     type = EventTypes.TRAINING_FAILED,
                     metadata = mapOf("error" to (e.message ?: "unknown")),
                 )
+                // Emit training.failed v2 telemetry
+                try {
+                    TelemetryQueue.shared?.enqueueV2Event(
+                        TelemetryV2Event(
+                            name = "training.failed",
+                            timestamp = isoNow(),
+                            attributes = TelemetryAttributes.of(
+                                "model.id" to config.modelId,
+                                "error.message" to (e.message ?: "unknown"),
+                            ),
+                        ),
+                    )
+                } catch (_: Exception) {
+                    // Telemetry must never crash the app
+                }
                 Result.failure(e)
             }
         }
@@ -1297,6 +1354,23 @@ class OctomilClient private constructor(
         val request = buildGradientRequest(weightUpdate, deviceId, roundId, trainingResult, isDegraded)
         val response = api.submitGradients(roundId, request)
         return if (response.isSuccessful) {
+            // Emit training.weight_upload v2 telemetry
+            try {
+                TelemetryQueue.shared?.enqueueV2Event(
+                    TelemetryV2Event(
+                        name = "training.weight_upload",
+                        timestamp = isoNow(),
+                        attributes = TelemetryAttributes.of(
+                            "model.id" to weightUpdate.modelId,
+                            "training.round_id" to roundId,
+                            "training.secure_aggregation" to true,
+                            "training.sample_count" to weightUpdate.sampleCount,
+                        ),
+                    ),
+                )
+            } catch (_: Exception) {
+                // Telemetry must never crash the app
+            }
             Result.success(Unit)
         } else {
             Result.failure(Exception("Upload failed: ${response.code()}"))
@@ -1316,6 +1390,23 @@ class OctomilClient private constructor(
             val request = buildGradientRequest(weightUpdate, deviceId, roundId, trainingResult, isDegraded)
             val response = api.submitGradients(roundId, request)
             return if (response.isSuccessful) {
+                // Emit training.weight_upload v2 telemetry
+                try {
+                    TelemetryQueue.shared?.enqueueV2Event(
+                        TelemetryV2Event(
+                            name = "training.weight_upload",
+                            timestamp = isoNow(),
+                            attributes = TelemetryAttributes.of(
+                                "model.id" to weightUpdate.modelId,
+                                "training.round_id" to roundId,
+                                "training.secure_aggregation" to false,
+                                "training.sample_count" to weightUpdate.sampleCount,
+                            ),
+                        ),
+                    )
+                } catch (_: Exception) {
+                    // Telemetry must never crash the app
+                }
                 Result.success(Unit)
             } else {
                 Result.failure(Exception("Upload failed: ${response.code()}"))
@@ -1360,6 +1451,12 @@ class OctomilClient private constructor(
             _serverDeviceId.value = deviceId
         }
     }
+
+    private val isoFormatter = java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", java.util.Locale.US).apply {
+        timeZone = java.util.TimeZone.getTimeZone("UTC")
+    }
+
+    private fun isoNow(): String = isoFormatter.format(java.util.Date())
 
     /**
      * Check if client is ready for operations.
