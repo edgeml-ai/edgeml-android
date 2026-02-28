@@ -872,10 +872,10 @@ class OctomilClient private constructor(
      * Creates a federated analytics client for the given federation.
      *
      * @param federationId The federation to run analytics against.
-     * @return A [ai.octomil.analytics.FederatedAnalyticsApi] bound to this client's API connection.
+     * @return A [ai.octomil.analytics.FederatedAnalyticsClient] bound to this client's API connection.
      */
-    fun analytics(federationId: String): ai.octomil.analytics.FederatedAnalyticsApi {
-        return ai.octomil.analytics.FederatedAnalyticsApi(api, federationId)
+    fun analytics(federationId: String): ai.octomil.analytics.FederatedAnalyticsClient {
+        return ai.octomil.analytics.FederatedAnalyticsClient(api, federationId)
     }
 
     // =========================================================================

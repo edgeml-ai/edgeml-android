@@ -12,16 +12,16 @@ import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
-class FederatedAnalyticsApiTest {
+class FederatedAnalyticsClientTest {
 
     private lateinit var api: OctomilApi
-    private lateinit var analyticsApi: FederatedAnalyticsApi
+    private lateinit var analyticsApi: FederatedAnalyticsClient
     private val federationId = "fed-123"
 
     @Before
     fun setUp() {
         api = mockk<OctomilApi>(relaxed = true)
-        analyticsApi = FederatedAnalyticsApi(api, federationId)
+        analyticsApi = FederatedAnalyticsClient(api, federationId)
     }
 
     // =========================================================================
