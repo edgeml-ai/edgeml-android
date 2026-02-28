@@ -63,7 +63,7 @@ class OctomilWrapperTest {
     }
 
     @Test
-    fun `wrapped interpreter delegates run to original`() {
+    fun `wrapped interpreter delegates predict to original`() {
         val config = OctomilWrapperConfig.offline()
         val wrapped = Octomil.wrap(
             interpreter = mockInterpreter,
@@ -73,7 +73,7 @@ class OctomilWrapperTest {
 
         val input = floatArrayOf(1.0f, 2.0f)
         val output = floatArrayOf(0.0f)
-        wrapped.run(input, output)
+        wrapped.predict(input, output)
 
         verify(exactly = 1) { mockInterpreter.run(input, output) }
         wrapped.close()
@@ -99,7 +99,7 @@ class OctomilWrapperTest {
         )
 
         // Run an inference so telemetry is enqueued
-        wrapped.run(floatArrayOf(1.0f), floatArrayOf(0.0f))
+        wrapped.predict(floatArrayOf(1.0f), floatArrayOf(0.0f))
 
         assertNotNull(wrapped)
         wrapped.close()
@@ -133,8 +133,8 @@ class OctomilWrapperTest {
         )
 
         assertNotNull(wrapped)
-        // Should still be able to run inference without server
-        wrapped.run(floatArrayOf(1.0f), floatArrayOf(0.0f))
+        // Should still be able to predict without server
+        wrapped.predict(floatArrayOf(1.0f), floatArrayOf(0.0f))
 
         verify(exactly = 1) { mockInterpreter.run(any(), any()) }
         wrapped.close()
@@ -172,8 +172,8 @@ class OctomilWrapperTest {
             config = OctomilWrapperConfig.offline(),
         )
 
-        // Run inference should work without any server
-        wrapped.run(floatArrayOf(1.0f, 2.0f, 3.0f), floatArrayOf(0.0f))
+        // Predict should work without any server
+        wrapped.predict(floatArrayOf(1.0f, 2.0f, 3.0f), floatArrayOf(0.0f))
         verify(exactly = 1) { mockInterpreter.run(any(), any()) }
         wrapped.close()
     }

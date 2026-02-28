@@ -23,10 +23,10 @@ import java.nio.ByteBuffer
  *
  * // After:
  * val interpreter = Octomil.wrap(Interpreter(modelFile), modelId = "classifier")
- * interpreter.run(input, output)   // identical call site
+ * interpreter.predict(input, output)   // cross-SDK consistent API
  * ```
  *
- * Each `run`/`runForMultipleInputsOutputs` call:
+ * Each `predict`/`predictMultiple` call:
  * 1. Validates input against the server model contract (if available & input is FloatArray).
  * 2. Records start time via [System.nanoTime].
  * 3. Delegates to the underlying [Interpreter].
@@ -48,7 +48,7 @@ class OctomilWrappedInterpreter internal constructor(
 
     /**
      * Optional routing client for device/cloud inference decisions.
-     * When set, `run()` consults the routing API before local inference.
+     * When set, `predict()` consults the routing API before local inference.
      * Set via [configureRouting].
      */
     @Volatile
@@ -73,7 +73,7 @@ class OctomilWrappedInterpreter internal constructor(
     /**
      * Enable cloud routing for this interpreter.
      *
-     * When configured, each [run] call first consults the routing API.
+     * When configured, each [predict] call first consults the routing API.
      * If the server recommends cloud execution, inference is sent to
      * `POST /api/v1/inference`. On any routing or cloud failure, the SDK
      * falls back to local TFLite inference silently.
@@ -90,16 +90,16 @@ class OctomilWrappedInterpreter internal constructor(
     }
 
     // =========================================================================
-    // run() — single input/output
+    // predict() — single input/output
     // =========================================================================
 
     /**
      * Run model inference with a single input and output.
      *
-     * Mirrors [Interpreter.run]. The input/output types follow the same rules
-     * as the underlying TFLite Interpreter (ByteBuffer, float arrays, etc.).
+     * Delegates to the underlying TFLite [Interpreter.run]. The input/output
+     * types follow the same rules as TFLite (ByteBuffer, float arrays, etc.).
      */
-    fun run(input: Any, output: Any) {
+    fun predict(input: Any, output: Any) {
         // Attempt cloud routing if configured.
         val router = routingClient
         val caps = deviceCapabilities

@@ -72,29 +72,29 @@ class OctomilWrappedInterpreterTest {
     )
 
     // =========================================================================
-    // run() delegation
+    // predict() delegation
     // =========================================================================
 
     @Test
-    fun `run delegates to underlying interpreter`() {
+    fun `predict delegates to underlying interpreter`() {
         val input = floatArrayOf(1.0f, 2.0f, 3.0f)
         val output = floatArrayOf(0.0f)
 
         val wrapper = createWrapper()
-        wrapper.run(input, output)
+        wrapper.predict(input, output)
 
         verify(exactly = 1) { mockInterpreter.run(input, output) }
         wrapper.close()
     }
 
     @Test
-    fun `run propagates interpreter exceptions`() {
+    fun `predict propagates interpreter exceptions`() {
         every { mockInterpreter.run(any(), any()) } throws RuntimeException("inference failed")
 
         val wrapper = createWrapper()
 
         assertFailsWith<RuntimeException>("inference failed") {
-            wrapper.run(floatArrayOf(1.0f), floatArrayOf(0.0f))
+            wrapper.predict(floatArrayOf(1.0f), floatArrayOf(0.0f))
         }
         wrapper.close()
     }
@@ -197,11 +197,11 @@ class OctomilWrappedInterpreterTest {
     // =========================================================================
 
     @Test
-    fun `run records telemetry event on success`() {
+    fun `predict records telemetry event on success`() {
         val queue = createQueue()
         val wrapper = createWrapper(queue = queue)
 
-        wrapper.run(floatArrayOf(1.0f), floatArrayOf(0.0f))
+        wrapper.predict(floatArrayOf(1.0f), floatArrayOf(0.0f))
 
         // 1 inference event in the inference queue
         assertEquals(1, queue.pendingCount)
@@ -211,14 +211,14 @@ class OctomilWrappedInterpreterTest {
     }
 
     @Test
-    fun `run records telemetry event on failure`() {
+    fun `predict records telemetry event on failure`() {
         every { mockInterpreter.run(any(), any()) } throws RuntimeException("boom")
 
         val queue = createQueue()
         val wrapper = createWrapper(queue = queue)
 
         try {
-            wrapper.run(floatArrayOf(1.0f), floatArrayOf(0.0f))
+            wrapper.predict(floatArrayOf(1.0f), floatArrayOf(0.0f))
         } catch (_: RuntimeException) {
             // expected
         }
@@ -234,7 +234,7 @@ class OctomilWrappedInterpreterTest {
         val queue = createQueue()
         val wrapper = createWrapper(config = config, queue = queue)
 
-        wrapper.run(floatArrayOf(1.0f), floatArrayOf(0.0f))
+        wrapper.predict(floatArrayOf(1.0f), floatArrayOf(0.0f))
 
         assertEquals(0, queue.pendingCount)
         assertEquals(0, queue.pendingV2Count)
@@ -267,7 +267,7 @@ class OctomilWrappedInterpreterTest {
         val queue = createQueue(sender = sender)
         val wrapper = createWrapper(queue = queue, modelId = "my-model")
 
-        wrapper.run(floatArrayOf(1.0f), floatArrayOf(0.0f))
+        wrapper.predict(floatArrayOf(1.0f), floatArrayOf(0.0f))
 
         queue.flush()
 
@@ -301,7 +301,7 @@ class OctomilWrappedInterpreterTest {
         wrapper.serverContract = ServerModelContract(expectedInputSize = 3, inputDescription = "[1, 3]")
 
         // Should not throw or log warnings when size matches
-        wrapper.run(floatArrayOf(1.0f, 2.0f, 3.0f), floatArrayOf(0.0f))
+        wrapper.predict(floatArrayOf(1.0f, 2.0f, 3.0f), floatArrayOf(0.0f))
 
         verify(exactly = 1) { mockInterpreter.run(any(), any()) }
         wrapper.close()
@@ -315,7 +315,7 @@ class OctomilWrappedInterpreterTest {
         wrapper.serverContract = ServerModelContract(expectedInputSize = 10, inputDescription = "[1, 10]")
 
         // Should still call interpreter even with wrong input size
-        wrapper.run(floatArrayOf(1.0f, 2.0f), floatArrayOf(0.0f))
+        wrapper.predict(floatArrayOf(1.0f, 2.0f), floatArrayOf(0.0f))
 
         verify(exactly = 1) { mockInterpreter.run(any(), any()) }
         wrapper.close()
@@ -328,7 +328,7 @@ class OctomilWrappedInterpreterTest {
         wrapper.serverContract = ServerModelContract(expectedInputSize = 10)
 
         // Even with mismatched size, no validation warning
-        wrapper.run(floatArrayOf(1.0f), floatArrayOf(0.0f))
+        wrapper.predict(floatArrayOf(1.0f), floatArrayOf(0.0f))
 
         verify(exactly = 1) { mockInterpreter.run(any(), any()) }
         wrapper.close()
@@ -340,7 +340,7 @@ class OctomilWrappedInterpreterTest {
         val wrapper = createWrapper(config = config)
         // serverContract is null by default
 
-        wrapper.run(floatArrayOf(1.0f), floatArrayOf(0.0f))
+        wrapper.predict(floatArrayOf(1.0f), floatArrayOf(0.0f))
 
         verify(exactly = 1) { mockInterpreter.run(any(), any()) }
         wrapper.close()
@@ -354,7 +354,7 @@ class OctomilWrappedInterpreterTest {
 
         // ByteBuffer input should not be validated (can't cheaply check shape)
         val buf = java.nio.ByteBuffer.allocateDirect(4)
-        wrapper.run(buf, floatArrayOf(0.0f))
+        wrapper.predict(buf, floatArrayOf(0.0f))
 
         verify(exactly = 1) { mockInterpreter.run(buf, any()) }
         wrapper.close()
@@ -437,13 +437,13 @@ class OctomilWrappedInterpreterTest {
     // =========================================================================
 
     @Test
-    fun `multiple run calls accumulate telemetry events`() {
+    fun `multiple predict calls accumulate telemetry events`() {
         val queue = createQueue()
         val wrapper = createWrapper(queue = queue)
 
-        wrapper.run(floatArrayOf(1.0f), floatArrayOf(0.0f))
-        wrapper.run(floatArrayOf(2.0f), floatArrayOf(0.0f))
-        wrapper.run(floatArrayOf(3.0f), floatArrayOf(0.0f))
+        wrapper.predict(floatArrayOf(1.0f), floatArrayOf(0.0f))
+        wrapper.predict(floatArrayOf(2.0f), floatArrayOf(0.0f))
+        wrapper.predict(floatArrayOf(3.0f), floatArrayOf(0.0f))
 
         assertEquals(3, queue.pendingCount)
         assertEquals(3, queue.pendingV2Count) // 3 inference.started events
