@@ -37,7 +37,7 @@ import java.util.concurrent.TimeUnit
  *
  * // After
  * val interpreter = Octomil.wrap(Interpreter(modelFile), modelId = "classifier")
- * interpreter.run(input, output)  // identical API
+ * interpreter.predict(input, output)  // cross-SDK consistent API
  * ```
  *
  * This object lives in the `ai.octomil.wrapper` package to stay decoupled from
@@ -57,7 +57,7 @@ object Octomil {
      *   process restarts. Null disables disk persistence (events are dropped on
      *   flush failure). Typically pass `context.filesDir` or `context.cacheDir`.
      * @param dispatcher Coroutine dispatcher for background telemetry and OTA work.
-     * @return An [OctomilWrappedInterpreter] with the same `run` API as [Interpreter].
+     * @return An [OctomilWrappedInterpreter] with the `predict` API for cross-SDK consistency.
      */
     fun wrap(
         interpreter: Interpreter,

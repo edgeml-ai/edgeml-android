@@ -79,7 +79,7 @@ class AdaptiveDeployedModel(
      * @param output Output [ByteBuffer].
      */
     fun predict(input: ByteBuffer, output: ByteBuffer) {
-        interpreter.run(input, output)
+        interpreter.predict(input, output)
     }
 
     /**

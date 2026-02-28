@@ -24,7 +24,7 @@ import java.nio.ByteBuffer
  * val result = interpreter.load("nnapi")
  * println("Loaded with ${result.delegate}, failed: ${result.failedDelegates}")
  *
- * interpreter.run(inputBuffer, outputBuffer)
+ * interpreter.predict(inputBuffer, outputBuffer)
  *
  * // Later, adapt to new conditions:
  * interpreter.reload("xnnpack")
@@ -110,7 +110,7 @@ class AdaptiveInterpreter(
      * @throws IllegalStateException if the interpreter has not been loaded.
      * @throws RuntimeException if inference fails.
      */
-    fun run(input: ByteBuffer, output: ByteBuffer) {
+    fun predict(input: ByteBuffer, output: ByteBuffer) {
         val interp = interpreter
             ?: throw IllegalStateException("Interpreter not loaded. Call load() first.")
 
