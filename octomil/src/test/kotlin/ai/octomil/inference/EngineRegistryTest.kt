@@ -13,7 +13,9 @@ import org.junit.Test
 import java.io.File
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
 import kotlin.test.assertIs
+import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
@@ -200,5 +202,205 @@ class EngineRegistryTest {
         val testFile = File("/tmp/test.tflite")
         EngineRegistry.resolve(Modality.IMAGE, Engine.TFLITE, context, testFile)
         assertEquals(testFile, receivedFile)
+    }
+
+    // =========================================================================
+    // Helper: create a test EnginePlugin
+    // =========================================================================
+
+    private fun testPlugin(
+        name: String,
+        available: Boolean = true,
+        info: String = "",
+        supports: Boolean = true,
+        tps: Double = 50.0,
+        priority: Int = 100,
+        error: String? = null,
+    ): EnginePlugin = object : EnginePlugin {
+        override val name: String = name
+        override val priority: Int = priority
+        override fun detect(context: Context) = available
+        override fun detectInfo(context: Context) = info
+        override fun supportsModel(modelName: String) = supports
+        override fun benchmark(context: Context, modelName: String, nTokens: Int) =
+            BenchmarkResult(
+                engineName = name,
+                tokensPerSecond = tps,
+                ttftMs = 10.0,
+                memoryMb = 64.0,
+                error = error,
+            )
+        override fun createEngine(context: Context, modelName: String): StreamingInferenceEngine =
+            StreamingInferenceEngine { _, _ -> kotlinx.coroutines.flow.emptyFlow() }
+    }
+
+    // =========================================================================
+    // detectAll
+    // =========================================================================
+
+    @Test
+    fun `detectAll returns detection result for each plugin`() {
+        EngineRegistry.registerPlugin(testPlugin("alpha", available = true, info = "v1"))
+        EngineRegistry.registerPlugin(testPlugin("beta", available = false, info = "missing"))
+
+        val results = EngineRegistry.detectAll(Modality.TEXT, context)
+        assertEquals(2, results.size)
+
+        val alpha = results.first { it.engine == "alpha" }
+        assertTrue(alpha.available)
+        assertEquals("v1", alpha.info)
+
+        val beta = results.first { it.engine == "beta" }
+        assertFalse(beta.available)
+        assertEquals("missing", beta.info)
+    }
+
+    @Test
+    fun `detectAll returns empty list when no plugins registered`() {
+        val results = EngineRegistry.detectAll(Modality.TEXT, context)
+        assertTrue(results.isEmpty())
+    }
+
+    @Test
+    fun `detectAll handles plugin that throws during detect`() {
+        val crashPlugin = object : EnginePlugin {
+            override val name = "crashy"
+            override fun detect(context: Context): Boolean = throw RuntimeException("boom")
+            override fun supportsModel(modelName: String) = true
+            override fun benchmark(context: Context, modelName: String, nTokens: Int) =
+                BenchmarkResult("crashy", 0.0, 0.0, 0.0)
+            override fun createEngine(context: Context, modelName: String) =
+                StreamingInferenceEngine { _, _ -> kotlinx.coroutines.flow.emptyFlow() }
+        }
+        EngineRegistry.registerPlugin(crashPlugin)
+
+        val results = EngineRegistry.detectAll(Modality.TEXT, context)
+        assertEquals(1, results.size)
+        assertFalse(results[0].available)
+    }
+
+    @Test
+    fun `detectAll sorts by priority`() {
+        EngineRegistry.registerPlugin(testPlugin("low-pri", priority = 200))
+        EngineRegistry.registerPlugin(testPlugin("high-pri", priority = 10))
+
+        val results = EngineRegistry.detectAll(Modality.TEXT, context)
+        assertEquals("high-pri", results[0].engine)
+        assertEquals("low-pri", results[1].engine)
+    }
+
+    // =========================================================================
+    // benchmarkAll
+    // =========================================================================
+
+    @Test
+    fun `benchmarkAll returns ranked results sorted by tps descending`() = runTest {
+        EngineRegistry.registerPlugin(testPlugin("slow", tps = 10.0))
+        EngineRegistry.registerPlugin(testPlugin("fast", tps = 100.0))
+        EngineRegistry.registerPlugin(testPlugin("mid", tps = 50.0))
+
+        val ranked = EngineRegistry.benchmarkAll(Modality.TEXT, context, "test-model")
+        assertEquals(3, ranked.size)
+        assertEquals("fast", ranked[0].engine)
+        assertEquals("mid", ranked[1].engine)
+        assertEquals("slow", ranked[2].engine)
+    }
+
+    @Test
+    fun `benchmarkAll filters out unavailable plugins`() = runTest {
+        EngineRegistry.registerPlugin(testPlugin("available", available = true, tps = 50.0))
+        EngineRegistry.registerPlugin(testPlugin("unavailable", available = false, tps = 100.0))
+
+        val ranked = EngineRegistry.benchmarkAll(Modality.TEXT, context, "test-model")
+        assertEquals(1, ranked.size)
+        assertEquals("available", ranked[0].engine)
+    }
+
+    @Test
+    fun `benchmarkAll filters out plugins that do not support model`() = runTest {
+        EngineRegistry.registerPlugin(testPlugin("supports", supports = true, tps = 50.0))
+        EngineRegistry.registerPlugin(testPlugin("no-support", supports = false, tps = 100.0))
+
+        val ranked = EngineRegistry.benchmarkAll(Modality.TEXT, context, "test-model")
+        assertEquals(1, ranked.size)
+        assertEquals("supports", ranked[0].engine)
+    }
+
+    @Test
+    fun `benchmarkAll handles plugin that throws during benchmark`() = runTest {
+        val crashPlugin = object : EnginePlugin {
+            override val name = "crashy"
+            override fun detect(context: Context) = true
+            override fun supportsModel(modelName: String) = true
+            override fun benchmark(context: Context, modelName: String, nTokens: Int): BenchmarkResult =
+                throw RuntimeException("benchmark failed")
+            override fun createEngine(context: Context, modelName: String) =
+                StreamingInferenceEngine { _, _ -> kotlinx.coroutines.flow.emptyFlow() }
+        }
+        EngineRegistry.registerPlugin(crashPlugin)
+
+        val ranked = EngineRegistry.benchmarkAll(Modality.TEXT, context, "test-model")
+        assertEquals(1, ranked.size)
+        assertFalse(ranked[0].result.ok)
+        assertEquals("benchmark failed", ranked[0].result.error)
+    }
+
+    @Test
+    fun `benchmarkAll returns empty when no plugins registered`() = runTest {
+        val ranked = EngineRegistry.benchmarkAll(Modality.TEXT, context, "test-model")
+        assertTrue(ranked.isEmpty())
+    }
+
+    // =========================================================================
+    // selectBest
+    // =========================================================================
+
+    @Test
+    fun `selectBest returns first ok result`() {
+        val ranked = listOf(
+            RankedEngine("fast", BenchmarkResult("fast", 100.0, 5.0, 64.0)),
+            RankedEngine("slow", BenchmarkResult("slow", 50.0, 10.0, 64.0)),
+        )
+        val best = EngineRegistry.selectBest(ranked)
+        assertNotNull(best)
+        assertEquals("fast", best.engine)
+    }
+
+    @Test
+    fun `selectBest skips errored results`() {
+        val ranked = listOf(
+            RankedEngine("err", BenchmarkResult("err", 100.0, 5.0, 64.0, error = "fail")),
+            RankedEngine("ok", BenchmarkResult("ok", 50.0, 10.0, 64.0)),
+        )
+        val best = EngineRegistry.selectBest(ranked)
+        assertNotNull(best)
+        assertEquals("ok", best.engine)
+    }
+
+    @Test
+    fun `selectBest returns null when all errored`() {
+        val ranked = listOf(
+            RankedEngine("a", BenchmarkResult("a", 0.0, 0.0, 0.0, error = "fail")),
+            RankedEngine("b", BenchmarkResult("b", 0.0, 0.0, 0.0, error = "fail")),
+        )
+        assertNull(EngineRegistry.selectBest(ranked))
+    }
+
+    @Test
+    fun `selectBest returns null for empty list`() {
+        assertNull(EngineRegistry.selectBest(emptyList()))
+    }
+
+    // =========================================================================
+    // reset clears plugins
+    // =========================================================================
+
+    @Test
+    fun `reset clears registered plugins`() {
+        EngineRegistry.registerPlugin(testPlugin("test-engine"))
+        assertEquals(1, EngineRegistry.detectAll(Modality.TEXT, context).size)
+
+        EngineRegistry.reset()
+        assertTrue(EngineRegistry.detectAll(Modality.TEXT, context).isEmpty())
     }
 }
