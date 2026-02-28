@@ -5,6 +5,7 @@ import android.content.Context
 import androidx.annotation.VisibleForTesting
 import java.io.File
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.CopyOnWriteArrayList
 
 /**
  * Composite key for engine lookup: modality + optional engine hint.
@@ -30,6 +31,7 @@ class EngineResolutionException(message: String) : RuntimeException(message)
 object EngineRegistry {
 
     private val factories = ConcurrentHashMap<EngineKey, EngineFactory>()
+    private val plugins = CopyOnWriteArrayList<EnginePlugin>()
 
     init {
         registerDefaults()
@@ -86,6 +88,7 @@ object EngineRegistry {
      */
     fun reset() {
         factories.clear()
+        plugins.clear()
         registerDefaults()
     }
 
@@ -95,6 +98,83 @@ object EngineRegistry {
     @VisibleForTesting
     fun clearAll() {
         factories.clear()
+        plugins.clear()
+    }
+
+    /**
+     * Register an [EnginePlugin] for detection and benchmarking.
+     */
+    fun registerPlugin(plugin: EnginePlugin) {
+        plugins.add(plugin)
+    }
+
+    /**
+     * Detect which registered plugins are available on this device.
+     *
+     * @return One [DetectionResult] per registered plugin, sorted by plugin priority (ascending).
+     */
+    fun detectAll(modality: Modality, context: Context): List<DetectionResult> {
+        return plugins
+            .sortedBy { it.priority }
+            .map { plugin ->
+                val available = try {
+                    plugin.detect(context)
+                } catch (_: Exception) {
+                    false
+                }
+                val info = try {
+                    plugin.detectInfo(context)
+                } catch (_: Exception) {
+                    ""
+                }
+                DetectionResult(
+                    engine = plugin.name,
+                    available = available,
+                    info = info,
+                )
+            }
+    }
+
+    /**
+     * Benchmark all available plugins and return results ranked by tokens per second (descending).
+     */
+    suspend fun benchmarkAll(
+        modality: Modality,
+        context: Context,
+        modelName: String,
+        nTokens: Int = 32,
+    ): List<RankedEngine> {
+        return plugins
+            .sortedBy { it.priority }
+            .filter { plugin ->
+                try {
+                    plugin.detect(context) && plugin.supportsModel(modelName)
+                } catch (_: Exception) {
+                    false
+                }
+            }
+            .map { plugin ->
+                val result = try {
+                    plugin.benchmark(context, modelName, nTokens)
+                } catch (e: Exception) {
+                    BenchmarkResult(
+                        engineName = plugin.name,
+                        tokensPerSecond = 0.0,
+                        ttftMs = 0.0,
+                        memoryMb = 0.0,
+                        error = e.message ?: "unknown error",
+                    )
+                }
+                RankedEngine(engine = plugin.name, result = result)
+            }
+            .sortedByDescending { it.result.tokensPerSecond }
+    }
+
+    /**
+     * Select the best engine from a ranked list: the first one with a successful result.
+     */
+    fun selectBest(ranked: List<RankedEngine>): RankedEngine? {
+        return ranked.firstOrNull { it.result.ok }
     }
 
     private fun registerDefaults() {
