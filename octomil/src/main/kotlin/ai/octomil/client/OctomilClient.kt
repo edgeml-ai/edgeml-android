@@ -614,7 +614,7 @@ class OctomilClient private constructor(
      * @param engine Optional custom engine; defaults to modality-appropriate engine.
      * @return A [Flow] of [ai.octomil.inference.InferenceChunk].
      */
-    fun generateStream(
+    fun predictStream(
         input: Any,
         modality: ai.octomil.inference.Modality,
         engine: ai.octomil.inference.StreamingInferenceEngine? = null,
