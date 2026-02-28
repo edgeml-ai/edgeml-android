@@ -3,6 +3,7 @@ package ai.octomil.experiments
 import ai.octomil.api.OctomilApi
 import ai.octomil.wrapper.TelemetryQueue
 import timber.log.Timber
+import java.security.MessageDigest
 
 /**
  * Client for managing A/B experiments across model variants.
@@ -75,7 +76,9 @@ class ExperimentsClient(
         if (experiment.status != "active") return null
         if (experiment.variants.isEmpty()) return null
 
-        val hash = "${experiment.id}:${deviceId}".hashCode().toUInt()
+        val key = "${experiment.id}:${deviceId}"
+        val digest = MessageDigest.getInstance("SHA-256").digest(key.toByteArray())
+        val hash = digest.take(4).fold(0u) { acc, b -> (acc shl 8) or b.toUByte().toUInt() }
         val bucket = (hash % 100u).toInt()
 
         var cumulative = 0
