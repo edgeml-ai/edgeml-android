@@ -103,6 +103,10 @@ class OctomilClient private constructor(
     // Store application context to avoid leaking Activity/Service references
     private val context: Context = context.applicationContext
 
+    /** Experiments client for A/B testing across model variants. */
+    val experiments: ai.octomil.experiments.ExperimentsClient =
+        ai.octomil.experiments.ExperimentsClient(api, TelemetryQueue.shared)
+
     /** Network connectivity monitor. Lazily initialized to avoid ClassCastException in test environments. */
     val networkMonitor: NetworkMonitor by lazy { NetworkMonitor.getInstance(this.context) }
 

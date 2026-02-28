@@ -435,6 +435,33 @@ interface OctomilApi {
     ): Response<Unit>
 
     // =========================================================================
+    // Experiments
+    // =========================================================================
+
+    /**
+     * List active experiments for the organization.
+     */
+    @GET("api/v1/experiments")
+    suspend fun getActiveExperiments(): Response<List<ai.octomil.experiments.Experiment>>
+
+    /**
+     * Get configuration for a specific experiment.
+     */
+    @GET("api/v1/experiments/{experiment_id}")
+    suspend fun getExperimentConfig(
+        @Path("experiment_id") experimentId: String,
+    ): Response<ai.octomil.experiments.Experiment>
+
+    /**
+     * Track a metric for an experiment.
+     */
+    @POST("api/v1/experiments/{experiment_id}/metrics")
+    suspend fun trackExperimentMetric(
+        @Path("experiment_id") experimentId: String,
+        @Body request: ai.octomil.experiments.ExperimentMetricRequest,
+    ): Response<Unit>
+
+    // =========================================================================
     // Runtime Adaptation
     // =========================================================================
 
