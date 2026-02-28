@@ -14,7 +14,7 @@ import timber.log.Timber
  * @param api The Retrofit API interface.
  * @param federationId The federation to run analytics against.
  */
-class FederatedAnalyticsApi(
+class FederatedAnalyticsClient(
     private val api: OctomilApi,
     private val federationId: String,
 ) {
