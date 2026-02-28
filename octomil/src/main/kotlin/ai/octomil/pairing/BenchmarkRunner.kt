@@ -458,6 +458,24 @@ class BenchmarkRunner(
 }
 
 /**
+ * Convert a [BenchmarkReport] to the cross-SDK [ai.octomil.inference.BenchmarkResult] type.
+ */
+fun BenchmarkReport.toBenchmarkResult(): ai.octomil.inference.BenchmarkResult {
+    return ai.octomil.inference.BenchmarkResult(
+        engineName = activeDelegate ?: "tflite",
+        tokensPerSecond = tokensPerSecond,
+        ttftMs = ttftMs,
+        memoryMb = memoryPeakBytes / (1024.0 * 1024.0),
+        error = null,
+        metadata = mapOf(
+            "model_name" to modelName,
+            "device_name" to deviceName,
+            "chip_family" to chipFamily,
+        ),
+    )
+}
+
+/**
  * Exception thrown when benchmarking fails.
  */
 class BenchmarkException(
