@@ -27,7 +27,7 @@ jobs:
         run: echo "version=$(grep OCTOMIL_VERSION gradle.properties | cut -d= -f2)" >> $GITHUB_OUTPUT
 
       - name: Dispatch to server
-        uses: peter-evans/repository-dispatch@v3
+        uses: peter-evans/repository-dispatch@v4
         with:
           token: ${{ steps.app-token.outputs.token }}
           repository: octomil/octomil-server
