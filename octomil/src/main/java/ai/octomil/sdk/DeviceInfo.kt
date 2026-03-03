@@ -7,9 +7,17 @@ import android.os.BatteryManager
 import android.os.Build
 import android.os.StatFs
 import androidx.annotation.ChecksSdkIntAtLeast
+import kotlinx.serialization.SerialName
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.Json
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import timber.log.Timber
+import java.io.File
 import java.util.Locale
 import java.util.TimeZone
 import java.util.UUID
+import java.util.concurrent.TimeUnit
 
 /**
  * Collects and manages device information for Octomil platform.
@@ -114,34 +122,30 @@ class DeviceInfo(
     /**
      * Maps this device to an Octomil server device profile key.
      *
-     * The server uses these keys to select the optimal model format,
-     * quantization settings, and MNN runtime config for the device.
-     *
-     * Detection priority: known flagship models first, then RAM-based fallback.
+     * The profile is fetched from `GET /api/v1/devices/profiles` and cached
+     * both in-memory and on disk. When the server is unreachable, a minimal
+     * RAM-based fallback is used (high/mid/low — no vendor-specific profiles).
      */
     val deviceProfile: String
-        get() {
-            val mfr = manufacturer.lowercase()
-            val mdl = model.lowercase()
-            val ramMb = totalMemoryMB ?: 0
+        get() = deviceProfileClient?.getProfile(this) ?: ramOnlyFallback()
 
-            // Samsung flagships (S24, S23, S22 — 8GB+)
-            if (mfr == "samsung" && (REDACTED)) {
-                return REDACTED
-            }
-
-            // Google Pixel flagships (Pixel 8, 7, 9 — 8GB+)
-            if (mfr == "google" && (REDACTED)) {
-                return REDACTED
-            }
-
-            // RAM-based fallback
-            return when {
-                ramMb >= 7000 -> REDACTED   // 8GB+ flagship tier
-                REDACTED
-                else -> REDACTED
-            }
+    /**
+     * Classify device by RAM only. No vendor-specific logic.
+     */
+    private fun ramOnlyFallback(): String {
+        val ramMb = totalMemoryMB ?: 0
+        return when {
+            ramMb >= 7000 -> "high_end"
+            ramMb >= 4000 -> "mid_range"
+            else -> "low_end"
         }
+    }
+
+    /**
+     * Attach a [DeviceProfileClient] so that [deviceProfile] can resolve
+     * profiles from the server. When null, only [ramOnlyFallback] is used.
+     */
+    var deviceProfileClient: DeviceProfileClient? = null
 
     // MARK: - Runtime Constraints
 
@@ -284,4 +288,183 @@ class DeviceInfo(
      * Call this periodically to send updated battery/network status.
      */
     fun updateMetadata(): Map<String, Any?> = collectMetadata()
+}
+
+// =============================================================================
+// Server-fetched device profile models
+// =============================================================================
+
+/**
+ * A single device profile rule from the server.
+ *
+ * The server returns a list of these; the client matches the first rule whose
+ * constraints are satisfied by the current device.
+ */
+@Serializable
+data class DeviceProfileRule(
+    @SerialName("profile") val profile: String,
+    @SerialName("min_ram_mb") val minRamMb: Long = 0,
+    @SerialName("max_ram_mb") val maxRamMb: Long = Long.MAX_VALUE,
+)
+
+/**
+ * Server response for `GET /api/v1/devices/profiles`.
+ */
+@Serializable
+data class DeviceProfilesResponse(
+    @SerialName("profiles") val profiles: List<DeviceProfileRule>,
+    @SerialName("ttl_seconds") val ttlSeconds: Int = 3600,
+    @SerialName("fetched_at") var fetchedAt: Double = 0.0,
+) {
+    val isExpired: Boolean
+        get() = fetchedAt == 0.0 ||
+            (System.currentTimeMillis() / 1000.0 - fetchedAt) > ttlSeconds
+}
+
+// =============================================================================
+// DeviceProfileClient
+// =============================================================================
+
+/**
+ * Fetches and caches device profile configuration from the Octomil server.
+ *
+ * Priority: in-memory (if not expired) -> server fetch -> disk cache -> RAM-only fallback.
+ *
+ * Thread-safe via `@Synchronized`.
+ */
+class DeviceProfileClient(
+    private val context: Context,
+    private val apiBase: String,
+    private val apiKey: String? = null,
+    private val httpClient: OkHttpClient = OkHttpClient.Builder()
+        .connectTimeout(10, TimeUnit.SECONDS)
+        .readTimeout(10, TimeUnit.SECONDS)
+        .build(),
+) {
+    private val json = Json {
+        ignoreUnknownKeys = true
+        encodeDefaults = true
+    }
+
+    private val serverUrl = apiBase.trimEnd('/')
+    private val cacheFile = File(context.cacheDir, "octomil_device_profiles.json")
+
+    @Volatile
+    private var cachedResponse: DeviceProfilesResponse? = null
+
+    /**
+     * Resolve the device profile for [deviceInfo].
+     *
+     * Returns null when no server config is available and the caller should
+     * fall back to the RAM-only default inside [DeviceInfo].
+     */
+    @Synchronized
+    fun getProfile(deviceInfo: DeviceInfo): String? {
+        val response = getProfilesResponse() ?: return null
+        return matchProfile(response, deviceInfo)
+    }
+
+    // =========================================================================
+    // Internal — config resolution
+    // =========================================================================
+
+    private fun getProfilesResponse(): DeviceProfilesResponse? {
+        val mem = cachedResponse
+        if (mem != null && !mem.isExpired) return mem
+
+        val fetched = fetchFromServer()
+        if (fetched != null) {
+            cachedResponse = fetched
+            persistToDisk(fetched)
+            return fetched
+        }
+
+        // Server unreachable — try expired in-memory cache.
+        if (mem != null) {
+            Timber.i("Using expired in-memory device profiles (ttl=%d)", mem.ttlSeconds)
+            return mem
+        }
+
+        // Try disk cache.
+        val disk = loadFromDisk()
+        if (disk != null) {
+            Timber.i("Using disk-cached device profiles")
+            cachedResponse = disk
+            return disk
+        }
+
+        return null
+    }
+
+    private fun matchProfile(
+        response: DeviceProfilesResponse,
+        deviceInfo: DeviceInfo,
+    ): String? {
+        val ramMb = deviceInfo.totalMemoryMB ?: 0
+        for (rule in response.profiles) {
+            if (ramMb >= rule.minRamMb && ramMb < rule.maxRamMb) {
+                return rule.profile
+            }
+        }
+        return null
+    }
+
+    // =========================================================================
+    // HTTP
+    // =========================================================================
+
+    private fun fetchFromServer(): DeviceProfilesResponse? {
+        val requestBuilder = Request.Builder()
+            .url("$serverUrl/api/v1/devices/profiles")
+            .get()
+            .header("User-Agent", "octomil-android/1.0")
+
+        if (apiKey != null) {
+            requestBuilder.header("Authorization", "Bearer $apiKey")
+        }
+
+        return try {
+            httpClient.newCall(requestBuilder.build()).execute().use { response ->
+                if (response.isSuccessful) {
+                    val body = response.body?.string() ?: return null
+                    val parsed = json.decodeFromString(
+                        DeviceProfilesResponse.serializer(),
+                        body,
+                    )
+                    parsed.fetchedAt = System.currentTimeMillis() / 1000.0
+                    parsed
+                } else {
+                    Timber.w("Device profiles fetch returned HTTP %d", response.code)
+                    null
+                }
+            }
+        } catch (e: Exception) {
+            Timber.w(e, "Device profiles fetch failed")
+            null
+        }
+    }
+
+    // =========================================================================
+    // Disk Cache
+    // =========================================================================
+
+    private fun persistToDisk(response: DeviceProfilesResponse) {
+        try {
+            cacheFile.writeText(
+                json.encodeToString(DeviceProfilesResponse.serializer(), response),
+            )
+        } catch (e: Exception) {
+            Timber.w(e, "Failed to write device profiles cache")
+        }
+    }
+
+    private fun loadFromDisk(): DeviceProfilesResponse? {
+        if (!cacheFile.exists()) return null
+        return try {
+            json.decodeFromString(DeviceProfilesResponse.serializer(), cacheFile.readText())
+        } catch (e: Exception) {
+            Timber.w(e, "Failed to read device profiles cache")
+            null
+        }
+    }
 }
