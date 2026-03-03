@@ -29,9 +29,6 @@ build/
 # Claude
 .claude/
 
-# Stale directories
-octomil/
-
 # Environment & secrets
 .env
 .env.*
