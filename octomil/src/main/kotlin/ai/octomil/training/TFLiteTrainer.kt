@@ -74,6 +74,15 @@ class TFLiteTrainer(
     // Snapshot of original model bytes taken at load time for delta computation
     private var originalModelBytes: ByteArray? = null
 
+    /**
+     * Vendor NPU delegate class names fetched from the server.
+     *
+     * Populated by [fetchVendorDelegateConfig] during [loadModel].
+     * Empty list means no vendor delegates are available or the server
+     * was unreachable — only the standard NNAPI delegate will be tried.
+     */
+    private var vendorDelegateClassNames: List<VendorDelegateInfo> = emptyList()
+
     companion object {
         private const val TAG = "TFLiteTrainer"
 
@@ -82,12 +91,19 @@ class TFLiteTrainer(
         private const val INFER_SIGNATURE = "infer"
         private const val SAVE_SIGNATURE = "save"
         private const val RESTORE_SIGNATURE = "restore"
-
-        // Vendor NPU delegate class names (loaded via reflection)
-        private const val QUALCOMM_QNN_CLASS = "com.qualcomm.qti.QnnDelegate"
-        private const val SAMSUNG_EDEN_CLASS = "com.samsung.android.eden.EdenDelegate"
-        private const val MEDIATEK_NEURON_CLASS = "com.mediatek.neuropilot.tflite.NeuronDelegate"
     }
+
+    /**
+     * Vendor delegate class name and display name, fetched from the server.
+     */
+    data class VendorDelegateInfo(
+        val className: String,
+        val displayName: String,
+        /** SoC patterns this delegate applies to (lowercase). Empty = always try. */
+        val socPatterns: List<String> = emptyList(),
+        /** Manufacturer patterns this delegate applies to (lowercase). Empty = always try. */
+        val manufacturerPatterns: List<String> = emptyList(),
+    )
 
     // =========================================================================
     // Model Loading
@@ -125,6 +141,11 @@ class TFLiteTrainer(
                     // Delegate priority: vendor NPU > GPU > NNAPI (legacy) > XNNPack/CPU
                     // warmup() benchmarks the selected delegate vs CPU after loading.
                     // ---------------------------------------------------------------
+
+                    // Fetch vendor delegate class names from server (if vendor NPU enabled)
+                    if (config.enableVendorNpu && vendorDelegateClassNames.isEmpty()) {
+                        vendorDelegateClassNames = fetchVendorDelegateConfig()
+                    }
 
                     val vendorAttached = if (config.enableVendorNpu) {
                         tryAttachVendorNpu(options)
@@ -1192,29 +1213,106 @@ class TFLiteTrainer(
      * Try to attach vendor NPU delegates via reflection.
      * Returns true if a vendor delegate was successfully attached.
      *
+     * Delegate class names are fetched from the server at model load time.
+     * If no server config is available, no vendor delegates are tried and
+     * the standard NNAPI delegate is used as fallback.
+     *
      * Vendor AARs are optional — if not on classpath, this silently falls through.
      * To enable: add the vendor AAR to your app-level build.gradle dependencies.
      */
     private fun tryAttachVendorNpu(options: Interpreter.Options): Boolean {
+        if (vendorDelegateClassNames.isEmpty()) {
+            Timber.d("No vendor delegate config from server — skipping vendor NPU")
+            return false
+        }
+
         val soc = getSocIdentifier().lowercase()
         val manufacturer = Build.MANUFACTURER.lowercase()
 
-        // Qualcomm QNN — Snapdragon NPU (replaces deprecated Hexagon DSP)
-        if (soc.contains("qcom") || soc.contains("snapdragon") || soc.startsWith("sm")) {
-            if (tryLoadReflectionDelegate(options, QUALCOMM_QNN_CLASS, "Qualcomm QNN")) return true
-        }
+        for (delegate in vendorDelegateClassNames) {
+            // Check SoC pattern match (empty patterns = always try)
+            val socMatch = delegate.socPatterns.isEmpty() ||
+                delegate.socPatterns.any { pattern -> soc.contains(pattern) }
+            // Check manufacturer pattern match (empty patterns = always try)
+            val mfrMatch = delegate.manufacturerPatterns.isEmpty() ||
+                delegate.manufacturerPatterns.any { pattern -> manufacturer.contains(pattern) }
 
-        // Samsung Eden / ENN — Exynos NPU
-        if (manufacturer == "samsung" && (soc.contains("exynos") || soc.contains("s5e"))) {
-            if (tryLoadReflectionDelegate(options, SAMSUNG_EDEN_CLASS, "Samsung Eden")) return true
-        }
-
-        // MediaTek NeuroPilot — Dimensity APU
-        if (soc.contains("mt") || soc.contains("mediatek") || soc.contains("dimensity")) {
-            if (tryLoadReflectionDelegate(options, MEDIATEK_NEURON_CLASS, "MediaTek NeuroPilot")) return true
+            if (socMatch && mfrMatch) {
+                if (tryLoadReflectionDelegate(options, delegate.className, delegate.displayName)) {
+                    return true
+                }
+            }
         }
 
         return false
+    }
+
+    /**
+     * Fetch vendor delegate configuration from the server.
+     *
+     * Calls GET /api/v1/models/{modelId}/optimized-config/{deviceType} with
+     * the device SoC identifier. Returns a list of vendor delegate class
+     * names and their SoC/manufacturer matching patterns.
+     *
+     * Returns an empty list if the server is unreachable or returns no
+     * vendor delegate config. In that case, only the standard NNAPI
+     * delegate will be used.
+     */
+    private fun fetchVendorDelegateConfig(): List<VendorDelegateInfo> {
+        return try {
+            val soc = getSocIdentifier()
+            val url = "${config.serverUrl}/api/v1/models/${config.modelId}/optimized-config/$soc"
+
+            val connection = java.net.URL(url).openConnection() as java.net.HttpURLConnection
+            connection.requestMethod = "GET"
+            connection.setRequestProperty("Authorization", "Bearer ${config.deviceAccessToken}")
+            connection.connectTimeout = 5_000
+            connection.readTimeout = 5_000
+
+            if (connection.responseCode == 200) {
+                val body = connection.inputStream.bufferedReader().readText()
+                parseVendorDelegateResponse(body)
+            } else {
+                Timber.d("Vendor delegate config fetch returned HTTP ${connection.responseCode}")
+                emptyList()
+            }
+        } catch (e: Exception) {
+            Timber.d(e, "Failed to fetch vendor delegate config from server")
+            emptyList()
+        }
+    }
+
+    /**
+     * Parse the vendor delegate configuration from the server JSON response.
+     */
+    private fun parseVendorDelegateResponse(json: String): List<VendorDelegateInfo> {
+        return try {
+            val root = org.json.JSONObject(json)
+            val delegates = root.optJSONArray("vendor_delegates") ?: return emptyList()
+            (0 until delegates.length()).mapNotNull { i ->
+                val obj = delegates.getJSONObject(i)
+                val className = obj.optString("class_name", "")
+                if (className.isBlank()) return@mapNotNull null
+
+                val socPatterns = obj.optJSONArray("soc_patterns")?.let { arr ->
+                    (0 until arr.length()).map { arr.getString(it) }
+                } ?: emptyList()
+
+                val mfrPatterns = obj.optJSONArray("manufacturer_patterns")?.let { arr ->
+                    (0 until arr.length()).map { arr.getString(it) }
+                } ?: emptyList()
+
+                VendorDelegateInfo(
+                    className = className,
+                    displayName = obj.optString("display_name", className.substringAfterLast('.')),
+                    socPatterns = socPatterns,
+                    manufacturerPatterns = mfrPatterns,
+                )
+            }
+        } catch (e: Exception) {
+            Timber.w(e, "Failed to parse vendor delegate config")
+            emptyList()
+        }
     }
 
     /**
