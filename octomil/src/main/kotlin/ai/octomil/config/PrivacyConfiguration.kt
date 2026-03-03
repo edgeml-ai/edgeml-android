@@ -9,7 +9,6 @@ import kotlin.random.Random
  * Provides two key privacy enhancements:
  * 1. Staggered updates: Random delays before upload
  * 2. Differential privacy: Noise injection for formal guarantees
-
  */
 @Serializable
 data class PrivacyConfiguration(
@@ -33,7 +32,6 @@ data class PrivacyConfiguration(
      * Whether to enable differential privacy (noise injection).
      *
      * When enabled, adds calibrated Gaussian noise to gradients.
-
      */
     val enableDifferentialPrivacy: Boolean = false,
     /**

@@ -6,14 +6,6 @@ package ai.octomil.runtime
  * Pure function — no side effects, no I/O. Takes a [DeviceStateMonitor.DeviceState]
  * snapshot and returns a [ComputeRecommendation] that the interpreter layer uses
  * to configure the TFLite delegate and threading.
- *
-
-
-
-
-
-
-
  */
 object RuntimeAdapter {
 
