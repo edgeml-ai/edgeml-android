@@ -192,9 +192,11 @@ object Octomil {
         @Suppress("UNUSED_PARAMETER") config: OctomilWrapperConfig,
     ) {
         try {
-            // TODO: implement real contract fetch from server
-            // GET $serverUrl/api/v1/models/$modelId/contract
-            // For now, try to infer contract from the interpreter's input tensor
+            // PLANNED(v2): Fetch model contract from server via
+            // GET $serverUrl/api/v1/models/$modelId/contract instead of inferring
+            // from the interpreter's input tensor shape. Server contract includes
+            // dtype, named inputs, and value range constraints.
+            // For now, infer contract from the interpreter's input tensor.
             val inputTensor = wrapped.getInputTensor(0)
             val shape = inputTensor.shape()
             val elementCount = shape.fold(1) { acc, dim -> acc * dim }
@@ -218,7 +220,9 @@ object Octomil {
     /**
      * Check for OTA model updates. Non-blocking, best-effort.
      *
-     * TODO: implement real OTA check against server
+     * PLANNED(v2): Implement OTA update check by calling
+     * GET $serverUrl/api/v1/models/$modelId/updates?current_version=<local_version>,
+     * downloading the new TFLite artifact, and hot-swapping the interpreter.
      */
     private suspend fun checkForOtaUpdate(
         modelId: String,
