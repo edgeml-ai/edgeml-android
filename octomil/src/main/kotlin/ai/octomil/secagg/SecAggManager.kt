@@ -27,10 +27,6 @@ import java.security.SecureRandom
  * 6. Client submits masked update + shares to server
  * 7. Server reconstructs the aggregate from threshold participants
  *
-
-
-
-
  */
 class SecAggManager(
     private val api: OctomilApi,
@@ -271,7 +267,6 @@ class SecAggManager(
 
     /**
      * Converts raw bytes to finite field elements (4-byte big-endian chunks).
-
      */
     internal fun bytesToFieldElements(data: ByteArray): List<BigInteger> {
         val elements = ArrayList<BigInteger>((data.size + FIELD_ELEMENT_BYTES - 1) / FIELD_ELEMENT_BYTES)
@@ -292,7 +287,6 @@ class SecAggManager(
 
     /**
      * Converts field elements back to raw bytes.
-
      */
     internal fun fieldElementsToBytes(elements: List<BigInteger>, originalSize: Int): ByteArray {
         val result = ByteArray(elements.size * FIELD_ELEMENT_BYTES)

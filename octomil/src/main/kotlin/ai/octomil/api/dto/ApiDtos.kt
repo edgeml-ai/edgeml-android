@@ -337,16 +337,6 @@ data class ModelVersionResponse(
  * fields are nullable for backwards compatibility — older servers that don't
  * populate them will just return nulls.
  */
-
-
-
-
-
-
-
-
-
-
 @Serializable
 data class ModelDownloadResponse(
     @SerialName("download_url")

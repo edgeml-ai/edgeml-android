@@ -181,21 +181,6 @@ class WeightExtractor(
 
     /**
      * Parses weight tensors from a TFLite FlatBuffer.
-     *
-
-
-
-
-     *
-
-
-
-
-
-
-
-
-
      */
     private fun parseTFLiteWeights(bb: ByteBuffer): Map<String, TensorData> {
         val weights = mutableMapOf<String, TensorData>()

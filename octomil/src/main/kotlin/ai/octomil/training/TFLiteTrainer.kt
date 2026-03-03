@@ -27,14 +27,6 @@ import java.nio.MappedByteBuffer
 import java.nio.channels.FileChannel
 import java.util.Locale
 
-
-
-
-
-
-
-
-
 /**
  * TensorFlow Lite model inference and training wrapper.
  *
@@ -672,7 +664,7 @@ class TFLiteTrainer(
      *
      * This performs inference on training data to compute loss, but cannot update
      * model weights directly. Instead, it copies the model and records the training
-     * metrics. 
+     * metrics.
      *
      * For true on-device training, models should be exported with training signatures.
      */
@@ -1160,7 +1152,6 @@ class TFLiteTrainer(
                 }
             }
 
-
             if (config.enableFloat16Inference) {
                 delegateOptions.setPrecisionLossAllowed(true)
                 delegateOptions.setInferencePreference(
@@ -1292,7 +1283,6 @@ class TFLiteTrainer(
             }
 
             if (maxFreqs.isEmpty()) return config.numThreads
-
 
             val topFreq = maxFreqs.max()
             val threshold = (topFreq * 0.8).toLong()
