@@ -59,7 +59,13 @@ class ModelManager(
     // In-memory cache metadata
     private var cacheMetadata: MutableMap<String, CachedModel> = mutableMapOf()
 
-    private val deviceInfo = ai.octomil.sdk.DeviceInfo(context)
+    private val deviceInfo = ai.octomil.sdk.DeviceInfo(context).apply {
+        deviceProfileClient = ai.octomil.sdk.DeviceProfileClient(
+            context = context,
+            apiBase = config.serverUrl,
+            apiKey = config.deviceAccessToken,
+        )
+    }
     private val modelFormatClient = ModelFormatClient(context, config)
 
     init {
