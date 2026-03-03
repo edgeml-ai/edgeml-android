@@ -82,9 +82,6 @@ object DifferentialPrivacy {
     /**
      * Full DP-SGD pipeline: clip gradients, calibrate noise, add noise.
      *
-
-
-     *
      * If [PrivacyConfiguration.enableDifferentialPrivacy] is false, returns
      * the input tensors unmodified.
      *
@@ -115,8 +112,6 @@ object DifferentialPrivacy {
 
     /**
      * Calibrate sigma for the analytic Gaussian mechanism.
-     *
-     * 
      */
     internal fun calibrateSigma(
         clippingNorm: Double,
