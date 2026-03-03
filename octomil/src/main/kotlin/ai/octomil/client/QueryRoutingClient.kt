@@ -22,6 +22,7 @@ data class RoutingPolicy(
     @SerialName("complex_indicators") val complexIndicators: List<String>,
     @SerialName("deterministic_enabled") val deterministicEnabled: Boolean,
     @SerialName("ttl_seconds") val ttlSeconds: Int,
+    @SerialName("scoring_weights") val scoringWeights: ScoringWeights = ScoringWeights(),
     @SerialName("fetched_at") var fetchedAt: Double = 0.0,
     var etag: String = "",
 ) {
@@ -29,6 +30,13 @@ data class RoutingPolicy(
     data class PolicyThresholds(
         @SerialName("fast_max_words") val fastMaxWords: Int,
         @SerialName("quality_min_words") val qualityMinWords: Int,
+    )
+
+    @Serializable
+    data class ScoringWeights(
+        @SerialName("length_weight") val lengthWeight: Double = 0.5,
+        @SerialName("complexity_boost") val complexityBoost: Double = 0.0,
+        @SerialName("length_normalizor") val lengthNormalizor: Int = 100,
     )
 
     val isExpired: Boolean
@@ -287,9 +295,13 @@ class QueryRouter(
         val fallbackChain = buildFallbackChain(modelName)
 
         // Compute a simple complexity score (normalised 0.0-1.0).
-        val lengthSignal = (wordCount.toDouble() / 100.0).coerceIn(0.0, 1.0)
-        val complexityBoost = if (hasComplexIndicator) policy.scoringWeights.complexityBoost else 0.0
-        val complexityScore = (REDACTED_WEIGHT + complexityBoost).coerceIn(0.0, 1.0)
+        // Weights come from the server-fetched policy; fallback uses neutral defaults.
+        val weights = policy.scoringWeights
+        val lengthSignal = (wordCount.toDouble() / weights.lengthNormalizor.toDouble())
+            .coerceIn(0.0, 1.0)
+        val complexityBoost = if (hasComplexIndicator) weights.complexityBoost else 0.0
+        val complexityScore = (lengthSignal * weights.lengthWeight + complexityBoost)
+            .coerceIn(0.0, 1.0)
 
         return QueryRoutingDecision(
             modelName = modelName,
