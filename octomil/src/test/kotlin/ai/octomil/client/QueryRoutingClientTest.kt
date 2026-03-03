@@ -343,6 +343,76 @@ class QueryRoutingClientTest {
     }
 
     // =========================================================================
+    // ScoringWeights — server-driven scoring
+    // =========================================================================
+
+    @Test
+    fun `ScoringWeights defaults are neutral`() {
+        val weights = RoutingPolicy.ScoringWeights()
+        assertEquals(0.5, weights.lengthWeight)
+        assertEquals(0.0, weights.complexityBoost)
+        assertEquals(100, weights.lengthNormalizor)
+    }
+
+    @Test
+    fun `ScoringWeights serializes to JSON correctly`() {
+        val weights = RoutingPolicy.ScoringWeights(
+            lengthWeight = 0.7,
+            complexityBoost = 0.3,
+            lengthNormalizor = 80,
+        )
+        val encoded = json.encodeToString(RoutingPolicy.ScoringWeights.serializer(), weights)
+        assertTrue(encoded.contains("\"length_weight\":0.7"))
+        assertTrue(encoded.contains("\"complexity_boost\":0.3"))
+        assertTrue(encoded.contains("\"length_normalizor\":80"))
+    }
+
+    @Test
+    fun `ScoringWeights deserializes from JSON correctly`() {
+        val raw = """{"length_weight":0.8,"complexity_boost":0.25,"length_normalizor":120}"""
+        val weights = json.decodeFromString(RoutingPolicy.ScoringWeights.serializer(), raw)
+        assertEquals(0.8, weights.lengthWeight)
+        assertEquals(0.25, weights.complexityBoost)
+        assertEquals(120, weights.lengthNormalizor)
+    }
+
+    @Test
+    fun `ScoringWeights absent in JSON uses defaults`() {
+        val raw = """
+            {
+                "version": 1,
+                "thresholds": {"fast_max_words": 10, "quality_min_words": 50},
+                "complex_indicators": [],
+                "deterministic_enabled": true,
+                "ttl_seconds": 300
+            }
+        """.trimIndent()
+        val policy = json.decodeFromString(RoutingPolicy.serializer(), raw)
+        assertEquals(0.5, policy.scoringWeights.lengthWeight)
+        assertEquals(0.0, policy.scoringWeights.complexityBoost)
+        assertEquals(100, policy.scoringWeights.lengthNormalizor)
+    }
+
+    @Test
+    fun `policy with scoring_weights round-trips correctly`() {
+        val original = RoutingPolicy(
+            version = 2,
+            thresholds = RoutingPolicy.PolicyThresholds(fastMaxWords = 10, qualityMinWords = 50),
+            complexIndicators = listOf("code"),
+            deterministicEnabled = true,
+            ttlSeconds = 300,
+            scoringWeights = RoutingPolicy.ScoringWeights(
+                lengthWeight = 0.7,
+                complexityBoost = 0.3,
+                lengthNormalizor = 80,
+            ),
+        )
+        val encoded = json.encodeToString(RoutingPolicy.serializer(), original)
+        val decoded = json.decodeFromString(RoutingPolicy.serializer(), encoded)
+        assertEquals(original.scoringWeights, decoded.scoringWeights)
+    }
+
+    // =========================================================================
     // Data classes
     // =========================================================================
 
