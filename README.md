@@ -5,8 +5,8 @@
 
 <p align="center">
   <a href="https://github.com/octomil/octomil-android/actions/workflows/ci.yml"><img src="https://github.com/octomil/octomil-android/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
-  <a href="https://github.com/octomil/octomil-android"><img src="https://img.shields.io/badge/Android-5.0%2B-green.svg" alt="Android 5.0+"></a>
-  <a href="https://opensource.org/licenses/MIT"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="MIT"></a>
+  <a href="https://github.com/octomil/octomil-android/actions/workflows/codeql.yml"><img src="https://github.com/octomil/octomil-android/actions/workflows/codeql.yml/badge.svg" alt="CodeQL"></a>
+  <a href="https://github.com/octomil/octomil-android/blob/main/LICENSE"><img src="https://img.shields.io/github/license/octomil/octomil-android" alt="License"></a>
 </p>
 
 ---
