@@ -102,7 +102,7 @@ class DeepLinkHandlerTest {
         val uri = mockUri(
             scheme = "octomil",
             host = "pair",
-            queryParams = mapOf("token" to "a1b2c3-d4e5f6", "host" to "https://staging.octomil.com"),
+            queryParams = mapOf("token" to "a1b2c3-d4e5f6", "host" to "https://test.example.com"),
         )
 
         val action = DeepLinkHandler.parse(uri)
@@ -110,7 +110,7 @@ class DeepLinkHandlerTest {
         assertNotNull(action)
         assertIs<DeepLinkHandler.DeepLinkAction.Pair>(action)
         assertEquals("a1b2c3-d4e5f6", action.token)
-        assertEquals("https://staging.octomil.com", action.host)
+        assertEquals("https://test.example.com", action.host)
     }
 
     // =========================================================================

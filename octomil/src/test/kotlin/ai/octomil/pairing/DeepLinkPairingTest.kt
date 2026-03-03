@@ -79,11 +79,11 @@ class DeepLinkPairingTest {
     fun `Pair action holds token and host correctly`() {
         val action = DeepLinkHandler.DeepLinkAction.Pair(
             token = "test-token-123",
-            host = "https://staging.octomil.com",
+            host = "https://test.example.com",
         )
 
         assertEquals("test-token-123", action.token)
-        assertEquals("https://staging.octomil.com", action.host)
+        assertEquals("https://test.example.com", action.host)
     }
 
     // =========================================================================
