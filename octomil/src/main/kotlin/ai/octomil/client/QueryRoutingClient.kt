@@ -35,6 +35,11 @@ data class RoutingPolicy(
     @Serializable
     data class ScoringWeights(
         @SerialName("length_weight") val lengthWeight: Double = 0.5,
+        @SerialName("indicator_weight") val indicatorWeight: Double = 0.5,
+        @SerialName("indicator_normalizor") val indicatorNormalizor: Double = 3.0,
+        @SerialName("fast_threshold") val fastThreshold: Double = 0.3,
+        @SerialName("quality_threshold") val qualityThreshold: Double = 0.7,
+        // Deprecated: kept for backward compatibility with old server responses.
         @SerialName("complexity_boost") val complexityBoost: Double = 0.0,
         @SerialName("length_normalizor") val lengthNormalizor: Int = 100,
     )
@@ -76,10 +81,13 @@ data class DeterministicResult(
 private val DEFAULT_POLICY = RoutingPolicy(
     version = 1,
     thresholds = RoutingPolicy.PolicyThresholds(
-        fastMaxWords = 0,
-        qualityMinWords = 999999,
+        fastMaxWords = 10,
+        qualityMinWords = 50,
     ),
-    complexIndicators = emptyList(),
+    complexIndicators = listOf(
+        "explain", "analyze", "compare", "implement",
+        "code", "step by step", "in detail",
+    ),
     deterministicEnabled = true,
     ttlSeconds = 0,
 )
@@ -277,31 +285,39 @@ class QueryRouter(
             }
         }
 
-        // Determine tier from word count + complex indicators.
+        // Compute complexity score using the cross-SDK standardised algorithm.
         val wordCount = userText.trim().split(Regex("\\s+")).filter { it.isNotEmpty() }.size
         val textLower = userText.lowercase()
-        val hasComplexIndicator = policy.complexIndicators.any { indicator ->
-            textLower.contains(indicator)
+        val weights = policy.scoringWeights
+
+        // Word score: linear interpolation between thresholds (0.0-1.0).
+        val wordScore = when {
+            wordCount <= policy.thresholds.fastMaxWords -> 0.0
+            wordCount >= policy.thresholds.qualityMinWords -> 1.0
+            else -> (wordCount - policy.thresholds.fastMaxWords).toDouble() /
+                    (policy.thresholds.qualityMinWords - policy.thresholds.fastMaxWords).toDouble()
         }
 
+        // Indicator score: fraction of complex indicators found (0.0-1.0).
+        val matchCount = policy.complexIndicators.count { indicator ->
+            textLower.contains(indicator)
+        }
+        val indicatorScore = (matchCount.toDouble() / weights.indicatorNormalizor)
+            .coerceIn(0.0, 1.0)
+
+        // Combined score.
+        val complexityScore = (wordScore * weights.lengthWeight +
+                indicatorScore * weights.indicatorWeight).coerceIn(0.0, 1.0)
+
+        // Tier from score.
         val tier = when {
-            hasComplexIndicator -> "quality"
-            wordCount <= policy.thresholds.fastMaxWords -> "fast"
-            wordCount >= policy.thresholds.qualityMinWords -> "quality"
+            complexityScore < weights.fastThreshold -> "fast"
+            complexityScore >= weights.qualityThreshold -> "quality"
             else -> "balanced"
         }
 
         val modelName = resolveModel(tier)
         val fallbackChain = buildFallbackChain(modelName)
-
-        // Compute a simple complexity score (normalised 0.0-1.0).
-        // Weights come from the server-fetched policy; fallback uses neutral defaults.
-        val weights = policy.scoringWeights
-        val lengthSignal = (wordCount.toDouble() / weights.lengthNormalizor.toDouble())
-            .coerceIn(0.0, 1.0)
-        val complexityBoost = if (hasComplexIndicator) weights.complexityBoost else 0.0
-        val complexityScore = (lengthSignal * weights.lengthWeight + complexityBoost)
-            .coerceIn(0.0, 1.0)
 
         return QueryRoutingDecision(
             modelName = modelName,
