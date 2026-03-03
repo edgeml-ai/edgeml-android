@@ -144,11 +144,13 @@ class QueryRoutingClientTest {
     }
 
     // =========================================================================
-    // Query routing — tier assignment
+    // Query routing — tier assignment (cross-SDK scoring algorithm)
     // =========================================================================
 
     @Test
-    fun `short query routes to fast tier`() {
+    fun `short query with no indicators routes to fast tier`() {
+        // "Hi there" = 2 words (<= fastMaxWords=10), no indicators.
+        // wordScore=0.0, indicatorScore=0.0 -> score=0.0 < 0.3 -> fast
         val messages = listOf(mapOf("role" to "user", "content" to "Hi there"))
         val decision = router.route(messages)
         assertEquals("fast", decision.tier)
@@ -157,9 +159,13 @@ class QueryRoutingClientTest {
     }
 
     @Test
-    fun `medium query routes to balanced tier`() {
+    fun `medium-length query routes to balanced tier`() {
+        // 37 words, no complex indicators. wordScore=(37-10)/(50-10)=27/40=0.675.
+        // score=0.675*0.5=0.3375. 0.3 <= 0.3375 < 0.7 -> balanced
         val content = "Tell me about the history of computing and how it evolved " +
-            "over the last few decades with various technological breakthroughs"
+            "over the last few decades with various technological breakthroughs " +
+            "and innovations that changed the way people interact with machines " +
+            "on a daily basis throughout modern civilization"
         val messages = listOf(mapOf("role" to "user", "content" to content))
         val decision = router.route(messages)
         assertEquals("balanced", decision.tier)
@@ -167,27 +173,56 @@ class QueryRoutingClientTest {
     }
 
     @Test
-    fun `long query routes to quality tier`() {
-        val words = (1..60).joinToString(" ") { "word$it" }
-        val messages = listOf(mapOf("role" to "user", "content" to words))
+    fun `long query with indicators routes to quality tier`() {
+        // 55+ words with "explain", "analyze", and "compare" -> 3 indicator matches.
+        // wordScore=1.0 (55>=50), indicatorScore=3/3=1.0.
+        // score=1.0*0.5+1.0*0.5=1.0 >= 0.7 -> quality
+        val content = "Please explain the differences between various sorting algorithms " +
+            "and analyze their time and space complexity across different input sizes " +
+            "then compare their performance characteristics when applied to real world " +
+            "datasets that contain partially sorted data with duplicate values and " +
+            "varying distribution patterns across multiple dimensions of the problem " +
+            "space including worst case and average case scenarios"
+        val messages = listOf(mapOf("role" to "user", "content" to content))
         val decision = router.route(messages)
         assertEquals("quality", decision.tier)
         assertEquals("llama-3.2-3b", decision.modelName)
     }
 
     @Test
-    fun `complex keyword forces quality tier regardless of length`() {
+    fun `indicator on short query increases score but does not force quality`() {
+        // "explain this" = 2 words (<= fastMaxWords=10). wordScore=0.0.
+        // matchCount=1 ("explain"), indicatorScore=1/3=0.333.
+        // score=0+0.333*0.5=0.167 < 0.3 -> fast (not quality, unlike old behavior)
         val messages = listOf(mapOf("role" to "user", "content" to "explain this"))
         val decision = router.route(messages)
-        assertEquals("quality", decision.tier)
-        assertEquals("llama-3.2-3b", decision.modelName)
+        assertEquals("fast", decision.tier)
+        // But score is non-zero due to indicator
+        assertTrue(decision.complexityScore > 0.0)
     }
 
     @Test
-    fun `multiple complex indicators route to quality`() {
+    fun `multiple indicators on short query route to balanced`() {
+        // "implement the algorithm step by step" = 6 words (<= fastMaxWords=10).
+        // matchCount=2 ("implement", "step by step"), indicatorScore=2/3=0.667.
+        // score=0+0.667*0.5=0.333. 0.3 <= 0.333 < 0.7 -> balanced
         val messages = listOf(
             mapOf("role" to "user", "content" to "implement the algorithm step by step")
         )
+        val decision = router.route(messages)
+        assertEquals("balanced", decision.tier)
+    }
+
+    @Test
+    fun `saturated indicators on medium query route to quality`() {
+        // A query with 3+ indicator matches and enough words to push score >= 0.7.
+        // ~30 words with "explain", "analyze", and "compare".
+        // wordScore=(30-10)/40=0.5, indicatorScore=3/3=1.0.
+        // score=0.5*0.5+1.0*0.5=0.25+0.5=0.75 >= 0.7 -> quality
+        val content = "Can you explain the core differences between these approaches " +
+            "then analyze the performance implications and compare them across " +
+            "multiple scenarios with varying input sizes and constraints please"
+        val messages = listOf(mapOf("role" to "user", "content" to content))
         val decision = router.route(messages)
         assertEquals("quality", decision.tier)
     }
@@ -197,6 +232,7 @@ class QueryRoutingClientTest {
         val messages = listOf(mapOf("role" to "user", "content" to ""))
         val decision = router.route(messages)
         assertEquals("fast", decision.tier)
+        assertEquals(0.0, decision.complexityScore)
     }
 
     @Test
@@ -208,7 +244,57 @@ class QueryRoutingClientTest {
             mapOf("role" to "user", "content" to "thanks"),
         )
         val decision = router.route(messages)
-        assertEquals("fast", decision.tier) // "thanks" is short, no complex indicator
+        assertEquals("fast", decision.tier) // "thanks" is 1 word, no indicator
+    }
+
+    @Test
+    fun `word count at exact threshold boundaries`() {
+        // Exactly fastMaxWords (10 words) -> wordScore=0.0
+        val atFast = (1..10).joinToString(" ") { "w$it" }
+        val decFast = router.route(listOf(mapOf("role" to "user", "content" to atFast)))
+        assertEquals(0.0, decFast.complexityScore) // no indicators, wordScore=0
+
+        // Exactly qualityMinWords (50 words) -> wordScore=1.0
+        val atQuality = (1..50).joinToString(" ") { "w$it" }
+        val decQuality = router.route(listOf(mapOf("role" to "user", "content" to atQuality)))
+        // wordScore=1.0, indicatorScore=0, score=0.5. balanced (0.3 <= 0.5 < 0.7)
+        assertEquals("balanced", decQuality.tier)
+    }
+
+    // =========================================================================
+    // Cross-SDK scoring formula — explicit score verification
+    // =========================================================================
+
+    @Test
+    fun `score computation matches cross-SDK formula`() {
+        // Default policy: fastMaxWords=10, qualityMinWords=50, indicators=7 common ones.
+        // Default weights: lengthWeight=0.5, indicatorWeight=0.5, indicatorNormalizor=3.0,
+        //                  fastThreshold=0.3, qualityThreshold=0.7.
+
+        // 30 words with 1 indicator ("explain"). wordScore=(30-10)/40=0.5.
+        // indicatorScore=1/3=0.333. score=0.5*0.5+0.333*0.5=0.25+0.167=0.417.
+        val words = (1..29).joinToString(" ") { "w$it" }
+        val content = "explain $words"
+        val decision = router.route(listOf(mapOf("role" to "user", "content" to content)))
+
+        val expectedWordScore = 20.0 / 40.0 // (30-10)/(50-10)
+        val expectedIndicatorScore = 1.0 / 3.0
+        val expectedScore = expectedWordScore * 0.5 + expectedIndicatorScore * 0.5
+        assertEquals(expectedScore, decision.complexityScore, 0.001)
+        assertEquals("balanced", decision.tier)
+    }
+
+    @Test
+    fun `score is clamped to 0 and 1`() {
+        // Empty query: all zeros.
+        val emptyDec = router.route(listOf(mapOf("role" to "user", "content" to "")))
+        assertEquals(0.0, emptyDec.complexityScore)
+
+        // Very long query with max indicators.
+        val longContent = "explain analyze compare " + (1..100).joinToString(" ") { "word$it" }
+        val longDec = router.route(listOf(mapOf("role" to "user", "content" to longContent)))
+        assertTrue(longDec.complexityScore <= 1.0)
+        assertTrue(longDec.complexityScore >= 0.0)
     }
 
     // =========================================================================
@@ -288,9 +374,13 @@ class QueryRoutingClientTest {
 
     @Test
     fun `fallback chain for quality model goes down`() {
-        val messages = listOf(
-            mapOf("role" to "user", "content" to "explain the algorithm in detail")
-        )
+        // Need a query that routes to quality (score >= 0.7).
+        // ~30 words with 3 indicators: wordScore=(30-10)/40=0.5,
+        // indicatorScore=3/3=1.0, score=0.5*0.5+1.0*0.5=0.75 -> quality.
+        val content = "Can you explain the core differences between these approaches " +
+            "then analyze the performance implications and compare them across " +
+            "multiple scenarios with varying input sizes and constraints please"
+        val messages = listOf(mapOf("role" to "user", "content" to content))
         val decision = router.route(messages)
         assertEquals("llama-3.2-3b", decision.modelName)
         assertEquals(listOf("phi-4-mini", "smollm-360m"), decision.fallbackChain)
@@ -298,8 +388,12 @@ class QueryRoutingClientTest {
 
     @Test
     fun `fallback chain for balanced model includes both directions`() {
+        // Need a query that routes to balanced (0.3 <= score < 0.7).
+        // 37 words, no indicators. wordScore=(37-10)/40=0.675, score=0.3375.
         val content = "Tell me about the history of computing and how it evolved " +
-            "over the last few decades with various breakthroughs"
+            "over the last few decades with various technological breakthroughs " +
+            "and innovations that changed the way people interact with machines " +
+            "on a daily basis throughout modern civilization"
         val messages = listOf(mapOf("role" to "user", "content" to content))
         val decision = router.route(messages)
         assertEquals("phi-4-mini", decision.modelName)
@@ -342,38 +436,98 @@ class QueryRoutingClientTest {
         )
     }
 
+    @Test
+    fun `more words increase complexity score`() {
+        // 5 words (below threshold) vs 30 words (above threshold), no indicators.
+        val short5 = router.route(listOf(mapOf("role" to "user", "content" to "one two three four five")))
+        val words30 = (1..30).joinToString(" ") { "w$it" }
+        val long30 = router.route(listOf(mapOf("role" to "user", "content" to words30)))
+        assertTrue(
+            long30.complexityScore > short5.complexityScore,
+            "30-word query (${long30.complexityScore}) should score higher than 5-word (${short5.complexityScore})"
+        )
+    }
+
+    @Test
+    fun `more indicators increase complexity score`() {
+        // Same word count but different number of indicator matches.
+        // 15 words each, one with 1 indicator, one with 2 indicators.
+        val oneIndicator = "explain the general purpose of this particular system and its features and outputs"
+        val twoIndicators = "explain and analyze the general purpose of this particular system and its features"
+        val dec1 = router.route(listOf(mapOf("role" to "user", "content" to oneIndicator)))
+        val dec2 = router.route(listOf(mapOf("role" to "user", "content" to twoIndicators)))
+        assertTrue(
+            dec2.complexityScore > dec1.complexityScore,
+            "Two indicators (${dec2.complexityScore}) should score higher than one (${dec1.complexityScore})"
+        )
+    }
+
     // =========================================================================
     // ScoringWeights — server-driven scoring
     // =========================================================================
 
     @Test
-    fun `ScoringWeights defaults are neutral`() {
+    fun `ScoringWeights defaults are correct`() {
         val weights = RoutingPolicy.ScoringWeights()
         assertEquals(0.5, weights.lengthWeight)
+        assertEquals(0.5, weights.indicatorWeight)
+        assertEquals(3.0, weights.indicatorNormalizor)
+        assertEquals(0.3, weights.fastThreshold)
+        assertEquals(0.7, weights.qualityThreshold)
+        // Deprecated fields still have defaults for backward compatibility.
         assertEquals(0.0, weights.complexityBoost)
         assertEquals(100, weights.lengthNormalizor)
     }
 
     @Test
-    fun `ScoringWeights serializes to JSON correctly`() {
+    fun `ScoringWeights serializes new fields to JSON`() {
         val weights = RoutingPolicy.ScoringWeights(
-            lengthWeight = 0.7,
-            complexityBoost = 0.3,
-            lengthNormalizor = 80,
+            lengthWeight = 0.6,
+            indicatorWeight = 0.4,
+            indicatorNormalizor = 5.0,
+            fastThreshold = 0.25,
+            qualityThreshold = 0.75,
         )
         val encoded = json.encodeToString(RoutingPolicy.ScoringWeights.serializer(), weights)
-        assertTrue(encoded.contains("\"length_weight\":0.7"))
-        assertTrue(encoded.contains("\"complexity_boost\":0.3"))
-        assertTrue(encoded.contains("\"length_normalizor\":80"))
+        assertTrue(encoded.contains("\"length_weight\":0.6"))
+        assertTrue(encoded.contains("\"indicator_weight\":0.4"))
+        assertTrue(encoded.contains("\"indicator_normalizor\":5.0"))
+        assertTrue(encoded.contains("\"fast_threshold\":0.25"))
+        assertTrue(encoded.contains("\"quality_threshold\":0.75"))
     }
 
     @Test
-    fun `ScoringWeights deserializes from JSON correctly`() {
+    fun `ScoringWeights deserializes old server format with defaults for new fields`() {
+        // Old server response only has length_weight, complexity_boost, length_normalizor.
         val raw = """{"length_weight":0.8,"complexity_boost":0.25,"length_normalizor":120}"""
         val weights = json.decodeFromString(RoutingPolicy.ScoringWeights.serializer(), raw)
         assertEquals(0.8, weights.lengthWeight)
         assertEquals(0.25, weights.complexityBoost)
         assertEquals(120, weights.lengthNormalizor)
+        // New fields use defaults.
+        assertEquals(0.5, weights.indicatorWeight)
+        assertEquals(3.0, weights.indicatorNormalizor)
+        assertEquals(0.3, weights.fastThreshold)
+        assertEquals(0.7, weights.qualityThreshold)
+    }
+
+    @Test
+    fun `ScoringWeights deserializes new server format correctly`() {
+        val raw = """{
+            "length_weight": 0.6,
+            "indicator_weight": 0.4,
+            "indicator_normalizor": 5.0,
+            "fast_threshold": 0.2,
+            "quality_threshold": 0.8,
+            "complexity_boost": 0.0,
+            "length_normalizor": 100
+        }""".trimIndent()
+        val weights = json.decodeFromString(RoutingPolicy.ScoringWeights.serializer(), raw)
+        assertEquals(0.6, weights.lengthWeight)
+        assertEquals(0.4, weights.indicatorWeight)
+        assertEquals(5.0, weights.indicatorNormalizor)
+        assertEquals(0.2, weights.fastThreshold)
+        assertEquals(0.8, weights.qualityThreshold)
     }
 
     @Test
@@ -389,8 +543,10 @@ class QueryRoutingClientTest {
         """.trimIndent()
         val policy = json.decodeFromString(RoutingPolicy.serializer(), raw)
         assertEquals(0.5, policy.scoringWeights.lengthWeight)
-        assertEquals(0.0, policy.scoringWeights.complexityBoost)
-        assertEquals(100, policy.scoringWeights.lengthNormalizor)
+        assertEquals(0.5, policy.scoringWeights.indicatorWeight)
+        assertEquals(3.0, policy.scoringWeights.indicatorNormalizor)
+        assertEquals(0.3, policy.scoringWeights.fastThreshold)
+        assertEquals(0.7, policy.scoringWeights.qualityThreshold)
     }
 
     @Test
@@ -402,9 +558,11 @@ class QueryRoutingClientTest {
             deterministicEnabled = true,
             ttlSeconds = 300,
             scoringWeights = RoutingPolicy.ScoringWeights(
-                lengthWeight = 0.7,
-                complexityBoost = 0.3,
-                lengthNormalizor = 80,
+                lengthWeight = 0.6,
+                indicatorWeight = 0.4,
+                indicatorNormalizor = 5.0,
+                fastThreshold = 0.25,
+                qualityThreshold = 0.75,
             ),
         )
         val encoded = json.encodeToString(RoutingPolicy.serializer(), original)
@@ -484,5 +642,23 @@ class QueryRoutingClientTest {
         val decision = router.route(messages)
         assertEquals("deterministic", decision.tier)
         assertEquals("4", decision.deterministicResult?.answer)
+    }
+
+    @Test
+    fun `no user message routes to fast with zero score`() {
+        val messages = listOf(mapOf("role" to "system", "content" to "You are helpful"))
+        val decision = router.route(messages)
+        assertEquals("fast", decision.tier)
+        assertEquals(0.0, decision.complexityScore)
+    }
+
+    @Test
+    fun `score is deterministic for same input`() {
+        val messages = listOf(mapOf("role" to "user", "content" to "explain sorting algorithms"))
+        val dec1 = router.route(messages)
+        val dec2 = router.route(messages)
+        assertEquals(dec1.complexityScore, dec2.complexityScore)
+        assertEquals(dec1.tier, dec2.tier)
+        assertEquals(dec1.modelName, dec2.modelName)
     }
 }
