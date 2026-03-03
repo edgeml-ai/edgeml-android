@@ -211,7 +211,7 @@ class SecAggPlusClient(
      * The update bytes are converted to field elements, then:
      * 1. For each peer, derive a pairwise mask from the ECDH shared secret.
      *    If my_index > peer_index, ADD the mask; otherwise SUBTRACT it.
-     *    These cancel out in the aggregate .
+     *    These cancel out in the aggregate.
      * 2. Add the self-mask (derived from the Shamir-shared seed).
      *    The server removes this by reconstructing the seed from shares.
      *
@@ -451,10 +451,6 @@ class SecAggPlusClient(
 
 /**
  * Configuration for the SecAgg+ protocol.
- *
-
-
-
  */
 data class SecAggPlusConfig(
     /** Server-assigned session ID. */
