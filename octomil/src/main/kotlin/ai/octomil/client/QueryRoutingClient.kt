@@ -68,16 +68,12 @@ data class DeterministicResult(
 private val DEFAULT_POLICY = RoutingPolicy(
     version = 1,
     thresholds = RoutingPolicy.PolicyThresholds(
-        fastMaxWords = 10,
-        qualityMinWords = 50,
+        fastMaxWords = 0,
+        qualityMinWords = 999999,
     ),
-    complexIndicators = listOf(
-        "code", "explain", "compare", "analyze", "implement",
-        "algorithm", "step by step", "debug", "refactor", "optimize",
-        "design", "architecture", "prove", "derive",
-    ),
+    complexIndicators = emptyList(),
     deterministicEnabled = true,
-    ttlSeconds = 300,
+    ttlSeconds = 0,
 )
 
 // =============================================================================
