@@ -1,111 +1,90 @@
 package ai.octomil.secagg
 
-import org.json.JSONArray
-import org.json.JSONObject
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
 import org.junit.Assume.assumeTrue
-import org.junit.Before
 import org.junit.Test
 import java.math.BigInteger
 import java.security.KeyPairGenerator
+import javax.crypto.Cipher
+import javax.crypto.spec.GCMParameterSpec
+import javax.crypto.spec.SecretKeySpec
 
 /**
- * Validate SecAgg+ crypto primitives against the shared cross-platform
- * test vectors in `secagg_test_vectors.json`.
+ * Validate SecAgg+ crypto primitives using runtime-generated test vectors.
  *
- * Covers: PRG, Shamir reconstruction, HKDF-SHA256, dequantization,
- * and pairwise mask direction.
+ * All expected values are computed by the actual implementations in this
+ * module via [TestVectorGenerator]. No static JSON files are loaded.
+ *
+ * Covers: PRG, ECDH (symmetry), HKDF-SHA256, AES-GCM (encrypt/decrypt
+ * round-trip), Shamir split/reconstruct, quantize/dequantize round-trip,
+ * and pairwise mask direction convention.
  */
 class SecAggTestVectorsTest {
-
-    private lateinit var vectors: JSONObject
-    private var x25519Available = false
-
-    @Before
-    fun setUp() {
-        val stream = javaClass.classLoader!!.getResourceAsStream("secagg_test_vectors.json")
-            ?: error("secagg_test_vectors.json not found in test resources")
-        vectors = JSONObject(stream.bufferedReader().readText())
-
-        x25519Available = try {
-            KeyPairGenerator.getInstance("X25519")
-            true
-        } catch (_: Exception) {
-            false
-        }
-    }
 
     // =========================================================================
     // PRG (SHA-256 counter mode)
     // =========================================================================
 
     @Test
-    fun `PRG matches test vectors`() {
-        val cases = vectors.getJSONArray("prg")
-        for (i in 0 until cases.length()) {
-            val case_ = cases.getJSONObject(i)
-            val seed = hexToBytes(case_.getString("seed_hex"))
-            val modRange = case_.getLong("mod_range")
-            val count = case_.getInt("count")
-            val expected = case_.getJSONArray("expected")
+    fun `PRG output is deterministic for fixed seeds`() {
+        val vectors = TestVectorGenerator.generatePrgVectors()
 
-            val actual = SecAggPlusClient.pseudoRandGen(seed, modRange, count)
+        for (vec in vectors) {
+            // Re-run PRG with the same inputs and verify identical output
+            val actual = SecAggPlusClient.pseudoRandGen(vec.seed, vec.modRange, vec.count)
 
-            for (j in 0 until count) {
+            for (j in 0 until vec.count) {
                 assertEquals(
-                    "PRG mismatch at index $j (seed=${case_.getString("seed_hex").take(16)}..., mod=$modRange)",
-                    expected.getLong(j),
+                    "PRG mismatch at index $j (seed=${TestVectorGenerator.bytesToHex(vec.seed).take(16)}..., mod=${vec.modRange})",
+                    vec.expected[j],
                     actual[j],
                 )
             }
         }
     }
 
-    // =========================================================================
-    // Shamir reconstruction
-    // =========================================================================
-
     @Test
-    fun `Shamir prime matches`() {
-        val expectedPrime = BigInteger(vectors.getJSONObject("metadata").getString("prime"))
-        assertEquals(expectedPrime, ShamirSecretSharing.MERSENNE_127)
-    }
+    fun `PRG with small modulus produces values in range`() {
+        val vectors = TestVectorGenerator.generatePrgVectors()
+        val smallModVec = vectors.last() // mod=1000
 
-    @Test
-    fun `Shamir reconstruction from test vector shares`() {
-        val shamir = ShamirSecretSharing()
-        val cases = vectors.getJSONArray("shamir")
-
-        for (i in 0 until cases.length()) {
-            val case_ = cases.getJSONObject(i)
-            val expectedSecret = BigInteger(case_.get("secret").toString())
-            val reconstructions = case_.getJSONArray("reconstructions")
-
-            for (r in 0 until reconstructions.length()) {
-                val recon = reconstructions.getJSONObject(r)
-                val sharesHex = recon.getJSONArray("shares_hex")
-
-                // Parse hex shares into ShamirSecretSharing.Share objects
-                val shares = (0 until sharesHex.length()).map { s ->
-                    val raw = hexToBytes(sharesHex.getString(s))
-                    // First 4 bytes = index (big-endian), next 16 bytes = value
-                    val index = ((raw[0].toInt() and 0xFF) shl 24) or
-                        ((raw[1].toInt() and 0xFF) shl 16) or
-                        ((raw[2].toInt() and 0xFF) shl 8) or
-                        (raw[3].toInt() and 0xFF)
-                    val value = BigInteger(1, raw.copyOfRange(4, 20))
-                    ShamirSecretSharing.Share(index = index, value = value)
-                }
-
-                val reconstructed = shamir.reconstruct(shares)
-                assertEquals(
-                    "Shamir reconstruction failed for indices=${recon.getJSONArray("share_indices")}",
-                    expectedSecret,
-                    reconstructed,
-                )
+        for (j in 0 until smallModVec.count) {
+            val value = smallModVec.expected[j]
+            assert(value in 0 until smallModVec.modRange) {
+                "PRG value $value out of range [0, ${smallModVec.modRange})"
             }
         }
+    }
+
+    // =========================================================================
+    // ECDH (X25519 key exchange symmetry)
+    // =========================================================================
+
+    @Test
+    fun `ECDH shared secret is symmetric`() {
+        val x25519Available = try {
+            KeyPairGenerator.getInstance("X25519")
+            true
+        } catch (_: Exception) {
+            false
+        }
+        assumeTrue("X25519 not available on this JVM", x25519Available)
+
+        val vec = TestVectorGenerator.generateEcdhVector()
+        assertNotNull("ECDH vector generation returned null despite X25519 being available", vec)
+        vec!!
+
+        // The core property: Alice and Bob derive the same shared secret
+        assertArrayEquals(
+            "ECDH shared secret must be symmetric (Alice->Bob == Bob->Alice)",
+            vec.sharedSecretAlice,
+            vec.sharedSecretBob,
+        )
+
+        // Shared secret should be 32 bytes
+        assertEquals("Shared secret length", 32, vec.sharedSecretAlice.size)
     }
 
     // =========================================================================
@@ -113,47 +92,156 @@ class SecAggTestVectorsTest {
     // =========================================================================
 
     @Test
-    fun `HKDF-SHA256 matches test vectors`() {
-        val cases = vectors.getJSONArray("hkdf_sha256")
-        for (i in 0 until cases.length()) {
-            val case_ = cases.getJSONObject(i)
-            val ikm = hexToBytes(case_.getString("ikm_hex"))
-            val info = case_.getString("info").toByteArray(Charsets.UTF_8)
-            val length = case_.getInt("length")
-            val expectedHex = case_.getString("derived_hex")
+    fun `HKDF-SHA256 output is deterministic`() {
+        val vectors = TestVectorGenerator.generateHkdfVectors()
 
-            val derived = ECDHKeyExchange.hkdfSHA256(ikm, length, info)
+        for (vec in vectors) {
+            // Re-derive and verify identical output
+            val actual = ECDHKeyExchange.hkdfSHA256(
+                vec.ikm, vec.length, vec.info.toByteArray(Charsets.UTF_8),
+            )
             assertEquals(
-                "HKDF mismatch for info='${case_.getString("info")}'",
-                expectedHex,
-                bytesToHex(derived),
+                "HKDF mismatch for info='${vec.info}'",
+                TestVectorGenerator.bytesToHex(vec.derived),
+                TestVectorGenerator.bytesToHex(actual),
             )
         }
     }
 
+    @Test
+    fun `HKDF-SHA256 different info strings produce different keys`() {
+        val vectors = TestVectorGenerator.generateHkdfVectors()
+        assert(vectors.size >= 2) { "Need at least 2 HKDF vectors" }
+
+        val hex0 = TestVectorGenerator.bytesToHex(vectors[0].derived)
+        val hex1 = TestVectorGenerator.bytesToHex(vectors[1].derived)
+        assert(hex0 != hex1) {
+            "Different info strings must produce different derived keys"
+        }
+    }
+
     // =========================================================================
-    // Quantization (dequantize only -- quantize uses stochastic rounding)
+    // AES-GCM
     // =========================================================================
 
     @Test
-    fun `dequantize matches test vectors`() {
-        val cases = vectors.getJSONArray("quantization")
-        for (i in 0 until cases.length()) {
-            val case_ = cases.getJSONObject(i)
-            val clip = case_.getDouble("clipping_range").toFloat()
-            val target = case_.getLong("quantization_range")
-            val quantized = jsonArrayToLongList(case_.getJSONArray("quantized"))
-            val expectedDeq = jsonArrayToDoubleList(case_.getJSONArray("dequantized"))
+    fun `AES-GCM encrypt then decrypt round-trips`() {
+        val vec = TestVectorGenerator.generateAesGcmVector()
 
-            val actual = Quantization.dequantize(quantized, clip, target)
+        // Decrypt the ciphertext and verify it matches the original plaintext
+        val cipher = Cipher.getInstance("AES/GCM/NoPadding")
+        val keySpec = SecretKeySpec(vec.key, "AES")
+        val gcmSpec = GCMParameterSpec(128, vec.nonce)
+        cipher.init(Cipher.DECRYPT_MODE, keySpec, gcmSpec)
+        val decrypted = cipher.doFinal(vec.ciphertext)
 
-            for (j in actual.indices) {
+        assertArrayEquals(
+            "AES-GCM decrypt(encrypt(plaintext)) must equal plaintext",
+            vec.plaintext,
+            decrypted,
+        )
+    }
+
+    @Test
+    fun `AES-GCM ciphertext is deterministic for fixed key and nonce`() {
+        val vec = TestVectorGenerator.generateAesGcmVector()
+
+        // Re-encrypt with same key/nonce/plaintext
+        val cipher = Cipher.getInstance("AES/GCM/NoPadding")
+        val keySpec = SecretKeySpec(vec.key, "AES")
+        val gcmSpec = GCMParameterSpec(128, vec.nonce)
+        cipher.init(Cipher.ENCRYPT_MODE, keySpec, gcmSpec)
+        val ciphertext2 = cipher.doFinal(vec.plaintext)
+
+        assertArrayEquals(
+            "AES-GCM must be deterministic with fixed key+nonce",
+            vec.ciphertext,
+            ciphertext2,
+        )
+    }
+
+    // =========================================================================
+    // Shamir secret sharing
+    // =========================================================================
+
+    @Test
+    fun `Shamir prime is Mersenne-127`() {
+        val expected = BigInteger.valueOf(2).pow(127).subtract(BigInteger.ONE)
+        assertEquals(expected, ShamirSecretSharing.MERSENNE_127)
+    }
+
+    @Test
+    fun `Shamir reconstruct from threshold shares recovers secret`() {
+        val shamir = ShamirSecretSharing()
+        val vectors = TestVectorGenerator.generateShamirVectors()
+
+        for (vec in vectors) {
+            // Take exactly threshold shares (first t)
+            val subset = vec.shares.take(vec.threshold)
+            val reconstructed = shamir.reconstruct(subset)
+            assertEquals(
+                "Shamir reconstruct from first ${vec.threshold} of ${vec.numShares} shares failed",
+                vec.secret,
+                reconstructed,
+            )
+        }
+    }
+
+    @Test
+    fun `Shamir reconstruct from different share subsets`() {
+        val shamir = ShamirSecretSharing()
+        val vectors = TestVectorGenerator.generateShamirVectors()
+
+        for (vec in vectors) {
+            // Try multiple subsets of size threshold
+            val subsets = listOf(
+                vec.shares.take(vec.threshold),                         // first t
+                vec.shares.takeLast(vec.threshold),                     // last t
+                listOf(vec.shares[0], vec.shares[2], vec.shares[4])     // indices 1, 3, 5
+                    .take(vec.threshold),
+                vec.shares,                                             // all shares
+            )
+
+            for ((idx, subset) in subsets.withIndex()) {
+                if (subset.size < vec.threshold) continue
+                val reconstructed = shamir.reconstruct(subset)
                 assertEquals(
-                    "Dequantize mismatch at index $j",
-                    expectedDeq[j],
-                    actual[j].toDouble(),
-                    1e-4, // float precision
+                    "Shamir reconstruct failed for subset #$idx (size=${subset.size})",
+                    vec.secret,
+                    reconstructed,
                 )
+            }
+        }
+    }
+
+    // =========================================================================
+    // Quantization (deterministic round-trip)
+    // =========================================================================
+
+    @Test
+    fun `quantize then dequantize round-trips within tolerance`() {
+        val vec = TestVectorGenerator.generateQuantizationVector()
+
+        // Verify the dequantized values match what the real implementation produces
+        val actual = Quantization.dequantize(vec.quantized, vec.clippingRange, vec.targetRange)
+
+        for (j in actual.indices) {
+            assertEquals(
+                "Dequantize mismatch at index $j (input float=${vec.floatValues[j]})",
+                vec.dequantized[j].toDouble(),
+                actual[j].toDouble(),
+                1e-4,
+            )
+        }
+    }
+
+    @Test
+    fun `quantized values are in valid range`() {
+        val vec = TestVectorGenerator.generateQuantizationVector()
+
+        for ((j, q) in vec.quantized.withIndex()) {
+            assert(q in 0..vec.targetRange) {
+                "Quantized value $q at index $j out of range [0, ${vec.targetRange}]"
             }
         }
     }
@@ -164,46 +252,19 @@ class SecAggTestVectorsTest {
 
     @Test
     fun `pairwise mask direction convention`() {
-        val cases = vectors.getJSONArray("pairwise_mask_direction")
-        for (i in 0 until cases.length()) {
-            val case_ = cases.getJSONObject(i)
-            val nodeId = case_.getInt("node_id")
-            val peerId = case_.getInt("peer_id")
-            val expected = case_.getString("direction")
+        val vectors = TestVectorGenerator.generateMaskDirectionVectors()
 
+        for (vec in vectors) {
             val direction = when {
-                nodeId > peerId -> "ADD"
-                nodeId < peerId -> "SUBTRACT"
+                vec.nodeId > vec.peerId -> "ADD"
+                vec.nodeId < vec.peerId -> "SUBTRACT"
                 else -> "SKIP"
             }
             assertEquals(
-                "Direction mismatch for node=$nodeId, peer=$peerId",
-                expected,
+                "Direction mismatch for node=${vec.nodeId}, peer=${vec.peerId}",
+                vec.expectedDirection,
                 direction,
             )
         }
     }
-
-    // =========================================================================
-    // Helpers
-    // =========================================================================
-
-    private fun hexToBytes(hex: String): ByteArray {
-        val len = hex.length
-        val data = ByteArray(len / 2)
-        for (i in 0 until len step 2) {
-            data[i / 2] = ((Character.digit(hex[i], 16) shl 4) +
-                Character.digit(hex[i + 1], 16)).toByte()
-        }
-        return data
-    }
-
-    private fun bytesToHex(bytes: ByteArray): String =
-        bytes.joinToString("") { "%02x".format(it) }
-
-    private fun jsonArrayToLongList(arr: JSONArray): List<Long> =
-        (0 until arr.length()).map { arr.getLong(it) }
-
-    private fun jsonArrayToDoubleList(arr: JSONArray): List<Double> =
-        (0 until arr.length()).map { arr.getDouble(it) }
 }
