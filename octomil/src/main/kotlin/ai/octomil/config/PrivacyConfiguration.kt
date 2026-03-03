@@ -6,10 +6,9 @@ import kotlin.random.Random
 /**
  * Configuration for privacy-preserving upload behavior.
  *
- * Provides three key privacy enhancements:
+ * Provides two key privacy enhancements:
  * 1. Staggered updates: Random delays before upload
  * 2. Differential privacy: Noise injection for formal guarantees
- * 3. Advanced weighting: Trust scores and staleness penalties (server-side)
  */
 @Serializable
 data class PrivacyConfiguration(
@@ -33,7 +32,6 @@ data class PrivacyConfiguration(
      * Whether to enable differential privacy (noise injection).
      *
      * When enabled, adds calibrated Gaussian noise to gradients.
-     * Note: Actual DP is applied server-side; this is client-side config.
      */
     val enableDifferentialPrivacy: Boolean = false,
     /**

@@ -181,21 +181,6 @@ class WeightExtractor(
 
     /**
      * Parses weight tensors from a TFLite FlatBuffer.
-     *
-     * FlatBuffer layout reminder:
-     * - Offset 0: int32 root table offset (relative to start of buffer)
-     * - At root table offset: int32 vtable offset (signed, relative to table start)
-     * - vtable: [uint16 vtable_size, uint16 table_size, field_offsets...]
-     *
-     * Model vtable field indices (0-based from field offset 4 in vtable):
-     *   0: version
-     *   1: operator_codes
-     *   2: subgraphs
-     *   3: description
-     *   4: buffers
-     *   5: metadata_buffer
-     *   6: metadata
-     *   7: signature_defs
      */
     private fun parseTFLiteWeights(bb: ByteBuffer): Map<String, TensorData> {
         val weights = mutableMapOf<String, TensorData>()

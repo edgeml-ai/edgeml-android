@@ -27,14 +27,6 @@ import java.nio.MappedByteBuffer
 import java.nio.channels.FileChannel
 import java.util.Locale
 
-// TODO(acceleration): Migrate from TensorFlow Lite to LiteRT.
-//   TensorFlow Lite has been rebranded to LiteRT (google-ai-edge/LiteRT).
-//   LiteRT provides the same API surface but with newer NPU delegate support,
-//   better GPU performance, and access to the Acceleration Service (Play Services).
-//   Migration: replace org.tensorflow:tensorflow-lite:* with
-//   com.google.ai.edge.litert:litert:* in build.gradle.kts.
-//   See: https://github.com/google-ai-edge/LiteRT
-
 /**
  * TensorFlow Lite model inference and training wrapper.
  *
@@ -672,7 +664,7 @@ class TFLiteTrainer(
      *
      * This performs inference on training data to compute loss, but cannot update
      * model weights directly. Instead, it copies the model and records the training
-     * metrics. The actual weight update happens server-side for these models.
+     * metrics.
      *
      * For true on-device training, models should be exported with training signatures.
      */
@@ -1160,7 +1152,6 @@ class TFLiteTrainer(
                 }
             }
 
-            // Float16 inference — ~2x throughput on GPU
             if (config.enableFloat16Inference) {
                 delegateOptions.setPrecisionLossAllowed(true)
                 delegateOptions.setInferencePreference(
@@ -1293,7 +1284,6 @@ class TFLiteTrainer(
 
             if (maxFreqs.isEmpty()) return config.numThreads
 
-            // "Big" cores are those with max freq >= 80% of the highest
             val topFreq = maxFreqs.max()
             val threshold = (topFreq * 0.8).toLong()
             maxFreqs.count { it >= threshold }.coerceAtLeast(1)

@@ -211,7 +211,7 @@ class SecAggPlusClient(
      * The update bytes are converted to field elements, then:
      * 1. For each peer, derive a pairwise mask from the ECDH shared secret.
      *    If my_index > peer_index, ADD the mask; otherwise SUBTRACT it.
-     *    These cancel out in the aggregate (matching Flower/server convention).
+     *    These cancel out in the aggregate.
      * 2. Add the self-mask (derived from the Shamir-shared seed).
      *    The server removes this by reconstructing the seed from shares.
      *
@@ -243,12 +243,12 @@ class SecAggPlusClient(
                 sharedSecret, n, BigInteger.valueOf(modRange), context,
             )
             if (myIdx > peerIdx) {
-                // Add pairwise mask (Flower convention: my_idx > peer_idx -> ADD)
+                // Add pairwise mask
                 for (j in 0 until n) {
                     masked[j] = (masked[j] + pairwiseMask[j].toLong()) % modRange
                 }
             } else {
-                // Subtract pairwise mask (Flower convention: my_idx < peer_idx -> SUBTRACT)
+                // Subtract pairwise mask
                 for (j in 0 until n) {
                     masked[j] = ((masked[j] - pairwiseMask[j].toLong()) % modRange + modRange) % modRange
                 }
@@ -451,10 +451,6 @@ class SecAggPlusClient(
 
 /**
  * Configuration for the SecAgg+ protocol.
- *
- * Parameters match the server's `SecAggConfig` and the Python SDK's
- * `SecAggPlusConfig`. The server sends `clipping_range`, `target_range`,
- * and `mod_range` during Stage 0 setup.
  */
 data class SecAggPlusConfig(
     /** Server-assigned session ID. */

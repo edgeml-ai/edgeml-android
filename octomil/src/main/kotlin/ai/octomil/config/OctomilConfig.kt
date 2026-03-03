@@ -105,8 +105,8 @@ data class OctomilConfig(
     val enableGpuAcceleration: Boolean = true,
     /**
      * Cache compiled GPU shaders to disk so subsequent model loads skip shader
-     * compilation (saves 100-500ms cold-start). No downside — cache is
-     * automatically invalidated when the model changes.
+     * compilation. No downside — cache is automatically invalidated when the
+     * model changes.
      */
     val enableGpuSerialization: Boolean = true,
     /**
@@ -120,7 +120,6 @@ data class OctomilConfig(
      *
      * NNAPI is **deprecated in Android 15** (API 35). On Android 15+ devices
      * this flag is ignored and vendor NPU delegates are used instead.
-     * Default off because NNAPI can be unpredictable across vendors.
      */
     val enableNnapi: Boolean = false,
     /**
@@ -144,7 +143,7 @@ data class OctomilConfig(
     val enableVendorNpu: Boolean = false,
     /**
      * Detect ARM big.LITTLE core topology and pin TFLite threads to
-     * performance (big) cores. Inference on little cores can be 3-5x slower.
+     * performance (big) cores.
      * When true, [numThreads] is overridden with the detected big core count.
      */
     val preferBigCores: Boolean = true,

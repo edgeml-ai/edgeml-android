@@ -1,19 +1,11 @@
 package ai.octomil.runtime
 
 /**
- * Decides compute delegate and thread configuration based on device state.
+ * Returns compute recommendation based on device conditions.
  *
  * Pure function — no side effects, no I/O. Takes a [DeviceStateMonitor.DeviceState]
  * snapshot and returns a [ComputeRecommendation] that the interpreter layer uses
  * to configure the TFLite delegate and threading.
- *
- * ## Decision priority (highest to lowest)
- * 1. **Critical thermal** → CPU-only, throttled, minimal threads
- * 2. **Serious thermal** → GPU (skip NNAPI/NPU), reduced threads
- * 3. **Battery Saver enabled** → CPU-only, minimal threads, single inference
- * 4. **Battery < 10%** → CPU-only, reduced batch, minimal threads
- * 5. **Battery < 20% and not charging** → CPU-only, moderate threads
- * 6. **Nominal** → NNAPI (best perf) or GPU, full thread count
  */
 object RuntimeAdapter {
 

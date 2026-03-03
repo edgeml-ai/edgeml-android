@@ -40,7 +40,6 @@ enum class TrainingMode {
      * - Only encrypted weight deltas sent to server
      * - Cannot reconstruct original data from deltas
      * - Benefits from global model improvements
-     * - 25%+ better predictions
      *
      * Use cases:
      * - Keyboard predictions

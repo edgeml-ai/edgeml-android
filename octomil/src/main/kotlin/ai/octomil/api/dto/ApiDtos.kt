@@ -337,16 +337,6 @@ data class ModelVersionResponse(
  * fields are nullable for backwards compatibility — older servers that don't
  * populate them will just return nulls.
  */
-// TODO(server): Generate INT8 and float16 TFLite variants on model upload.
-//   When a model version is published, the server conversion pipeline should:
-//   1. Take the uploaded SavedModel/ONNX/TFLite float32 source
-//   2. Run TFLiteConverter with:
-//      - Default: float32 (no quantization)
-//      - converter.optimizations = [tf.lite.Optimize.DEFAULT] → dynamic range
-//      - converter.target_spec.supported_types = [tf.float16] → float16
-//      - Full int8 with representative_dataset → int8
-//   3. Store all variants with their optimization metadata
-//   4. Return the right variant based on the client's format query param
 @Serializable
 data class ModelDownloadResponse(
     @SerialName("download_url")
