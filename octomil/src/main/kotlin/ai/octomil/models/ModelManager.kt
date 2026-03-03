@@ -13,6 +13,8 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import kotlinx.serialization.SerialName
+import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import okhttp3.OkHttpClient
@@ -58,6 +60,7 @@ class ModelManager(
     private var cacheMetadata: MutableMap<String, CachedModel> = mutableMapOf()
 
     private val deviceInfo = ai.octomil.sdk.DeviceInfo(context)
+    private val modelFormatClient = ModelFormatClient(context, config)
 
     init {
         // Ensure cache directory exists
@@ -253,24 +256,16 @@ class ModelManager(
     }
 
     /**
-     * Negotiate the best model format for this device based on its profile.
+     * Negotiate the best model format for this device.
      *
-     * The server already accepts a `format` query param — this maps device tiers
-     * to the optimal quantization variant:
-     * - **Flagships** (8GB+ RAM, GPU/NPU): float16 for GPU throughput
-     * - **Mid-range** (4-8GB RAM): float32 baseline
-     * - **Low-end** (<4GB RAM): INT8 for smallest size + XNNPack CPU perf
-     *
-     * If the server doesn't have the requested variant, it falls back to float32.
+     * Fetches the optimal format from `GET /api/v1/models/{modelId}/format`
+     * parameterised by device profile. The response is cached in-memory and
+     * on disk. When the server is unreachable, falls back to "tensorflow_lite"
+     * (fp32) which is the safest universal default.
      */
     private fun negotiateModelFormat(): String {
         val profile = deviceInfo.deviceProfile
-        val format = when (profile) {
-            "low_end_android" -> "tensorflow_lite_int8"
-            "mid_range_android" -> "tensorflow_lite"
-            "galaxy_s24", "pixel_8" -> "tensorflow_lite_float16"
-            else -> "tensorflow_lite"
-        }
+        val format = modelFormatClient.getFormat(config.modelId, profile)
         Timber.d("Negotiated model format: %s (device profile: %s)", format, profile)
         return format
     }
@@ -606,6 +601,169 @@ class ModelManager(
             Timber.d("Saved MNN config for $modelId to ${configFile.absolutePath}")
         } catch (e: Exception) {
             Timber.w(e, "Failed to save MNN config")
+        }
+    }
+}
+
+// =============================================================================
+// Server-fetched model format models
+// =============================================================================
+
+/** Fallback format when the server is unreachable. fp32 works on every device. */
+private const val FALLBACK_FORMAT = "tensorflow_lite"
+
+/**
+ * Server response for `GET /api/v1/models/{modelId}/format?device_profile={profile}`.
+ */
+@Serializable
+data class ModelFormatResponse(
+    @SerialName("format") val format: String,
+    @SerialName("ttl_seconds") val ttlSeconds: Int = 3600,
+    @SerialName("fetched_at") var fetchedAt: Double = 0.0,
+) {
+    val isExpired: Boolean
+        get() = fetchedAt == 0.0 ||
+            (System.currentTimeMillis() / 1000.0 - fetchedAt) > ttlSeconds
+}
+
+// =============================================================================
+// ModelFormatClient
+// =============================================================================
+
+/**
+ * Fetches and caches the optimal model format for a device profile.
+ *
+ * Priority: in-memory (if not expired) -> server fetch -> disk cache -> [FALLBACK_FORMAT].
+ *
+ * Thread-safe via `@Synchronized`. Follows the same pattern as
+ * [ai.octomil.client.PolicyClient].
+ */
+class ModelFormatClient(
+    private val context: Context,
+    private val config: OctomilConfig,
+    private val httpClient: OkHttpClient = OkHttpClient.Builder()
+        .connectTimeout(10, TimeUnit.SECONDS)
+        .readTimeout(10, TimeUnit.SECONDS)
+        .build(),
+) {
+    private val json = Json {
+        ignoreUnknownKeys = true
+        encodeDefaults = true
+    }
+
+    private val serverUrl = config.serverUrl.trimEnd('/')
+
+    /**
+     * Keyed by "modelId:profile" to support multiple model/profile combos.
+     */
+    @Volatile
+    private var inMemoryCache: MutableMap<String, ModelFormatResponse> = mutableMapOf()
+
+    /**
+     * Return the optimal model format string for [modelId] on [deviceProfile].
+     */
+    @Synchronized
+    fun getFormat(modelId: String, deviceProfile: String): String {
+        val cacheKey = "$modelId:$deviceProfile"
+
+        // 1. In-memory cache (not expired)
+        val mem = inMemoryCache[cacheKey]
+        if (mem != null && !mem.isExpired) return mem.format
+
+        // 2. Server fetch
+        val fetched = fetchFromServer(modelId, deviceProfile)
+        if (fetched != null) {
+            inMemoryCache[cacheKey] = fetched
+            persistToDisk(cacheKey, fetched)
+            return fetched.format
+        }
+
+        // 3. Expired in-memory
+        if (mem != null) {
+            Timber.i("Using expired in-memory model format for %s", cacheKey)
+            return mem.format
+        }
+
+        // 4. Disk cache
+        val disk = loadFromDisk(cacheKey)
+        if (disk != null) {
+            Timber.i("Using disk-cached model format for %s", cacheKey)
+            inMemoryCache[cacheKey] = disk
+            return disk.format
+        }
+
+        // 5. Absolute fallback — fp32 works on every device.
+        Timber.i("Using fallback model format: %s", FALLBACK_FORMAT)
+        return FALLBACK_FORMAT
+    }
+
+    // =========================================================================
+    // HTTP
+    // =========================================================================
+
+    private fun fetchFromServer(
+        modelId: String,
+        deviceProfile: String,
+    ): ModelFormatResponse? {
+        val requestBuilder = Request.Builder()
+            .url("$serverUrl/api/v1/models/$modelId/format?device_profile=$deviceProfile")
+            .get()
+            .header("User-Agent", "octomil-android/1.0")
+
+        val token = config.deviceAccessToken
+        if (token.isNotBlank()) {
+            requestBuilder.header("Authorization", "Bearer $token")
+        }
+
+        return try {
+            httpClient.newCall(requestBuilder.build()).execute().use { response ->
+                if (response.isSuccessful) {
+                    val body = response.body?.string() ?: return null
+                    val parsed = json.decodeFromString(
+                        ModelFormatResponse.serializer(),
+                        body,
+                    )
+                    parsed.fetchedAt = System.currentTimeMillis() / 1000.0
+                    parsed
+                } else {
+                    Timber.w("Model format fetch returned HTTP %d", response.code)
+                    null
+                }
+            }
+        } catch (e: Exception) {
+            Timber.w(e, "Model format fetch failed")
+            null
+        }
+    }
+
+    // =========================================================================
+    // Disk Cache
+    // =========================================================================
+
+    private fun cacheFileFor(cacheKey: String): File {
+        // Sanitise key for filesystem: replace colons with underscores.
+        val safeName = cacheKey.replace(":", "_")
+        return File(context.cacheDir, "octomil_model_format_$safeName.json")
+    }
+
+    private fun persistToDisk(cacheKey: String, response: ModelFormatResponse) {
+        try {
+            cacheFileFor(cacheKey).writeText(
+                json.encodeToString(ModelFormatResponse.serializer(), response),
+            )
+        } catch (e: Exception) {
+            Timber.w(e, "Failed to write model format cache")
+        }
+    }
+
+    private fun loadFromDisk(cacheKey: String): ModelFormatResponse? {
+        val file = cacheFileFor(cacheKey)
+        if (!file.exists()) return null
+        return try {
+            json.decodeFromString(ModelFormatResponse.serializer(), file.readText())
+        } catch (e: Exception) {
+            Timber.w(e, "Failed to read model format cache")
+            null
         }
     }
 }
