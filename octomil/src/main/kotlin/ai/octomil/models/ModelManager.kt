@@ -1,6 +1,7 @@
 package ai.octomil.models
 
 import ai.octomil.api.OctomilApi
+import ai.octomil.api.dto.ModelResolveRequest
 import ai.octomil.config.OctomilConfig
 import ai.octomil.storage.SecureStorage
 import ai.octomil.wrapper.TelemetryQueue
@@ -66,8 +67,6 @@ class ModelManager(
             apiKey = config.deviceAccessToken,
         )
     }
-    private val modelFormatClient = ModelFormatClient(context, config)
-
     init {
         // Ensure cache directory exists
         cacheDir.mkdirs()
@@ -119,7 +118,8 @@ class ModelManager(
                         return@withContext Result.success(cachedModel)
                     }
 
-                    val downloadInfo = fetchDownloadUrl(modelId, version)
+                    val resolution = resolveModelFormat(modelId, version)
+                    val downloadInfo = fetchDownloadUrl(modelId, resolution.version, resolution.format)
 
                     // Emit deploy.started telemetry
                     val deployStartNanos = System.nanoTime()
@@ -143,20 +143,21 @@ class ModelManager(
                     val newCachedModel =
                         CachedModel(
                             modelId = modelId,
-                            version = version,
+                            version = resolution.version,
                             filePath = modelFile.absolutePath,
                             checksum = downloadInfo.checksum,
                             sizeBytes = downloadInfo.sizeBytes,
-                            format = negotiateModelFormat(),
+                            format = resolution.format,
                             downloadedAt = System.currentTimeMillis(),
                             verified = true,
                             modelContract = downloadInfo.modelContract,
                         )
 
                     // Update cache
-                    cacheMetadata[cacheKey] = newCachedModel
+                    val resolvedCacheKey = getCacheKey(modelId, resolution.version)
+                    cacheMetadata[resolvedCacheKey] = newCachedModel
                     saveCacheMetadata()
-                    storage.setCurrentModelVersion(version)
+                    storage.setCurrentModelVersion(resolution.version)
                     storage.setModelChecksum(downloadInfo.checksum)
 
                     evictOldModels()
@@ -166,7 +167,7 @@ class ModelManager(
                     try {
                         val mnnConfig = fetchDeviceConfig(modelId, deviceProfile)
                         if (mnnConfig != null) {
-                            saveMnnConfig(modelId, version, mnnConfig)
+                            saveMnnConfig(modelId, resolution.version, mnnConfig)
                         }
                     } catch (e: Exception) {
                         Timber.d("No MNN config for $modelId on $deviceProfile")
@@ -177,7 +178,7 @@ class ModelManager(
                     // Emit deploy.completed telemetry
                     try {
                         val deployDurationMs = (System.nanoTime() - deployStartNanos) / 1_000_000.0
-                        TelemetryQueue.shared?.reportDeployCompleted(modelId, version, deployDurationMs)
+                        TelemetryQueue.shared?.reportDeployCompleted(modelId, resolution.version, deployDurationMs)
                     } catch (_: Exception) {
                         // Telemetry must never crash the app
                     }
@@ -261,26 +262,43 @@ class ModelManager(
         return resolvedVersion.version
     }
 
-    /**
-     * Negotiate the best model format for this device.
-     *
-     * Fetches the optimal format from `GET /api/v1/models/{modelId}/format`
-     * parameterised by device profile. The response is cached in-memory and
-     * on disk. When the server is unreachable, falls back to "tensorflow_lite"
-     * (fp32) which is the safest universal default.
-     */
-    private fun negotiateModelFormat(): String {
-        val profile = deviceInfo.deviceProfile
-        val format = modelFormatClient.getFormat(config.modelId, profile)
-        Timber.d("Negotiated model format: %s (device profile: %s)", format, profile)
-        return format
+    private suspend fun resolveModelFormat(
+        modelId: String,
+        version: String,
+    ): ai.octomil.api.dto.ModelResolveResponse {
+        val request =
+            ModelResolveRequest(
+                platform = "android",
+                model = deviceInfo.model,
+                manufacturer = deviceInfo.manufacturer,
+                cpuArchitecture = deviceInfo.cpuArchitecture,
+                osVersion = deviceInfo.osVersion,
+                totalMemoryMb = deviceInfo.totalMemoryMB,
+                gpuAvailable = deviceInfo.gpuAvailable,
+                npuAvailable = deviceInfo.gpuAvailable,
+                supportedRuntimes = listOf("tflite", "nnapi"),
+            )
+        val response =
+            api.resolveModelFormat(
+                modelId = modelId,
+                version = version,
+                request = request,
+            )
+        if (!response.isSuccessful) {
+            throw ModelDownloadException(
+                "Failed to resolve model format: ${response.code()}",
+                errorCode = ModelDownloadException.ErrorCode.NETWORK_ERROR,
+            )
+        }
+        return response.body()
+            ?: throw ModelDownloadException("Empty resolve response")
     }
 
     private suspend fun fetchDownloadUrl(
         modelId: String,
         version: String,
+        format: String,
     ): ai.octomil.api.dto.ModelDownloadResponse {
-        val format = negotiateModelFormat()
         val downloadResponse =
             api.getModelDownloadUrl(
                 modelId = modelId,

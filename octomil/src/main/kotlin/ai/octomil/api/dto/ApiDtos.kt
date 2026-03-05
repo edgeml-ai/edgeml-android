@@ -271,6 +271,52 @@ data class VersionResolutionResponse(
 )
 
 /**
+ * Request for POST /api/v1/models/{model_id}/versions/{version}/resolve.
+ */
+@Serializable
+data class ModelResolveRequest(
+    @SerialName("platform")
+    val platform: String = "android",
+    @SerialName("model")
+    val model: String? = null,
+    @SerialName("manufacturer")
+    val manufacturer: String? = null,
+    @SerialName("cpu_architecture")
+    val cpuArchitecture: String? = null,
+    @SerialName("os_version")
+    val osVersion: String? = null,
+    @SerialName("total_memory_mb")
+    val totalMemoryMb: Long? = null,
+    @SerialName("gpu_available")
+    val gpuAvailable: Boolean = false,
+    @SerialName("npu_available")
+    val npuAvailable: Boolean = false,
+    @SerialName("supported_runtimes")
+    val supportedRuntimes: List<String> = emptyList(),
+)
+
+/**
+ * Response for POST /api/v1/models/{model_id}/versions/{version}/resolve.
+ */
+@Serializable
+data class ModelResolveResponse(
+    @SerialName("model_id")
+    val modelId: String,
+    @SerialName("version")
+    val version: String,
+    @SerialName("format")
+    val format: String,
+    @SerialName("quantization")
+    val quantization: String? = null,
+    @SerialName("executor")
+    val executor: String? = null,
+    @SerialName("download_url")
+    val downloadUrl: String? = null,
+    @SerialName("available_formats")
+    val availableFormats: List<String> = emptyList(),
+)
+
+/**
  * Model metadata response.
  */
 @Serializable
@@ -761,4 +807,3 @@ data class SecAggUnmaskRequest(
     @SerialName("unmask_data")
     val unmaskData: String,
 )
-

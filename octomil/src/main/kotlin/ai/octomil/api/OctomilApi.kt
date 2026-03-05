@@ -14,6 +14,8 @@ import ai.octomil.api.dto.HeartbeatResponse
 import ai.octomil.api.dto.InferenceEventRequest
 import ai.octomil.api.dto.InferenceEventResponse
 import ai.octomil.api.dto.ModelDownloadResponse
+import ai.octomil.api.dto.ModelResolveRequest
+import ai.octomil.api.dto.ModelResolveResponse
 import ai.octomil.api.dto.ModelResponse
 import ai.octomil.api.dto.ModelUpdateInfo
 import ai.octomil.api.dto.ModelVersionResponse
@@ -149,6 +151,16 @@ interface OctomilApi {
         @Path("model_id") modelId: String,
         @Query("status") status: String? = "published",
     ): Response<ModelVersionResponse>
+
+    /**
+     * Resolve optimal format/runtime for a model version on this device.
+     */
+    @POST("api/v1/models/{model_id}/versions/{version}/resolve")
+    suspend fun resolveModelFormat(
+        @Path("model_id") modelId: String,
+        @Path("version") version: String,
+        @Body request: ModelResolveRequest,
+    ): Response<ModelResolveResponse>
 
     /**
      * Get a pre-signed download URL for a model.
