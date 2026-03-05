@@ -192,7 +192,7 @@ class WeightExtractor(
         val buffersVectorOffset = readFieldOffset(bb, rootOffset, fieldIndex = 4)
             ?: run {
                 Timber.w("No buffers field in model")
-            
+                return emptyMap()
             }
         val buffersVector = readVector(bb, buffersVectorOffset)
 
@@ -200,13 +200,13 @@ class WeightExtractor(
         val subgraphsVectorOffset = readFieldOffset(bb, rootOffset, fieldIndex = 2)
             ?: run {
                 Timber.w("No subgraphs field in model")
-            
+                return emptyMap()
             }
         val subgraphsVector = readVector(bb, subgraphsVectorOffset)
 
         if (subgraphsVector.isEmpty()) {
             Timber.w("No subgraphs found in model")
-        
+            return emptyMap()
         }
 
         // Process first subgraph (main graph)
@@ -227,7 +227,7 @@ class WeightExtractor(
         val tensorsVectorOffset = readFieldOffset(bb, subgraphOffset, fieldIndex = 0)
             ?: run {
                 Timber.w("No tensors field in subgraph")
-            
+                return emptyMap()
             }
         val tensorsVector = readVector(bb, tensorsVectorOffset)
 
@@ -296,7 +296,7 @@ class WeightExtractor(
         }
 
         Timber.i("Extracted ${weights.size} weight tensors from model")
-    
+        return weights
     }
 
     // =========================================================================
