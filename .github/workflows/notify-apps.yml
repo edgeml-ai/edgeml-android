@@ -1,0 +1,35 @@
+name: Notify Apps
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - '*.md'
+      - 'docs/**'
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Generate app token
+        id: app-token
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ secrets.VERSION_BOT_APP_ID }}
+          private-key: ${{ secrets.VERSION_BOT_PRIVATE_KEY }}
+          owner: octomil
+          repositories: octomil-app-android
+
+      - name: Get version
+        id: version
+        run: echo "version=$(grep OCTOMIL_VERSION gradle.properties | cut -d= -f2)" >> $GITHUB_OUTPUT
+
+      - name: Dispatch to Android app
+        uses: peter-evans/repository-dispatch@v3
+        with:
+          token: ${{ steps.app-token.outputs.token }}
+          repository: octomil/octomil-app-android
+          event-type: sdk-updated
+          client-payload: '{"sdk": "android", "version": "${{ steps.version.outputs.version }}"}'
