@@ -19,16 +19,18 @@ import kotlin.test.assertNull
 class DeepLinkHandlerTest {
 
     /**
-     * Helper to build a mock [Uri] with the given scheme, host, and query parameters.
+     * Helper to build a mock [Uri] with the given scheme, host, path, and query parameters.
      */
     private fun mockUri(
         scheme: String?,
         host: String?,
+        path: String? = null,
         queryParams: Map<String, String?> = emptyMap(),
     ): Uri {
         val uri = mockk<Uri>()
         every { uri.scheme } returns scheme
         every { uri.host } returns host
+        every { uri.path } returns path
         every { uri.getQueryParameter(any()) } returns null
         for ((key, value) in queryParams) {
             every { uri.getQueryParameter(key) } returns value
@@ -37,6 +39,7 @@ class DeepLinkHandlerTest {
             append(scheme ?: "")
             append("://")
             append(host ?: "")
+            if (path != null) append(path)
             if (queryParams.isNotEmpty()) {
                 append("?")
                 append(queryParams.entries.joinToString("&") { "${it.key}=${it.value ?: ""}" })
@@ -156,11 +159,90 @@ class DeepLinkHandlerTest {
     }
 
     // =========================================================================
+    // parse() — App Link (https://octomil.com/pair)
+    // =========================================================================
+
+    @Test
+    fun `parse returns Pair action for https octomil com pair with token and host`() {
+        val uri = mockUri(
+            scheme = "https",
+            host = "octomil.com",
+            path = "/pair",
+            queryParams = mapOf("token" to "applink-token", "host" to "https://api.octomil.com"),
+        )
+
+        val action = DeepLinkHandler.parse(uri)
+
+        assertNotNull(action)
+        assertIs<DeepLinkHandler.DeepLinkAction.Pair>(action)
+        assertEquals("applink-token", action.token)
+        assertEquals("https://api.octomil.com", action.host)
+    }
+
+    @Test
+    fun `parse returns Pair action for App Link with default host`() {
+        val uri = mockUri(
+            scheme = "https",
+            host = "octomil.com",
+            path = "/pair",
+            queryParams = mapOf("token" to "mytoken"),
+        )
+
+        val action = DeepLinkHandler.parse(uri)
+
+        assertNotNull(action)
+        assertIs<DeepLinkHandler.DeepLinkAction.Pair>(action)
+        assertEquals("mytoken", action.token)
+        assertEquals(DeepLinkHandler.DEFAULT_HOST, action.host)
+    }
+
+    @Test
+    fun `parse returns null for App Link without token`() {
+        val uri = mockUri(
+            scheme = "https",
+            host = "octomil.com",
+            path = "/pair",
+        )
+
+        val action = DeepLinkHandler.parse(uri)
+
+        assertNull(action)
+    }
+
+    @Test
+    fun `parse returns null for https with wrong host`() {
+        val uri = mockUri(
+            scheme = "https",
+            host = "example.com",
+            path = "/pair",
+            queryParams = mapOf("token" to "abc"),
+        )
+
+        val action = DeepLinkHandler.parse(uri)
+
+        assertNull(action)
+    }
+
+    @Test
+    fun `parse returns null for https octomil com with wrong path`() {
+        val uri = mockUri(
+            scheme = "https",
+            host = "octomil.com",
+            path = "/other",
+            queryParams = mapOf("token" to "abc"),
+        )
+
+        val action = DeepLinkHandler.parse(uri)
+
+        assertNull(action)
+    }
+
+    // =========================================================================
     // parse() — wrong scheme
     // =========================================================================
 
     @Test
-    fun `parse returns null for non-octomil scheme`() {
+    fun `parse returns null for non-octomil scheme with unrecognized host`() {
         val uri = mockUri(
             scheme = "https",
             host = "pair",
