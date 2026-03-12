@@ -1,7 +1,7 @@
 package ai.octomil.training
 
-import ai.octomil.runtime.DeviceStateMonitor.DeviceState
-import ai.octomil.runtime.DeviceStateMonitor.ThermalState
+import ai.octomil.runtime.adaptation.DeviceStateMonitor.DeviceState
+import ai.octomil.runtime.adaptation.DeviceStateMonitor.ThermalState
 
 /**
  * Reason why training was deemed ineligible.

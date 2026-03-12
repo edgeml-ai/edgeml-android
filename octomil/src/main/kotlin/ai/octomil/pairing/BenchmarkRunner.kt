@@ -458,10 +458,10 @@ class BenchmarkRunner(
 }
 
 /**
- * Convert a [BenchmarkReport] to the cross-SDK [ai.octomil.inference.BenchmarkResult] type.
+ * Convert a [BenchmarkReport] to the cross-SDK [ai.octomil.runtime.engines.tflite.BenchmarkResult] type.
  */
-fun BenchmarkReport.toBenchmarkResult(): ai.octomil.inference.BenchmarkResult {
-    return ai.octomil.inference.BenchmarkResult(
+fun BenchmarkReport.toBenchmarkResult(): ai.octomil.runtime.engines.tflite.BenchmarkResult {
+    return ai.octomil.runtime.engines.tflite.BenchmarkResult(
         engineName = activeDelegate ?: "tflite",
         tokensPerSecond = tokensPerSecond,
         ttftMs = ttftMs,

@@ -76,7 +76,7 @@ class LoadedModel internal constructor(
      *
      * For true streaming with chunked output (e.g. LLM token generation),
      * use [OctomilClient.predictStream] which resolves a streaming engine
-     * and emits [ai.octomil.inference.InferenceChunk] values.
+     * and emits [ai.octomil.runtime.engines.tflite.InferenceChunk] values.
      *
      * @param input Input data as a flat float array.
      * @return A [Flow] emitting a single [InferenceOutput] (or throwing on failure).
