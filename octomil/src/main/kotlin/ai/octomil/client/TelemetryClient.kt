@@ -1,6 +1,5 @@
 package ai.octomil.client
 
-import ai.octomil.api.dto.TelemetryAttributes
 import ai.octomil.api.dto.TelemetryV2Event
 import ai.octomil.wrapper.TelemetryQueue
 import kotlinx.serialization.json.JsonPrimitive
