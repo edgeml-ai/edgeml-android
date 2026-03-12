@@ -14,7 +14,7 @@ import kotlinx.coroutines.flow.flow
  * @param context Android application context.
  * @param steps Number of diffusion steps.
  */
-class ImageEngine(
+internal class ImageEngine(
     private val context: Context,
     private val steps: Int = 20,
 ) : StreamingInferenceEngine {

@@ -11,7 +11,7 @@ import java.util.concurrent.CopyOnWriteArrayList
  * Composite key for engine lookup: modality + optional engine hint.
  * A null [engine] means "default for this modality".
  */
-data class EngineKey(val modality: Modality, val engine: Engine?)
+internal data class EngineKey(val modality: Modality, val engine: Engine?)
 
 /**
  * Factory that creates a [StreamingInferenceEngine] given a context and optional model file.

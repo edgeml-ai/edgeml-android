@@ -14,7 +14,7 @@ import kotlinx.coroutines.flow.flow
  * @param context Android application context.
  * @param totalFrames Number of audio frames to generate.
  */
-class AudioEngine(
+internal class AudioEngine(
     private val context: Context,
     private val totalFrames: Int = 80,
 ) : StreamingInferenceEngine {

@@ -53,7 +53,7 @@ data class RankedEngine(
  * Cross-SDK inference metrics for a completed generation.
  */
 @Serializable
-data class InferenceMetrics(
+internal data class InferenceMetrics(
     @SerialName("ttfc_ms")
     val ttfcMs: Double,
     @SerialName("prompt_tokens")
@@ -74,7 +74,7 @@ data class InferenceMetrics(
  * A single chunk of generated output with performance metadata.
  */
 @Serializable
-data class GenerationChunk(
+internal data class GenerationChunk(
     @SerialName("text")
     val text: String,
     @SerialName("token_count")
@@ -89,7 +89,7 @@ data class GenerationChunk(
  * Statistics for the inference cache.
  */
 @Serializable
-data class CacheStats(
+internal data class CacheStats(
     @SerialName("hits")
     val hits: Int,
     @SerialName("misses")

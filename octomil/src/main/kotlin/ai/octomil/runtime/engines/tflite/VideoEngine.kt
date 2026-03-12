@@ -14,7 +14,7 @@ import kotlinx.coroutines.flow.flow
  * @param context Android application context.
  * @param frameCount Number of frames to generate.
  */
-class VideoEngine(
+internal class VideoEngine(
     private val context: Context,
     private val frameCount: Int = 30,
 ) : StreamingInferenceEngine {

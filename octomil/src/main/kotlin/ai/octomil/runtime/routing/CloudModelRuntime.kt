@@ -45,7 +45,7 @@ import java.util.concurrent.TimeUnit
  * @param model     Model identifier sent in the request body. Defaults to `"default"`.
  * @param httpClient OkHttp client instance; allows injection for testing.
  */
-class CloudModelRuntime(
+internal class CloudModelRuntime(
     private val serverUrl: String = "https://api.octomil.com",
     private val apiKey: String? = null,
     private val model: String = "default",

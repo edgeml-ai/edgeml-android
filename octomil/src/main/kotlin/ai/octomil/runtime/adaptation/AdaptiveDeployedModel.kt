@@ -35,7 +35,7 @@ import java.nio.ByteBuffer
  * monitor.stopMonitoring()
  * ```
  */
-class AdaptiveDeployedModel(
+internal class AdaptiveDeployedModel(
     private val modelFile: File,
     private val context: Context,
     private val stateMonitor: DeviceStateMonitor,

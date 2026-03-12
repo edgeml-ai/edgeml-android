@@ -16,7 +16,7 @@ import kotlinx.coroutines.flow.Flow
  * runtime. With [RoutingPolicy.Auto], it prefers local inference and falls back to
  * cloud when no local runtime is available.
  */
-class RouterModelRuntime(
+internal class RouterModelRuntime(
     private val localFactory: RuntimeFactory? = null,
     private val cloudFactory: RuntimeFactory? = null,
     private val defaultPolicy: RoutingPolicy = RoutingPolicy.Auto(),

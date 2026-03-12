@@ -40,7 +40,7 @@ import timber.log.Timber
  * - Memory: all API levels ([ActivityManager.MemoryInfo])
  * - Power-save mode: API 21+ ([PowerManager.isPowerSaveMode])
  */
-class DeviceStateMonitor(private val context: Context) {
+internal class DeviceStateMonitor(private val context: Context) {
 
     /**
      * Snapshot of device state relevant for compute adaptation.

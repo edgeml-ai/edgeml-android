@@ -32,7 +32,7 @@ import java.nio.ByteBuffer
  * interpreter.close()
  * ```
  */
-class AdaptiveInterpreter(
+internal class AdaptiveInterpreter(
     private val modelFile: File,
     @Suppress("unused") private val context: Context,
 ) {

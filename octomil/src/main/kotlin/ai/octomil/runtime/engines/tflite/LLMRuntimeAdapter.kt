@@ -11,7 +11,7 @@ import ai.octomil.runtime.core.RuntimeUsage
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 
-class LLMRuntimeAdapter(
+internal class LLMRuntimeAdapter(
     private val llmRuntime: LLMRuntime,
     override val capabilities: RuntimeCapabilities = RuntimeCapabilities(
         supportsToolCalls = false,

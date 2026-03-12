@@ -18,7 +18,7 @@ import java.io.File
  * @param maxTokens Maximum tokens to generate.
  * @param temperature Sampling temperature.
  */
-class LLMEngine(
+internal class LLMEngine(
     private val context: Context,
     private val modelPath: File? = null,
     private val maxTokens: Int = 512,

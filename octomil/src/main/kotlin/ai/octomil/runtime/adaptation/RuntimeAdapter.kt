@@ -7,7 +7,7 @@ package ai.octomil.runtime.adaptation
  * snapshot and returns a [ComputeRecommendation] that the interpreter layer uses
  * to configure the TFLite delegate and threading.
  */
-object RuntimeAdapter {
+internal object RuntimeAdapter {
 
     /**
      * Recommendation for how to configure the inference interpreter.
