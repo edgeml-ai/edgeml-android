@@ -2,12 +2,13 @@ package ai.octomil
 
 import ai.octomil.chat.LLMRuntimeRegistry
 import ai.octomil.chat.OctomilChat
-import ai.octomil.inference.EngineRegistry
-import ai.octomil.inference.Modality
 import ai.octomil.models.CachedModel
 import ai.octomil.responses.OctomilResponses
-import ai.octomil.responses.runtime.LLMRuntimeAdapter
-import ai.octomil.responses.runtime.ModelRuntimeRegistry
+import ai.octomil.runtime.core.Engine
+import ai.octomil.runtime.core.ModelRuntimeRegistry
+import ai.octomil.runtime.engines.tflite.EngineRegistry
+import ai.octomil.runtime.engines.tflite.LLMRuntimeAdapter
+import ai.octomil.runtime.engines.tflite.Modality
 import ai.octomil.training.TFLiteTrainer
 import ai.octomil.workflows.WorkflowRunner
 import android.content.Context

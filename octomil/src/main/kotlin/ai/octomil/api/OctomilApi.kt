@@ -504,8 +504,8 @@ interface OctomilApi {
      */
     @POST("api/v1/deploy/adapt")
     suspend fun getAdaptationRecommendation(
-        @Body request: ai.octomil.runtime.AdaptationRequest,
-    ): Response<ai.octomil.runtime.AdaptationRecommendation>
+        @Body request: ai.octomil.runtime.adaptation.AdaptationRequest,
+    ): Response<ai.octomil.runtime.adaptation.AdaptationRecommendation>
 
     /**
      * Get a fallback recommendation after a delegate or model format fails.
@@ -518,6 +518,6 @@ interface OctomilApi {
      */
     @POST("api/v1/deploy/fallback")
     suspend fun getFallback(
-        @Body request: ai.octomil.runtime.FallbackRequest,
-    ): Response<ai.octomil.runtime.FallbackRecommendation>
+        @Body request: ai.octomil.runtime.adaptation.FallbackRequest,
+    ): Response<ai.octomil.runtime.adaptation.FallbackRecommendation>
 }

@@ -2,8 +2,8 @@ package ai.octomil.chat
 
 import ai.octomil.ModelResolver
 import ai.octomil.responses.OctomilResponses
-import ai.octomil.responses.runtime.LLMRuntimeAdapter
-import ai.octomil.responses.runtime.ModelRuntimeRegistry
+import ai.octomil.runtime.core.ModelRuntimeRegistry
+import ai.octomil.runtime.engines.tflite.LLMRuntimeAdapter
 import android.content.Context
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.SerialName
