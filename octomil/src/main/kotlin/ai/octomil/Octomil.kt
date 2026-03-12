@@ -45,10 +45,10 @@ object Octomil {
      */
     fun init(context: Context) {
         appContext = context.applicationContext
-        ModelRuntimeRegistry.defaultFactory = { modelId ->
-            val ctx = appContext ?: return@defaultFactory null
-            val file = ModelResolver.default().resolveSync(ctx, modelId) ?: return@defaultFactory null
-            val llm = LLMRuntimeRegistry.factory?.invoke(file) ?: return@defaultFactory null
+        ModelRuntimeRegistry.defaultFactory = factory@{ modelId ->
+            val ctx = appContext ?: return@factory null
+            val file = ModelResolver.default().resolveSync(ctx, modelId) ?: return@factory null
+            val llm = LLMRuntimeRegistry.factory?.invoke(file) ?: return@factory null
             LLMRuntimeAdapter(llm)
         }
     }
