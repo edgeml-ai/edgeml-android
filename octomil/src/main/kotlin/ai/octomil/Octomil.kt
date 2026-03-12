@@ -9,6 +9,7 @@ import ai.octomil.responses.OctomilResponses
 import ai.octomil.responses.runtime.LLMRuntimeAdapter
 import ai.octomil.responses.runtime.ModelRuntimeRegistry
 import ai.octomil.training.TFLiteTrainer
+import ai.octomil.workflows.WorkflowRunner
 import android.content.Context
 import java.io.File
 
@@ -65,6 +66,21 @@ object Octomil {
      * ```
      */
     val responses: OctomilResponses by lazy { OctomilResponses() }
+
+    /**
+     * Workflow runner for multi-step orchestrated inference pipelines.
+     *
+     * ```kotlin
+     * val result = Octomil.workflows.run(
+     *     Workflow(name = "summarize-then-translate", steps = listOf(
+     *         WorkflowStep.Inference(model = "phi-4-mini", instructions = "Summarize this text"),
+     *         WorkflowStep.Inference(model = "phi-4-mini", instructions = "Translate to Spanish"),
+     *     )),
+     *     input = "Long article text here...",
+     * )
+     * ```
+     */
+    val workflows: WorkflowRunner by lazy { WorkflowRunner(responses) }
 
     /**
      * Load a model by name with automatic resolution.
