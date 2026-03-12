@@ -5,6 +5,7 @@ import ai.octomil.chat.OctomilChat
 import ai.octomil.inference.EngineRegistry
 import ai.octomil.inference.Modality
 import ai.octomil.models.CachedModel
+import ai.octomil.responses.OctomilResponses
 import ai.octomil.training.TFLiteTrainer
 import android.content.Context
 import java.io.File
@@ -23,6 +24,20 @@ import java.io.File
  * The [LocalModel.cachedModel] property bridges local and server workflows.
  */
 object Octomil {
+
+    /**
+     * Response API for structured on-device inference.
+     *
+     * ```kotlin
+     * val response = Octomil.responses.create(
+     *     ResponseRequest(
+     *         model = "phi-4-mini",
+     *         input = listOf(InputItem.text("What is machine learning?")),
+     *     )
+     * )
+     * ```
+     */
+    val responses: OctomilResponses by lazy { OctomilResponses() }
 
     /**
      * Load a model by name with automatic resolution.
