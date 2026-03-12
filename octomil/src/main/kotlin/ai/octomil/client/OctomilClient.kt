@@ -32,7 +32,7 @@ import ai.octomil.storage.SecureStorage
 import ai.octomil.sync.EventQueue
 import ai.octomil.sync.EventTypes
 import ai.octomil.sync.WorkManagerSync
-import ai.octomil.runtime.DeviceStateMonitor
+import ai.octomil.runtime.adaptation.DeviceStateMonitor
 import ai.octomil.training.EligibilityResult
 import ai.octomil.training.TFLiteTrainer
 import ai.octomil.training.MissingTrainingSignatureException
@@ -643,22 +643,22 @@ class OctomilClient private constructor(
     /**
      * Stream generative inference with automatic timing instrumentation.
      *
-     * Each emitted [ai.octomil.inference.InferenceChunk] carries per-chunk
+     * Each emitted [ai.octomil.runtime.engines.tflite.InferenceChunk] carries per-chunk
      * latency. On stream completion a [ai.octomil.inference.StreamingInferenceResult]
      * is automatically reported to the server.
      *
      * @param input Modality-specific input (e.g. prompt string for text).
      * @param modality Output modality.
      * @param engine Optional custom engine; defaults to modality-appropriate engine.
-     * @return A [Flow] of [ai.octomil.inference.InferenceChunk].
+     * @return A [Flow] of [ai.octomil.runtime.engines.tflite.InferenceChunk].
      */
     fun predictStream(
         input: Any,
-        modality: ai.octomil.inference.Modality,
-        engine: ai.octomil.inference.StreamingInferenceEngine? = null,
+        modality: ai.octomil.runtime.engines.tflite.Modality,
+        engine: ai.octomil.runtime.engines.tflite.StreamingInferenceEngine? = null,
         modelId: String? = null,
         version: String? = null,
-    ): Flow<ai.octomil.inference.InferenceChunk> {
+    ): Flow<ai.octomil.runtime.engines.tflite.InferenceChunk> {
         checkReady()
 
         val resolvedEngine = resolveStreamingEngine(engine, modality)
@@ -703,7 +703,7 @@ class OctomilClient private constructor(
                     chunkCount++
 
                     emit(
-                        ai.octomil.inference.InferenceChunk(
+                        ai.octomil.runtime.engines.tflite.InferenceChunk(
                             index = chunkCount - 1,
                             data = rawChunk.data,
                             modality = modality,
@@ -758,10 +758,10 @@ class OctomilClient private constructor(
     }
 
     private fun resolveStreamingEngine(
-        engine: ai.octomil.inference.StreamingInferenceEngine?,
-        modality: ai.octomil.inference.Modality,
-    ): ai.octomil.inference.StreamingInferenceEngine =
-        engine ?: ai.octomil.inference.EngineRegistry.resolve(modality, context = context)
+        engine: ai.octomil.runtime.engines.tflite.StreamingInferenceEngine?,
+        modality: ai.octomil.runtime.engines.tflite.Modality,
+    ): ai.octomil.runtime.engines.tflite.StreamingInferenceEngine =
+        engine ?: ai.octomil.runtime.engines.tflite.EngineRegistry.resolve(modality, context = context)
 
     private suspend fun emitStreamingV2Event(
         name: String,

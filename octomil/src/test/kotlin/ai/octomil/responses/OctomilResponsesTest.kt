@@ -1,13 +1,13 @@
 package ai.octomil.responses
 
-import ai.octomil.responses.runtime.ModelRuntime
-import ai.octomil.responses.runtime.RuntimeCapabilities
-import ai.octomil.responses.runtime.RuntimeChunk
-import ai.octomil.responses.runtime.RuntimeRequest
-import ai.octomil.responses.runtime.RuntimeResponse
-import ai.octomil.responses.runtime.RuntimeToolCall
-import ai.octomil.responses.runtime.RuntimeToolCallDelta
-import ai.octomil.responses.runtime.RuntimeUsage
+import ai.octomil.runtime.core.ModelRuntime
+import ai.octomil.runtime.core.RuntimeCapabilities
+import ai.octomil.runtime.core.RuntimeChunk
+import ai.octomil.runtime.core.RuntimeRequest
+import ai.octomil.runtime.core.RuntimeResponse
+import ai.octomil.runtime.core.RuntimeToolCall
+import ai.octomil.runtime.core.RuntimeToolCallDelta
+import ai.octomil.runtime.core.RuntimeUsage
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.toList

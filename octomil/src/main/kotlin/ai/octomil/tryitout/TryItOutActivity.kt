@@ -2,7 +2,7 @@ package ai.octomil.tryitout
 
 import ai.octomil.pairing.PairingManager
 import ai.octomil.pairing.ui.OctomilPairingTheme
-import ai.octomil.runtime.AdaptiveInterpreter
+import ai.octomil.runtime.adaptation.AdaptiveInterpreter
 import android.content.Context
 import android.content.Intent
 import android.os.Bundle
