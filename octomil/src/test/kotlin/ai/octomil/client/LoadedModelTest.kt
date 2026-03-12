@@ -1,5 +1,6 @@
 package ai.octomil.client
 
+import ai.octomil.models.InferenceInput
 import ai.octomil.models.InferenceOutput
 import ai.octomil.testCachedModel
 import ai.octomil.training.TFLiteTrainer
@@ -9,9 +10,12 @@ import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
+import kotlinx.coroutines.flow.single
+import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.test.runTest
 import org.junit.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
@@ -74,6 +78,55 @@ class LoadedModelTest {
         val result = loadedModel.predict(floatArrayOf(1.0f))
 
         assertTrue(result.isFailure)
+    }
+
+    // =========================================================================
+    // predictStream
+    // =========================================================================
+
+    @Test
+    fun `predictStream emits single InferenceOutput on success`() = runTest {
+        val expectedOutput = InferenceOutput(
+            data = floatArrayOf(0.2f, 0.8f),
+            shape = intArrayOf(1, 2),
+            inferenceTimeMs = 15L,
+        )
+        coEvery { trainer.runInference(any<FloatArray>()) } returns Result.success(expectedOutput)
+
+        val results = loadedModel.predictStream(floatArrayOf(1.0f, 2.0f)).toList()
+
+        assertEquals(1, results.size)
+        assertEquals(15L, results[0].inferenceTimeMs)
+        assertTrue(results[0].data.contentEquals(floatArrayOf(0.2f, 0.8f)))
+    }
+
+    @Test
+    fun `predictStream throws on inference failure`() = runTest {
+        coEvery { trainer.runInference(any<FloatArray>()) } returns
+            Result.failure(RuntimeException("model closed"))
+
+        assertFailsWith<RuntimeException> {
+            loadedModel.predictStream(floatArrayOf(1.0f)).single()
+        }
+    }
+
+    @Test
+    fun `predictStream with InferenceInput emits single result`() = runTest {
+        val expectedOutput = InferenceOutput(
+            data = floatArrayOf(0.5f, 0.5f),
+            shape = intArrayOf(1, 2),
+            inferenceTimeMs = 10L,
+        )
+        coEvery { trainer.runInference(any<FloatArray>()) } returns Result.success(expectedOutput)
+
+        val input = InferenceInput(
+            data = floatArrayOf(3.0f, 4.0f),
+            shape = intArrayOf(1, 2),
+        )
+        val results = loadedModel.predictStream(input).toList()
+
+        assertEquals(1, results.size)
+        assertEquals(10L, results[0].inferenceTimeMs)
     }
 
     // =========================================================================
