@@ -2,6 +2,7 @@ package ai.octomil.pairing.ui
 
 import ai.octomil.pairing.BenchmarkReport
 import ai.octomil.pairing.DeploymentInfo
+import ai.octomil.pairing.DeploymentResult
 import ai.octomil.pairing.PairingException
 import ai.octomil.pairing.PairingManager
 import ai.octomil.pairing.PairingSession
@@ -113,7 +114,7 @@ class PairingViewModelTest {
             format = "tensorflow_lite",
             sizeBytes = 2_700_000_000L,
         )
-        coEvery { pairingManager.executeDeployment(any()) } returns testReport
+        coEvery { pairingManager.executeDeployment(any()) } returns DeploymentResult(report = testReport, modelFilePath = null)
         coEvery { pairingManager.submitBenchmark("TOKEN123", any()) } returns Unit
 
         val viewModel = createViewModel()
@@ -137,7 +138,7 @@ class PairingViewModelTest {
             format = "onnx",
             sizeBytes = 1_000_000L,
         )
-        coEvery { pairingManager.executeDeployment(any()) } returns testReport
+        coEvery { pairingManager.executeDeployment(any()) } returns DeploymentResult(report = testReport, modelFilePath = null)
         coEvery { pairingManager.submitBenchmark("TOKEN123", any()) } returns Unit
 
         val viewModel = createViewModel()
@@ -309,7 +310,7 @@ class PairingViewModelTest {
             format = "tensorflow_lite",
             sizeBytes = 100L,
         )
-        coEvery { pairingManager.executeDeployment(any()) } returns testReport
+        coEvery { pairingManager.executeDeployment(any()) } returns DeploymentResult(report = testReport, modelFilePath = null)
         coEvery { pairingManager.submitBenchmark("TOKEN123", any()) } returns Unit
 
         viewModel.retry()
@@ -356,7 +357,7 @@ class PairingViewModelTest {
         coEvery { pairingManager.executeDeployment(any()) } coAnswers {
             // Capture the Downloading state that should have been set before this call
             states.add(PairingState.Downloading(0f, "phi-4-mini", 0L, 2_700_000_000L))
-            testReport
+            DeploymentResult(report = testReport, modelFilePath = null)
         }
         coEvery { pairingManager.submitBenchmark("TOKEN123", any()) } returns Unit
 

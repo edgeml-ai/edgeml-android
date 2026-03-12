@@ -102,12 +102,12 @@ class PairingViewModel(
                     totalBytes = deployment.sizeBytes ?: 0L,
                 )
 
-                // Step 4: Download + benchmark
+                // Step 4: Download + benchmark + persist
                 Timber.d("Pairing UI: executing deployment for %s", deployment.modelName)
-                val report = pairingManager.executeDeployment(deployment)
+                val result = pairingManager.executeDeployment(deployment)
 
                 // Step 5: Submit benchmark
-                pairingManager.submitBenchmark(token, report)
+                pairingManager.submitBenchmark(token, result.report)
 
                 // Step 6: Success
                 _state.value = PairingState.Success(

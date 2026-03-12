@@ -1,8 +1,12 @@
 package ai.octomil.tryitout
 
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -32,6 +36,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -67,12 +74,15 @@ fun ClassificationContent(
     topK: Int = 5,
     modifier: Modifier = Modifier,
 ) {
+    val context = LocalContext.current
     var selectedImageUri by remember { mutableStateOf<Uri?>(null) }
+    var selectedBitmap by remember { mutableStateOf<Bitmap?>(null) }
 
     val imagePickerLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.GetContent(),
+        contract = ActivityResultContracts.PickVisualMedia(),
     ) { uri: Uri? ->
         selectedImageUri = uri
+        selectedBitmap = uri?.let { loadClassificationBitmap(context, it) }
     }
 
     Column(
@@ -95,24 +105,14 @@ fun ClassificationContent(
                 modifier = Modifier.fillMaxSize(),
                 contentAlignment = Alignment.Center,
             ) {
-                if (selectedImageUri != null) {
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                    ) {
-                        Text(
-                            text = "Image selected",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Medium,
-                            color = MaterialTheme.colorScheme.primary,
-                        )
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text(
-                            text = selectedImageUri.toString().takeLast(40),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            textAlign = TextAlign.Center,
-                        )
-                    }
+                val bmp = selectedBitmap
+                if (bmp != null) {
+                    Image(
+                        bitmap = bmp.asImageBitmap(),
+                        contentDescription = "Selected image",
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = ContentScale.Fit,
+                    )
                 } else {
                     Text(
                         text = "No image selected",
@@ -125,26 +125,17 @@ fun ClassificationContent(
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        // Image selection buttons
-        Row(
+        // Image selection button
+        OutlinedButton(
+            onClick = {
+                imagePickerLauncher.launch(
+                    PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly),
+                )
+            },
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            shape = RoundedCornerShape(12.dp),
         ) {
-            OutlinedButton(
-                onClick = { imagePickerLauncher.launch("image/*") },
-                modifier = Modifier.weight(1f),
-                shape = RoundedCornerShape(12.dp),
-            ) {
-                Text("Gallery")
-            }
-
-            OutlinedButton(
-                onClick = { imagePickerLauncher.launch("image/*") },
-                modifier = Modifier.weight(1f),
-                shape = RoundedCornerShape(12.dp),
-            ) {
-                Text("Camera")
-            }
+            Text(if (selectedBitmap != null) "Change Image" else "Select Image")
         }
 
         Spacer(modifier = Modifier.height(16.dp))
@@ -152,12 +143,13 @@ fun ClassificationContent(
         // Classify button
         Button(
             onClick = {
-                val imageHash = selectedImageUri?.hashCode()?.toFloat() ?: 0f
-                onRunInference(floatArrayOf(imageHash))
+                val bmp = selectedBitmap ?: return@Button
+                val input = bitmapToFloatArray(bmp)
+                onRunInference(input)
             },
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(12.dp),
-            enabled = selectedImageUri != null && state !is TryItOutState.Loading,
+            enabled = selectedBitmap != null && state !is TryItOutState.Loading,
         ) {
             if (state is TryItOutState.Loading) {
                 CircularProgressIndicator(
@@ -269,4 +261,17 @@ internal fun extractTopKLabels(output: FloatArray, k: Int): List<ClassificationL
         .mapIndexed { index, confidence -> ClassificationLabel(index, "Class $index", confidence) }
         .sortedByDescending { it.confidence }
         .take(k)
+}
+
+private const val CLASSIFICATION_IMAGE_SIZE = 224
+
+private fun loadClassificationBitmap(context: android.content.Context, uri: Uri): Bitmap? {
+    return try {
+        val stream = context.contentResolver.openInputStream(uri) ?: return null
+        val original = BitmapFactory.decodeStream(stream)
+        stream.close()
+        Bitmap.createScaledBitmap(original, CLASSIFICATION_IMAGE_SIZE, CLASSIFICATION_IMAGE_SIZE, true)
+    } catch (e: Exception) {
+        null
+    }
 }
