@@ -14,4 +14,14 @@ data class ResponseRequest(
     val topP: Float? = null,
     val stop: List<String>? = null,
     val metadata: Map<String, String>? = null,
-)
+    /** System prompt shorthand -- prepended as a system message to input. */
+    val instructions: String? = null,
+    /** Previous response ID for conversation chaining. */
+    val previousResponseId: String? = null,
+) {
+    companion object {
+        /** Create a simple text request. */
+        fun text(model: String, text: String): ResponseRequest =
+            ResponseRequest(model = model, input = listOf(InputItem.text(text)))
+    }
+}
