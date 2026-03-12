@@ -1,8 +1,9 @@
 package ai.octomil.chat
 
 import ai.octomil.ModelResolver
-import ai.octomil.inference.EngineRegistry
-import ai.octomil.inference.Modality
+import ai.octomil.responses.OctomilResponses
+import ai.octomil.responses.runtime.LLMRuntimeAdapter
+import ai.octomil.responses.runtime.ModelRuntimeRegistry
 import android.content.Context
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.SerialName
@@ -105,15 +106,14 @@ class OctomilInterceptor(
     private suspend fun handleChatCompletion(request: OpenAIRequest): OpenAIResponse {
         val modelName = request.model
         val modelFile = resolver.resolve(context, modelName)
-        val runtime = modelFile?.let { file ->
+        val llmRuntime = modelFile?.let { file ->
             LLMRuntimeRegistry.factory?.invoke(file)
         }
-        val engine = EngineRegistry.resolve(
-            modality = Modality.TEXT,
-            context = context,
-            modelFile = modelFile,
-        )
-        val chat = OctomilChat(modelName = modelName, engine = engine, runtime = runtime)
+        if (llmRuntime != null) {
+            ModelRuntimeRegistry.register(modelName, LLMRuntimeAdapter(llmRuntime))
+        }
+        val responses = OctomilResponses()
+        val chat = OctomilChat(modelName = modelName, responses = responses)
 
         val messages = request.messages.map { msg ->
             ChatMessage(

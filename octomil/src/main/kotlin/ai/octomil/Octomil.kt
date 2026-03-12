@@ -291,16 +291,8 @@ object Octomil {
         context: Context,
         name: String,
     ): OctomilChat {
-        val modelFile = ModelResolver.default().resolveSync(context, name)
-        val runtime = modelFile?.let { file ->
-            LLMRuntimeRegistry.factory?.invoke(file)
-        }
-        val engine = EngineRegistry.resolve(
-            modality = Modality.TEXT,
-            context = context,
-            modelFile = modelFile,
-        )
-        return OctomilChat(modelName = name, engine = engine, runtime = runtime)
+        val responses = buildResponses(context, name, ModelResolver.default())
+        return OctomilChat(modelName = name, responses = responses)
     }
 
     /**
@@ -311,16 +303,27 @@ object Octomil {
         name: String,
         resolver: ModelResolver,
     ): OctomilChat {
+        val responses = buildResponses(context, name, resolver)
+        return OctomilChat(modelName = name, responses = responses)
+    }
+
+    /**
+     * Build an [OctomilResponses] for the given model, registering a runtime
+     * from [LLMRuntimeRegistry] or the engine registry if needed.
+     */
+    private fun buildResponses(
+        context: Context,
+        name: String,
+        resolver: ModelResolver,
+    ): OctomilResponses {
         val modelFile = resolver.resolveSync(context, name)
-        val runtime = modelFile?.let { file ->
+        val llmRuntime = modelFile?.let { file ->
             LLMRuntimeRegistry.factory?.invoke(file)
         }
-        val engine = EngineRegistry.resolve(
-            modality = Modality.TEXT,
-            context = context,
-            modelFile = modelFile,
-        )
-        return OctomilChat(modelName = name, engine = engine, runtime = runtime)
+        if (llmRuntime != null) {
+            ModelRuntimeRegistry.register(name, LLMRuntimeAdapter(llmRuntime))
+        }
+        return OctomilResponses()
     }
 
     private fun resolveEngine(filename: String, engine: Engine): Engine {
