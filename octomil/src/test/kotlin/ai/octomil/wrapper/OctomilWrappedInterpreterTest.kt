@@ -1,5 +1,6 @@
 package ai.octomil.wrapper
 
+import ai.octomil.api.dto.AnyValue
 import ai.octomil.api.dto.ExportLogsServiceRequest
 import io.mockk.Runs
 import io.mockk.every
@@ -272,18 +273,24 @@ class OctomilWrappedInterpreterTest {
         queue.flush()
 
         assertEquals(1, batches.size)
-        val events = batches[0].events
+        val logRecords = batches[0].resourceLogs.flatMap { rl ->
+            rl.scopeLogs.flatMap { sl -> sl.logRecords }
+        }
         // Should contain both the inference.completed and inference.started events
-        val names = events.map { it.name }
+        val names = logRecords.mapNotNull { (it.body as? AnyValue.StringValue)?.stringValue }
         assertTrue("inference.started" in names, "Expected inference.started, got: $names")
         assertTrue("inference.completed" in names, "Expected inference.completed, got: $names")
 
         // inference.started should appear in the batch (order may vary since
         // they're in separate queues, but both must be present)
-        val startedEvent = events.first { it.name == "inference.started" }
+        val startedRecord = logRecords.first {
+            (it.body as? AnyValue.StringValue)?.stringValue == "inference.started"
+        }
+        val modelIdAttr = startedRecord.attributes?.firstOrNull { it.key == "model.id" }
+        assertNotNull(modelIdAttr, "Expected model.id attribute on inference.started")
         assertEquals(
-            kotlinx.serialization.json.JsonPrimitive("my-model"),
-            startedEvent.attributes["model.id"],
+            "my-model",
+            (modelIdAttr.value as AnyValue.StringValue).stringValue,
         )
 
         wrapper.close()
