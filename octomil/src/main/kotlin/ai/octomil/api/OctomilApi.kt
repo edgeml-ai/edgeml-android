@@ -249,6 +249,18 @@ interface OctomilApi {
     ): Response<Unit>
 
     // =========================================================================
+    // Control Plane Sync
+    // =========================================================================
+
+    /**
+     * Fetch the latest control-plane configuration (assignments, rollouts).
+     */
+    @GET("api/v1/control/sync")
+    suspend fun syncControl(
+        @Query("org_id") orgId: String,
+    ): Response<ai.octomil.control.ControlSyncResponse>
+
+    // =========================================================================
     // Organization Settings
     // =========================================================================
 

@@ -112,6 +112,11 @@ class OctomilClient private constructor(
         ai.octomil.models.OctomilModels(modelManager)
     }
 
+    /** Control plane client for syncing remote configuration, assignments, and rollouts. */
+    val control: ai.octomil.control.ControlPlaneClient by lazy {
+        ai.octomil.control.ControlPlaneClient(api, config.orgId)
+    }
+
     /** Network connectivity monitor. Lazily initialized to avoid ClassCastException in test environments. */
     val networkMonitor: NetworkMonitor by lazy { NetworkMonitor.getInstance(this.context) }
 
