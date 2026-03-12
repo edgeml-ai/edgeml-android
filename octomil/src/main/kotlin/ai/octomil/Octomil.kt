@@ -6,6 +6,8 @@ import ai.octomil.inference.EngineRegistry
 import ai.octomil.inference.Modality
 import ai.octomil.models.CachedModel
 import ai.octomil.responses.OctomilResponses
+import ai.octomil.responses.runtime.LLMRuntimeAdapter
+import ai.octomil.responses.runtime.ModelRuntimeRegistry
 import ai.octomil.training.TFLiteTrainer
 import android.content.Context
 import java.io.File
@@ -24,6 +26,31 @@ import java.io.File
  * The [LocalModel.cachedModel] property bridges local and server workflows.
  */
 object Octomil {
+
+    private var appContext: Context? = null
+
+    /**
+     * Initialize the Octomil SDK with an Android context.
+     *
+     * Wires the LLM runtime registry into the model runtime registry so that
+     * `Octomil.responses` can resolve on-device LLM runtimes automatically.
+     *
+     * Call this once in `Application.onCreate()`:
+     * ```kotlin
+     * Octomil.init(this)
+     * ```
+     *
+     * @param context Android context (application context is retained).
+     */
+    fun init(context: Context) {
+        appContext = context.applicationContext
+        ModelRuntimeRegistry.defaultFactory = { modelId ->
+            val ctx = appContext ?: return@defaultFactory null
+            val file = ModelResolver.default().resolveSync(ctx, modelId) ?: return@defaultFactory null
+            val llm = LLMRuntimeRegistry.factory?.invoke(file) ?: return@defaultFactory null
+            LLMRuntimeAdapter(llm)
+        }
+    }
 
     /**
      * Response API for structured on-device inference.
