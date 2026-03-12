@@ -110,7 +110,8 @@ class OctomilInterceptor(
             LLMRuntimeRegistry.factory?.invoke(file)
         }
         if (llmRuntime != null) {
-            ModelRuntimeRegistry.register(modelName, LLMRuntimeAdapter(llmRuntime))
+            val adapter = LLMRuntimeAdapter(llmRuntime)
+            ModelRuntimeRegistry.register(modelName) { adapter }
         }
         val responses = OctomilResponses()
         val chat = OctomilChat(modelName = modelName, responses = responses)

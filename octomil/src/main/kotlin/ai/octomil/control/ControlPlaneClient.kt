@@ -9,7 +9,7 @@ import timber.log.Timber
  * Response DTO from GET /api/v1/control/sync.
  */
 @Serializable
-internal data class ControlSyncResponse(
+data class ControlSyncResponse(
     @SerialName("config_version") val configVersion: String,
     val assignments: Map<String, String> = emptyMap(),
     val rollouts: Map<String, String> = emptyMap(),

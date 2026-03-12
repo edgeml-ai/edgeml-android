@@ -321,7 +321,8 @@ object Octomil {
             LLMRuntimeRegistry.factory?.invoke(file)
         }
         if (llmRuntime != null) {
-            ModelRuntimeRegistry.register(name, LLMRuntimeAdapter(llmRuntime))
+            val adapter = LLMRuntimeAdapter(llmRuntime)
+            ModelRuntimeRegistry.register(name) { adapter }
         }
         return OctomilResponses()
     }
