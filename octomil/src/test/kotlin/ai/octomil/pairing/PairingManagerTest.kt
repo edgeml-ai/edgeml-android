@@ -84,6 +84,7 @@ class PairingManagerTest {
         cacheDir.mkdirs()
 
         every { context.cacheDir } returns cacheDir
+        every { context.filesDir } returns cacheDir // Use same dir for persistence in tests
         every { context.applicationContext } returns context
 
         // Mock DeviceCapabilities
@@ -340,10 +341,11 @@ class PairingManagerTest {
 
         every { benchmarkRunner.run(any(), eq("test-model"), any()) } returns testBenchmarkReport
 
-        val report = pairingManager.executeDeployment(deployment)
+        val result = pairingManager.executeDeployment(deployment)
 
-        assertEquals("test-model", report.modelName)
-        assertEquals(11, report.inferenceCount)
+        assertEquals("test-model", result.report.modelName)
+        assertEquals(11, result.report.inferenceCount)
+        assertNotNull(result.modelFilePath)
 
         mockServer.shutdown()
     }
@@ -421,9 +423,9 @@ class PairingManagerTest {
         )
         coEvery { api.getPairingSession("ABC123") } returns Response.success(deployingSessionWithUrl)
 
-        val report = pairingManager.pair("ABC123", timeoutMs = 5_000L)
+        val result = pairingManager.pair("ABC123", timeoutMs = 5_000L)
 
-        assertEquals("mobilenet-v2", report.modelName)
+        assertEquals("mobilenet-v2", result.report.modelName)
 
         // Verify all API calls were made
         coVerify { api.connectToPairing("ABC123", any()) }

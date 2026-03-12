@@ -38,6 +38,15 @@ import java.util.concurrent.TimeUnit
  * val report = pairingManager.executeDeployment(deployment)
  * ```
  */
+/**
+ * Result of executing a deployment: benchmark report plus the persisted model file.
+ */
+data class DeploymentResult(
+    val report: BenchmarkReport,
+    /** Path to the model file persisted on disk for inference. Null if persistence failed. */
+    val modelFilePath: String?,
+)
+
 class PairingManager(
     private val api: OctomilApi,
     private val context: Context,
@@ -45,6 +54,7 @@ class PairingManager(
     private val pollIntervalMs: Long = DEFAULT_POLL_INTERVAL_MS,
 ) {
     private val modelCacheDir = File(context.cacheDir, "octomil_pairing")
+    private val modelPersistDir = File(context.filesDir, "octomil_models")
 
     private val downloadClient: OkHttpClient = OkHttpClient.Builder()
         .connectTimeout(30, TimeUnit.SECONDS)
@@ -54,6 +64,7 @@ class PairingManager(
 
     init {
         modelCacheDir.mkdirs()
+        modelPersistDir.mkdirs()
     }
 
     // =========================================================================
@@ -213,7 +224,7 @@ class PairingManager(
      * @return Benchmark report with device performance metrics.
      * @throws PairingException on download or benchmark failure.
      */
-    suspend fun executeDeployment(deployment: DeploymentInfo): BenchmarkReport {
+    suspend fun executeDeployment(deployment: DeploymentInfo): DeploymentResult {
         Timber.i(
             "Executing deployment: model=%s version=%s format=%s",
             deployment.modelName, deployment.modelVersion, deployment.format,
@@ -232,12 +243,14 @@ class PairingManager(
                 report.p50LatencyMs, report.p95LatencyMs, report.tokensPerSecond,
             )
 
-            return report
-        } finally {
-            // Clean up downloaded model file
-            if (modelFile.exists() && !modelFile.delete()) {
-                Timber.w("Failed to delete temporary model file: %s", modelFile.absolutePath)
-            }
+            // Persist model to stable location for inference
+            val persistedFile = persistModel(modelFile, deployment)
+
+            return DeploymentResult(report = report, modelFilePath = persistedFile?.absolutePath)
+        } catch (e: Exception) {
+            // Clean up on failure
+            if (modelFile.exists()) modelFile.delete()
+            throw e
         }
     }
 
@@ -254,7 +267,7 @@ class PairingManager(
     suspend fun pair(
         code: String,
         timeoutMs: Long = DEFAULT_TIMEOUT_MS,
-    ): BenchmarkReport {
+    ): DeploymentResult {
         Timber.i("Starting full pairing flow for code: %s", code)
 
         // Step 1: Connect
@@ -263,14 +276,14 @@ class PairingManager(
         // Step 2: Wait for deployment
         val deployment = waitForDeployment(code, timeoutMs)
 
-        // Step 3: Download + benchmark
-        val report = executeDeployment(deployment)
+        // Step 3: Download + benchmark + persist
+        val result = executeDeployment(deployment)
 
         // Step 4: Report results
-        submitBenchmark(code, report)
+        submitBenchmark(code, result.report)
 
         Timber.i("Pairing flow complete for code: %s", code)
-        return report
+        return result
     }
 
     // =========================================================================
@@ -356,12 +369,51 @@ class PairingManager(
         return modelFile
     }
 
+    /**
+     * Move the downloaded model to a stable directory for on-device inference.
+     *
+     * Persists to: `filesDir/octomil_models/{modelName}/{version}/model.{ext}`
+     */
+    private fun persistModel(modelFile: File, deployment: DeploymentInfo): File? {
+        return try {
+            val dir = File(modelPersistDir, "${deployment.modelName}/${deployment.modelVersion}")
+            dir.mkdirs()
+            val target = File(dir, modelFile.name)
+            if (target.exists()) target.delete()
+            if (modelFile.renameTo(target)) {
+                Timber.i("Model persisted: %s", target.absolutePath)
+                target
+            } else {
+                // renameTo can fail across filesystems; fall back to copy
+                modelFile.copyTo(target, overwrite = true)
+                modelFile.delete()
+                Timber.i("Model persisted (copy): %s", target.absolutePath)
+                target
+            }
+        } catch (e: Exception) {
+            Timber.w(e, "Failed to persist model file, cleaning up")
+            modelFile.delete()
+            null
+        }
+    }
+
     companion object {
         /** Default poll interval: 2 seconds. */
         const val DEFAULT_POLL_INTERVAL_MS: Long = 2_000L
 
         /** Default timeout: 5 minutes. */
         const val DEFAULT_TIMEOUT_MS: Long = 300_000L
+
+        /**
+         * Look up a persisted model file by name and version.
+         *
+         * @return The model [File] if it exists on disk, or null.
+         */
+        fun getModelFile(context: Context, modelName: String, modelVersion: String): File? {
+            val dir = File(context.filesDir, "octomil_models/$modelName/$modelVersion")
+            if (!dir.exists()) return null
+            return dir.listFiles()?.firstOrNull { it.isFile }
+        }
     }
 }
 

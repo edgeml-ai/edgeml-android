@@ -1,7 +1,11 @@
 package ai.octomil
 
+import ai.octomil.chat.LLMRuntimeRegistry
+import ai.octomil.chat.OctomilChat
 import ai.octomil.inference.EngineRegistry
+import ai.octomil.inference.Modality
 import ai.octomil.models.CachedModel
+import ai.octomil.responses.OctomilResponses
 import ai.octomil.training.TFLiteTrainer
 import android.content.Context
 import java.io.File
@@ -20,6 +24,84 @@ import java.io.File
  * The [LocalModel.cachedModel] property bridges local and server workflows.
  */
 object Octomil {
+
+    /**
+     * Response API for structured on-device inference.
+     *
+     * ```kotlin
+     * val response = Octomil.responses.create(
+     *     ResponseRequest(
+     *         model = "phi-4-mini",
+     *         input = listOf(InputItem.text("What is machine learning?")),
+     *     )
+     * )
+     * ```
+     */
+    val responses: OctomilResponses by lazy { OctomilResponses() }
+
+    /**
+     * Load a model by name with automatic resolution.
+     *
+     * Searches for the model in this order:
+     * 1. Paired models (deployed via `octomil deploy --phone`)
+     * 2. Assets directory as `{name}.tflite`
+     * 3. Model download cache
+     *
+     * ```kotlin
+     * val model = Octomil.load(context, "mobilenet-v2")
+     * val output = model.predict(floatArrayOf(1f, 2f, 3f)).getOrThrow()
+     * model.close()
+     * ```
+     *
+     * @param context Android context.
+     * @param name Model name (e.g., "mobilenet-v2"). Not a file path.
+     * @param options Hardware acceleration and threading options.
+     * @param engine Inference engine hint. Defaults to [Engine.AUTO].
+     * @return A [DeployedModel] ready for inference.
+     * @throws ModelNotFoundException if the model cannot be found in any source.
+     */
+    suspend fun load(
+        context: Context,
+        name: String,
+        options: LocalModelOptions = LocalModelOptions(),
+        engine: Engine = Engine.AUTO,
+    ): DeployedModel {
+        val modelFile = ModelResolver.default().resolve(context, name)
+            ?: throw ModelNotFoundException(name)
+        return deploy(context, modelFile, engine, name, options, benchmark = true)
+    }
+
+    /**
+     * Load a model by name with a custom [ModelResolver].
+     *
+     * ```kotlin
+     * val resolver = ModelResolver.chain(
+     *     ModelResolver.paired(),
+     *     ModelResolver.assets(),
+     *     MyCustomCdnResolver(),
+     * )
+     * val model = Octomil.load(context, "phi-4-mini", resolver = resolver)
+     * ```
+     *
+     * @param context Android context.
+     * @param name Model name.
+     * @param resolver Custom model resolution strategy.
+     * @param options Hardware acceleration and threading options.
+     * @param engine Inference engine hint.
+     * @return A [DeployedModel] ready for inference.
+     * @throws ModelNotFoundException if the resolver returns null.
+     */
+    suspend fun load(
+        context: Context,
+        name: String,
+        resolver: ModelResolver,
+        options: LocalModelOptions = LocalModelOptions(),
+        engine: Engine = Engine.AUTO,
+    ): DeployedModel {
+        val modelFile = resolver.resolve(context, name)
+            ?: throw ModelNotFoundException(name)
+        return deploy(context, modelFile, engine, name, options, benchmark = true)
+    }
 
     /**
      * Load a TFLite model from the app's assets directory.
@@ -140,6 +222,64 @@ object Octomil {
         return deployed
     }
 
+    /**
+     * Create an OpenAI-compatible chat interface for on-device LLM inference.
+     *
+     * Drop-in replacement for OpenAI/Groq client calls:
+     * ```kotlin
+     * val chat = Octomil.chat(context, "phi-4-mini")
+     *
+     * // Non-streaming (like openai.chat.completions.create):
+     * val response = chat.create("What is machine learning?")
+     * println(response.choices[0].message.content)
+     *
+     * // Streaming:
+     * chat.stream("Explain neural networks").collect { chunk ->
+     *     print(chunk.choices[0].delta.content.orEmpty())
+     * }
+     * ```
+     *
+     * @param context Android context.
+     * @param name Model name (e.g., "phi-4-mini").
+     * @return An [OctomilChat] ready for chat completions.
+     * @throws ModelNotFoundException if the model cannot be found.
+     */
+    fun chat(
+        context: Context,
+        name: String,
+    ): OctomilChat {
+        val modelFile = ModelResolver.default().resolveSync(context, name)
+        val runtime = modelFile?.let { file ->
+            LLMRuntimeRegistry.factory?.invoke(file)
+        }
+        val engine = EngineRegistry.resolve(
+            modality = Modality.TEXT,
+            context = context,
+            modelFile = modelFile,
+        )
+        return OctomilChat(modelName = name, engine = engine, runtime = runtime)
+    }
+
+    /**
+     * Create a chat interface with a custom [ModelResolver].
+     */
+    fun chat(
+        context: Context,
+        name: String,
+        resolver: ModelResolver,
+    ): OctomilChat {
+        val modelFile = resolver.resolveSync(context, name)
+        val runtime = modelFile?.let { file ->
+            LLMRuntimeRegistry.factory?.invoke(file)
+        }
+        val engine = EngineRegistry.resolve(
+            modality = Modality.TEXT,
+            context = context,
+            modelFile = modelFile,
+        )
+        return OctomilChat(modelName = name, engine = engine, runtime = runtime)
+    }
+
     private fun resolveEngine(filename: String, engine: Engine): Engine {
         if (engine != Engine.AUTO) return engine
         return EngineRegistry.engineFromFilename(filename) ?: Engine.TFLITE
@@ -148,7 +288,7 @@ object Octomil {
     /**
      * Copy an asset file to the app's cache directory if it doesn't already exist.
      */
-    private fun copyAssetToCache(context: Context, assetFileName: String): File {
+    internal fun copyAssetToCache(context: Context, assetFileName: String): File {
         val cacheDir = File(context.cacheDir, "octomil_local_models").apply { mkdirs() }
         val outFile = File(cacheDir, assetFileName)
 

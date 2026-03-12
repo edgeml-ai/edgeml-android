@@ -68,8 +68,8 @@ object DeepLinkPairing {
         return try {
             val api = createPairingApi(action.host)
             val manager = PairingManager(api, context)
-            val report = manager.pair(action.token, timeoutMs)
-            Result.success(report)
+            val result = manager.pair(action.token, timeoutMs)
+            Result.success(result.report)
         } catch (e: PairingException) {
             Timber.e(e, "Deep link pairing failed: %s", e.errorCode)
             Result.failure(e)

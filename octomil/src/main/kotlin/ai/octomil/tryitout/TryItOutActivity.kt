@@ -1,6 +1,8 @@
 package ai.octomil.tryitout
 
+import ai.octomil.pairing.PairingManager
 import ai.octomil.pairing.ui.OctomilPairingTheme
+import ai.octomil.runtime.AdaptiveInterpreter
 import android.content.Context
 import android.content.Intent
 import android.os.Bundle
@@ -8,6 +10,8 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.lifecycle.ViewModelProvider
 import timber.log.Timber
+import java.nio.ByteBuffer
+import java.nio.ByteOrder
 
 /**
  * Activity that hosts the [TryItOutScreen] composable.
@@ -82,7 +86,15 @@ class TryItOutActivity : ComponentActivity() {
             return factory.create(modelInfo)
         }
 
-        // Default: placeholder runner
+        // Look up the persisted model file automatically
+        val modelFile = PairingManager.getModelFile(this, modelInfo.modelName, modelInfo.modelVersion)
+        if (modelFile != null) {
+            Timber.i("Creating AdaptiveInterpreter runner for: %s", modelFile.absolutePath)
+            return AdaptiveInferenceRunner(modelFile, this)
+        }
+
+        // Fallback: placeholder runner
+        Timber.w("No model file found for %s/%s, using placeholder runner", modelInfo.modelName, modelInfo.modelVersion)
         return InferenceRunner { input ->
             FloatArray(input.size)
         }
@@ -157,5 +169,43 @@ class TryItOutActivity : ComponentActivity() {
      */
     fun interface InferenceRunnerFactory {
         fun create(modelInfo: ModelInfo): InferenceRunner
+    }
+}
+
+/**
+ * [InferenceRunner] backed by [AdaptiveInterpreter] for real on-device TFLite inference.
+ *
+ * Loads the model on first inference call (lazy) with delegate fallback (NNAPI → GPU → XNNPACK).
+ * Converts FloatArray input/output to ByteBuffer for the TFLite interpreter.
+ */
+internal class AdaptiveInferenceRunner(
+    modelFile: java.io.File,
+    context: Context,
+) : InferenceRunner {
+
+    private val interpreter = AdaptiveInterpreter(modelFile, context)
+    private var loaded = false
+
+    override suspend fun runInference(input: FloatArray): FloatArray {
+        if (!loaded) {
+            val result = interpreter.load()
+            Timber.i("Model loaded with delegate=%s", result.delegate)
+            loaded = true
+        }
+
+        val inputBuffer = ByteBuffer.allocateDirect(input.size * 4)
+            .order(ByteOrder.nativeOrder())
+        inputBuffer.asFloatBuffer().put(input)
+
+        // Output buffer same size as input (TFLite will resize if needed)
+        val outputBuffer = ByteBuffer.allocateDirect(input.size * 4)
+            .order(ByteOrder.nativeOrder())
+
+        interpreter.predict(inputBuffer, outputBuffer)
+
+        outputBuffer.rewind()
+        val output = FloatArray(input.size)
+        outputBuffer.asFloatBuffer().get(output)
+        return output
     }
 }
