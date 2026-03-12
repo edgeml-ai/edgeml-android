@@ -3,6 +3,12 @@ package ai.octomil.workflows
 import ai.octomil.chat.Tool
 import ai.octomil.responses.Response
 
+/**
+ * ADVANCED — MAY: Multi-step inference workflow definition.
+ *
+ * Compose sequential inference, tool-use, and transform steps into a
+ * reusable pipeline. Requires the Team tier or higher.
+ */
 data class Workflow(
     val name: String,
     val steps: List<WorkflowStep>,

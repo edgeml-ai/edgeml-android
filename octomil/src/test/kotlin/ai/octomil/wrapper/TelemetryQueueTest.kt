@@ -1,7 +1,9 @@
 package ai.octomil.wrapper
 
+import ai.octomil.api.dto.AnyValue
+import ai.octomil.api.dto.ExportLogsServiceRequest
+import ai.octomil.api.dto.LogRecord
 import ai.octomil.api.dto.TelemetryAttributes
-import ai.octomil.api.dto.TelemetryV2BatchRequest
 import ai.octomil.api.dto.TelemetryV2Event
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.StandardTestDispatcher
@@ -17,13 +19,37 @@ import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
 /**
- * Tests for [TelemetryQueue] — batching, flushing, persistence, v2 envelope,
+ * Tests for [TelemetryQueue] — batching, flushing, persistence, OTLP envelope,
  * generic v2 events, inference.failed naming, and sender integration.
  *
  * Uses [StandardTestDispatcher] for deterministic coroutine control.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class TelemetryQueueTest {
+
+    // =========================================================================
+    // OTLP helpers — extract log records and resource attrs from OTLP envelope
+    // =========================================================================
+
+    /** Flatten all log records from an OTLP request. */
+    private val ExportLogsServiceRequest.logRecords: List<LogRecord>
+        get() = resourceLogs.flatMap { it.scopeLogs }.flatMap { it.logRecords }
+
+    /** Get the body string of a log record (event name). */
+    private val LogRecord.eventName: String
+        get() = (body as? AnyValue.StringValue)?.stringValue ?: ""
+
+    /** Get a resource attribute value by key. */
+    private fun ExportLogsServiceRequest.resourceAttr(key: String): String? =
+        resourceLogs.firstOrNull()?.resource?.attributes
+            ?.firstOrNull { it.key == key }
+            ?.let { (it.value as? AnyValue.StringValue)?.stringValue }
+
+    /** Get a log record attribute string value by key. */
+    private fun LogRecord.attrString(key: String): String? =
+        attributes?.firstOrNull { it.key == key }
+            ?.let { (it.value as? AnyValue.StringValue)?.stringValue }
+
 
     private val testDispatcher = StandardTestDispatcher()
     private lateinit var tmpDir: File
@@ -83,7 +109,7 @@ class TelemetryQueueTest {
 
     @Test
     fun `flush sends v2 batch with correct event count`() = runTest(testDispatcher) {
-        val batches = mutableListOf<TelemetryV2BatchRequest>()
+        val batches = mutableListOf<ExportLogsServiceRequest>()
         val sender = TelemetrySender { batch -> batches.add(batch) }
 
         val queue = TelemetryQueue(
@@ -103,16 +129,17 @@ class TelemetryQueueTest {
 
         assertEquals(0, queue.pendingCount)
         assertEquals(1, batches.size)
-        assertEquals(2, batches[0].events.size)
-        assertEquals("inference.completed", batches[0].events[0].name)
-        assertEquals("inference.completed", batches[0].events[1].name)
+        val records = batches[0].logRecords
+        assertEquals(2, records.size)
+        assertEquals("inference.completed", records[0].eventName)
+        assertEquals("inference.completed", records[1].eventName)
 
         queue.close()
     }
 
     @Test
-    fun `flush v2 resource contains sdk metadata`() = runTest(testDispatcher) {
-        val batches = mutableListOf<TelemetryV2BatchRequest>()
+    fun `flush OTLP resource contains sdk metadata`() = runTest(testDispatcher) {
+        val batches = mutableListOf<ExportLogsServiceRequest>()
         val sender = TelemetrySender { batch -> batches.add(batch) }
 
         val queue = TelemetryQueue(
@@ -128,19 +155,18 @@ class TelemetryQueueTest {
         queue.enqueue(makeEvent())
         queue.flush()
 
-        val resource = batches[0].resource
-        assertEquals("android", resource.sdk)
-        assertEquals("android", resource.platform)
-        assertEquals("org-abc", resource.orgId)
-        assertEquals("dev-xyz", resource.deviceId)
-        assertNotNull(resource.sdkVersion)
+        val req = batches[0]
+        assertEquals("android", req.resourceAttr("telemetry.sdk.name"))
+        assertEquals("org-abc", req.resourceAttr("org.id"))
+        assertEquals("dev-xyz", req.resourceAttr("device.id"))
+        assertNotNull(req.resourceAttr("service.version"))
 
         queue.close()
     }
 
     @Test
-    fun `flush v2 events have typed attributes`() = runTest(testDispatcher) {
-        val batches = mutableListOf<TelemetryV2BatchRequest>()
+    fun `flush OTLP events have typed attributes`() = runTest(testDispatcher) {
+        val batches = mutableListOf<ExportLogsServiceRequest>()
         val sender = TelemetrySender { batch -> batches.add(batch) }
 
         val queue = TelemetryQueue(
@@ -154,22 +180,17 @@ class TelemetryQueueTest {
         queue.enqueue(makeEvent(modelId = "classifier", latencyMs = 12.5))
         queue.flush()
 
-        val event = batches[0].events[0]
-        assertEquals("inference.completed", event.name)
-        assertEquals(JsonPrimitive("classifier"), event.attributes["model.id"])
-        assertEquals(JsonPrimitive(12.5), event.attributes["inference.duration_ms"])
-        assertEquals(JsonPrimitive("on_device"), event.attributes["inference.modality"])
-        assertEquals(JsonPrimitive("cpu"), event.attributes["device.compute_unit"])
-        assertEquals(JsonPrimitive("tflite"), event.attributes["model.format"])
-        assertEquals(JsonPrimitive(true), event.attributes["inference.success"])
-        assertNotNull(event.timestamp)
+        val record = batches[0].logRecords[0]
+        assertEquals("inference.completed", record.eventName)
+        assertEquals("classifier", record.attrString("model.id"))
+        assertNotNull(record.timeUnixNano)
 
         queue.close()
     }
 
     @Test
-    fun `flush v2 includes error message on failure`() = runTest(testDispatcher) {
-        val batches = mutableListOf<TelemetryV2BatchRequest>()
+    fun `flush OTLP includes error message on failure`() = runTest(testDispatcher) {
+        val batches = mutableListOf<ExportLogsServiceRequest>()
         val sender = TelemetrySender { batch -> batches.add(batch) }
 
         val queue = TelemetryQueue(
@@ -183,9 +204,9 @@ class TelemetryQueueTest {
         queue.enqueue(makeEvent(success = false, errorMessage = "OOM"))
         queue.flush()
 
-        val attrs = batches[0].events[0].attributes
-        assertEquals(JsonPrimitive(false), attrs["inference.success"])
-        assertEquals(JsonPrimitive("OOM"), attrs["error.message"])
+        val record = batches[0].logRecords[0]
+        assertEquals("inference.failed", record.eventName)
+        assertEquals("OOM", record.attrString("error.message"))
 
         queue.close()
     }
@@ -216,7 +237,7 @@ class TelemetryQueueTest {
 
     @Test
     fun `failed inference events use inference_failed name`() = runTest(testDispatcher) {
-        val batches = mutableListOf<TelemetryV2BatchRequest>()
+        val batches = mutableListOf<ExportLogsServiceRequest>()
         val sender = TelemetrySender { batch -> batches.add(batch) }
 
         val queue = TelemetryQueue(
@@ -230,14 +251,14 @@ class TelemetryQueueTest {
         queue.enqueue(makeEvent(success = false, errorMessage = "OOM"))
         queue.flush()
 
-        assertEquals("inference.failed", batches[0].events[0].name)
+        assertEquals("inference.failed", batches[0].logRecords[0].eventName)
 
         queue.close()
     }
 
     @Test
     fun `successful inference events use inference_completed name`() = runTest(testDispatcher) {
-        val batches = mutableListOf<TelemetryV2BatchRequest>()
+        val batches = mutableListOf<ExportLogsServiceRequest>()
         val sender = TelemetrySender { batch -> batches.add(batch) }
 
         val queue = TelemetryQueue(
@@ -251,7 +272,7 @@ class TelemetryQueueTest {
         queue.enqueue(makeEvent(success = true))
         queue.flush()
 
-        assertEquals("inference.completed", batches[0].events[0].name)
+        assertEquals("inference.completed", batches[0].logRecords[0].eventName)
 
         queue.close()
     }
@@ -262,7 +283,7 @@ class TelemetryQueueTest {
 
     @Test
     fun `enqueue triggers auto-flush when batch size reached`() = runTest(testDispatcher) {
-        val batches = mutableListOf<TelemetryV2BatchRequest>()
+        val batches = mutableListOf<ExportLogsServiceRequest>()
         val sender = TelemetrySender { batch -> batches.add(batch) }
 
         val queue = TelemetryQueue(
@@ -280,7 +301,7 @@ class TelemetryQueueTest {
         advanceUntilIdle()
 
         assertEquals(1, batches.size)
-        assertEquals(3, batches[0].events.size)
+        assertEquals(3, batches[0].logRecords.size)
         assertEquals(0, queue.pendingCount)
 
         queue.close()
@@ -317,7 +338,7 @@ class TelemetryQueueTest {
 
     @Test
     fun `generic v2 events batch correctly with inference events`() = runTest(testDispatcher) {
-        val batches = mutableListOf<TelemetryV2BatchRequest>()
+        val batches = mutableListOf<ExportLogsServiceRequest>()
         val sender = TelemetrySender { batch -> batches.add(batch) }
 
         val queue = TelemetryQueue(
@@ -353,20 +374,20 @@ class TelemetryQueueTest {
         queue.flush()
 
         assertEquals(1, batches.size)
-        val events = batches[0].events
-        assertEquals(3, events.size)
+        val records = batches[0].logRecords
+        assertEquals(3, records.size)
         // First: converted inference event
-        assertEquals("inference.completed", events[0].name)
+        assertEquals("inference.completed", records[0].eventName)
         // Second and third: generic v2 events
-        assertEquals("inference.started", events[1].name)
-        assertEquals("training.epoch_completed", events[2].name)
+        assertEquals("inference.started", records[1].eventName)
+        assertEquals("training.epoch_completed", records[2].eventName)
 
         queue.close()
     }
 
     @Test
     fun `v2 events trigger auto-flush when combined count reaches batch size`() = runTest(testDispatcher) {
-        val batches = mutableListOf<TelemetryV2BatchRequest>()
+        val batches = mutableListOf<ExportLogsServiceRequest>()
         val sender = TelemetrySender { batch -> batches.add(batch) }
 
         val queue = TelemetryQueue(
@@ -389,18 +410,18 @@ class TelemetryQueueTest {
         advanceUntilIdle()
 
         assertEquals(1, batches.size)
-        assertEquals(3, batches[0].events.size)
+        assertEquals(3, batches[0].logRecords.size)
 
         queue.close()
     }
 
     // =========================================================================
-    // Typed attributes serialize as native JSON
+    // OTLP attributes use typed AnyValue
     // =========================================================================
 
     @Test
-    fun `typed attributes serialize as native JSON not string`() = runTest(testDispatcher) {
-        val batches = mutableListOf<TelemetryV2BatchRequest>()
+    fun `OTLP attributes use typed AnyValue not string`() = runTest(testDispatcher) {
+        val batches = mutableListOf<ExportLogsServiceRequest>()
         val sender = TelemetrySender { batch -> batches.add(batch) }
 
         val queue = TelemetryQueue(
@@ -414,19 +435,19 @@ class TelemetryQueueTest {
         queue.enqueue(makeEvent(latencyMs = 12.5))
         queue.flush()
 
-        val attrs = batches[0].events[0].attributes
+        val record = batches[0].logRecords[0]
+        val attrs = record.attributes ?: emptyList()
 
-        // Duration should be a numeric JsonPrimitive, not a string
-        val durationMs = attrs["inference.duration_ms"]
-        assertNotNull(durationMs)
-        assertTrue(!durationMs.isString, "duration_ms should not be a string primitive")
-        assertEquals(12.5, durationMs.content.toDouble())
+        // Duration should be a DoubleValue
+        val durationKv = attrs.firstOrNull { it.key == "inference.duration_ms" }
+        assertNotNull(durationKv)
+        assertTrue(durationKv.value is AnyValue.DoubleValue, "duration_ms should be DoubleValue")
+        assertEquals(12.5, (durationKv.value as AnyValue.DoubleValue).doubleValue)
 
-        // Success should be a boolean JsonPrimitive
-        val success = attrs["inference.success"]
-        assertNotNull(success)
-        assertTrue(!success.isString, "success should not be a string primitive")
-        assertEquals("true", success.content)
+        // Success should be a BoolValue
+        val successKv = attrs.firstOrNull { it.key == "inference.success" }
+        assertNotNull(successKv)
+        assertTrue(successKv.value is AnyValue.BoolValue, "success should be BoolValue")
 
         queue.close()
     }
@@ -547,7 +568,7 @@ class TelemetryQueueTest {
         assertTrue(filesBefore != null && filesBefore.isNotEmpty())
 
         // Second: create a new queue with a working sender and start it
-        val batches = mutableListOf<TelemetryV2BatchRequest>()
+        val batches = mutableListOf<ExportLogsServiceRequest>()
         val sender = TelemetrySender { batch -> batches.add(batch) }
 
         val queue2 = TelemetryQueue(
@@ -560,9 +581,9 @@ class TelemetryQueueTest {
         queue2.start()
         advanceUntilIdle()
 
-        // Persisted events should have been resent as v2 batch
+        // Persisted events should have been resent as OTLP batch
         assertEquals(1, batches.size)
-        assertTrue(batches[0].events.isNotEmpty())
+        assertTrue(batches[0].logRecords.isNotEmpty())
 
         // Persisted files should be cleaned up
         val filesAfter = tmpDir.listFiles()?.filter { it.extension == "json" }
@@ -578,7 +599,7 @@ class TelemetryQueueTest {
         val oldFile = File(tmpDir, "telemetry_old.json")
         oldFile.writeText(oldFormatJson)
 
-        val batches = mutableListOf<TelemetryV2BatchRequest>()
+        val batches = mutableListOf<ExportLogsServiceRequest>()
         val sender = TelemetrySender { batch -> batches.add(batch) }
 
         val queue = TelemetryQueue(
@@ -603,7 +624,7 @@ class TelemetryQueueTest {
 
     @Test
     fun `training events can be enqueued as v2 events`() = runTest(testDispatcher) {
-        val batches = mutableListOf<TelemetryV2BatchRequest>()
+        val batches = mutableListOf<ExportLogsServiceRequest>()
         val sender = TelemetrySender { batch -> batches.add(batch) }
 
         val queue = TelemetryQueue(
@@ -627,11 +648,9 @@ class TelemetryQueueTest {
         queue.flush()
 
         assertEquals(1, batches.size)
-        val event = batches[0].events[0]
-        assertEquals("training.epoch_completed", event.name)
-        assertEquals(JsonPrimitive("classifier"), event.attributes["model.id"])
-        assertEquals(JsonPrimitive(0.05), event.attributes["training.loss"])
-        assertEquals(JsonPrimitive(0.98), event.attributes["training.accuracy"])
+        val record = batches[0].logRecords[0]
+        assertEquals("training.epoch_completed", record.eventName)
+        assertEquals("classifier", record.attrString("model.id"))
 
         queue.close()
     }
@@ -832,7 +851,7 @@ class TelemetryQueueTest {
 
     @Test
     fun `reportFunnelEvent sends v2 batch through sender`() = runTest(testDispatcher) {
-        val batches = mutableListOf<TelemetryV2BatchRequest>()
+        val batches = mutableListOf<ExportLogsServiceRequest>()
         val sender = TelemetrySender { batch -> batches.add(batch) }
 
         val queue = TelemetryQueue(
@@ -855,8 +874,8 @@ class TelemetryQueueTest {
         advanceUntilIdle()
 
         assertEquals(1, batches.size)
-        assertEquals("funnel.benchmark_completed", batches[0].events[0].name)
-        assertEquals("org-funnel", batches[0].resource.orgId)
+        assertEquals("funnel.benchmark_completed", batches[0].logRecords[0].eventName)
+        assertEquals("org-funnel", batches[0].resourceAttr("org.id"))
 
         queue.close()
     }

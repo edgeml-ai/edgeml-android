@@ -17,6 +17,14 @@ import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonPrimitive
 import ai.octomil.BuildConfig
+import ai.octomil.api.dto.AnyValue
+import ai.octomil.api.dto.ExportLogsServiceRequest
+import ai.octomil.api.dto.InstrumentationScope
+import ai.octomil.api.dto.KeyValue
+import ai.octomil.api.dto.LogRecord
+import ai.octomil.api.dto.OtlpResource
+import ai.octomil.api.dto.ResourceLogs
+import ai.octomil.api.dto.ScopeLogs
 import ai.octomil.api.dto.TelemetryAttributes
 import ai.octomil.api.dto.TelemetryV2BatchRequest
 import ai.octomil.api.dto.TelemetryV2Event
@@ -173,8 +181,8 @@ class TelemetryQueue internal constructor(
 
             if (sender != null) {
                 try {
-                    val batch = buildMergedBatch(inferenceEvents, genericEvents)
-                    sender.sendBatch(batch)
+                    val otlpRequest = buildOtlpRequest(inferenceEvents, genericEvents)
+                    sender.sendBatch(otlpRequest)
                     Timber.d("Telemetry flush succeeded: %d events", totalCount)
                 } catch (e: Exception) {
                     Timber.w(e, "Telemetry flush failed, persisting %d events to disk", totalCount)
@@ -190,6 +198,8 @@ class TelemetryQueue internal constructor(
     /**
      * Build a v2 OTLP batch request from inference events and generic v2 events,
      * merging them into a single batch.
+     *
+     * @deprecated Use [buildOtlpRequest] for the canonical OTLP/JSON envelope.
      */
     internal fun buildMergedBatch(
         inferenceEvents: List<InferenceTelemetryEvent>,
@@ -198,6 +208,101 @@ class TelemetryQueue internal constructor(
         val resource = buildResource()
         val allEvents = buildMergedEvents(inferenceEvents, genericEvents)
         return TelemetryV2BatchRequest(resource = resource, events = allEvents)
+    }
+
+    /**
+     * Build an OTLP/JSON [ExportLogsServiceRequest] from inference events
+     * and generic v2 events.
+     */
+    internal fun buildOtlpRequest(
+        inferenceEvents: List<InferenceTelemetryEvent>,
+        genericEvents: List<TelemetryV2Event>,
+    ): ExportLogsServiceRequest {
+        val v2Events = buildMergedEvents(inferenceEvents, genericEvents)
+        return wrapInOtlp(v2Events)
+    }
+
+    /**
+     * Build an OTLP/JSON [ExportLogsServiceRequest] for a single funnel event.
+     */
+    internal fun buildOtlpFunnelRequest(event: FunnelEvent): ExportLogsServiceRequest {
+        val legacy = buildV2FunnelBatch(event)
+        return wrapInOtlp(legacy.events, legacy.resource)
+    }
+
+    /**
+     * Convert a list of v2 events into the OTLP/JSON envelope.
+     */
+    private fun wrapInOtlp(
+        events: List<TelemetryV2Event>,
+        v2Resource: TelemetryV2Resource? = null,
+    ): ExportLogsServiceRequest {
+        val res = v2Resource ?: buildResource()
+        val resourceAttrs = listOf(
+            KeyValue("service.name", AnyValue.StringValue("octomil-android-sdk")),
+            KeyValue("service.version", AnyValue.StringValue(res.sdkVersion)),
+            KeyValue("telemetry.sdk.name", AnyValue.StringValue(res.sdk)),
+            KeyValue("telemetry.sdk.language", AnyValue.StringValue(res.platform)),
+        ) + listOfNotNull(
+            res.deviceId?.let { KeyValue("device.id", AnyValue.StringValue(it)) },
+            res.orgId?.let { KeyValue("org.id", AnyValue.StringValue(it)) },
+        )
+
+        val logRecords = events.map { ev ->
+            val attrs = ev.attributes.map { (k, v) ->
+                val anyValue: AnyValue = when {
+                    v.isString -> AnyValue.StringValue(v.content)
+                    v.content.toBooleanStrictOrNull() != null ->
+                        AnyValue.BoolValue(v.content.toBooleanStrict())
+                    v.content.toLongOrNull() != null ->
+                        AnyValue.IntValue(v.content.toLong())
+                    v.content.toDoubleOrNull() != null ->
+                        AnyValue.DoubleValue(v.content.toDouble())
+                    else -> AnyValue.StringValue(v.content)
+                }
+                KeyValue(k, anyValue)
+            } + listOfNotNull(
+                ev.traceId?.let { KeyValue("trace_id", AnyValue.StringValue(it)) },
+                ev.spanId?.let { KeyValue("span_id", AnyValue.StringValue(it)) },
+            )
+
+            LogRecord(
+                timeUnixNano = toNanos(ev.timestamp),
+                body = AnyValue.StringValue(ev.name),
+                attributes = attrs.ifEmpty { null },
+                traceId = ev.traceId,
+                spanId = ev.spanId,
+            )
+        }
+
+        return ExportLogsServiceRequest(
+            resourceLogs = listOf(
+                ResourceLogs(
+                    resource = OtlpResource(attributes = resourceAttrs),
+                    scopeLogs = listOf(
+                        ScopeLogs(
+                            scope = InstrumentationScope(
+                                name = "ai.octomil.android",
+                                version = BuildConfig.OCTOMIL_VERSION,
+                            ),
+                            logRecords = logRecords,
+                        ),
+                    ),
+                ),
+            ),
+        )
+    }
+
+    /**
+     * Convert ISO-8601 timestamp to nanoseconds since epoch (as string).
+     */
+    private fun toNanos(isoTimestamp: String): String {
+        return try {
+            val millis = isoFormatter.parse(isoTimestamp)?.time ?: 0L
+            "${millis * 1_000_000}"
+        } catch (_: Exception) {
+            "0"
+        }
     }
 
     /**
@@ -352,8 +457,8 @@ class TelemetryQueue internal constructor(
         for (file in files) {
             try {
                 val events: List<TelemetryV2Event> = json.decodeFromString(file.readText())
-                val batch = TelemetryV2BatchRequest(resource = buildResource(), events = events)
-                sender.sendBatch(batch)
+                val otlpRequest = wrapInOtlp(events)
+                sender.sendBatch(otlpRequest)
                 file.delete()
                 Timber.d("Resent %d persisted events from %s", events.size, file.name)
             } catch (e: Exception) {
@@ -630,8 +735,8 @@ class TelemetryQueue internal constructor(
                     platform = platform,
                     metadata = metadata,
                 )
-                val batch = buildV2FunnelBatch(event)
-                sender?.sendBatch(batch)
+                val otlpRequest = buildOtlpFunnelRequest(event)
+                sender?.sendBatch(otlpRequest)
             } catch (e: Exception) {
                 Timber.d(e, "Funnel event reporting failed")
             }
@@ -660,16 +765,16 @@ data class FunnelEvent(
 )
 
 /**
- * Abstraction for sending telemetry to the server via the v2 OTLP envelope.
+ * Abstraction for sending telemetry to the server via the OTLP/JSON envelope.
  *
  * Implementations should throw on failure so the queue can fall back to
  * disk persistence.
  */
 fun interface TelemetrySender {
     /**
-     * Send a v2 OTLP telemetry batch to POST /api/v2/telemetry/events.
+     * Send an OTLP/JSON logs request to POST /api/v2/telemetry/events.
      *
      * @throws Exception if the send fails (events will be persisted to disk).
      */
-    suspend fun sendBatch(batch: TelemetryV2BatchRequest)
+    suspend fun sendBatch(batch: ExportLogsServiceRequest)
 }

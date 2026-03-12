@@ -1,15 +1,19 @@
 package ai.octomil.wrapper
 
 import ai.octomil.api.OctomilApi
-import ai.octomil.api.dto.TelemetryV2BatchRequest
-import ai.octomil.api.dto.TelemetryV2Event
-import ai.octomil.api.dto.TelemetryV2Resource
+import ai.octomil.api.dto.AnyValue
+import ai.octomil.api.dto.ExportLogsServiceRequest
+import ai.octomil.api.dto.InstrumentationScope
+import ai.octomil.api.dto.KeyValue
+import ai.octomil.api.dto.LogRecord
+import ai.octomil.api.dto.OtlpResource
+import ai.octomil.api.dto.ResourceLogs
+import ai.octomil.api.dto.ScopeLogs
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.mockk
 import io.mockk.slot
 import kotlinx.coroutines.test.runTest
-import kotlinx.serialization.json.JsonPrimitive
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
 import org.junit.After
@@ -40,29 +44,43 @@ class TelemetrySenderTest {
         mockWebServer.shutdown()
     }
 
-    private fun makeBatch(
+    private fun makeOtlpRequest(
         eventCount: Int = 1,
         eventName: String = "inference.completed",
-    ): TelemetryV2BatchRequest {
-        val resource = TelemetryV2Resource(
-            sdk = "android",
-            sdkVersion = "1.0.0-test",
-            deviceId = "test-device",
-            platform = "android",
-            orgId = "test-org",
-        )
-        val events = (0 until eventCount).map { i ->
-            TelemetryV2Event(
-                name = eventName,
-                timestamp = "2026-02-27T14:00:00.000Z",
-                attributes = mapOf(
-                    "model.id" to JsonPrimitive("model-$i"),
-                    "inference.duration_ms" to JsonPrimitive(5.0 + i),
-                    "inference.success" to JsonPrimitive(true),
+    ): ExportLogsServiceRequest {
+        val logRecords = (0 until eventCount).map { i ->
+            LogRecord(
+                timeUnixNano = "1708000000000000000",
+                body = AnyValue.StringValue(eventName),
+                attributes = listOf(
+                    KeyValue("model.id", AnyValue.StringValue("model-$i")),
+                    KeyValue("inference.duration_ms", AnyValue.DoubleValue(5.0 + i)),
+                    KeyValue("inference.success", AnyValue.BoolValue(true)),
                 ),
             )
         }
-        return TelemetryV2BatchRequest(resource = resource, events = events)
+
+        return ExportLogsServiceRequest(
+            resourceLogs = listOf(
+                ResourceLogs(
+                    resource = OtlpResource(
+                        attributes = listOf(
+                            KeyValue("service.name", AnyValue.StringValue("octomil-android-sdk")),
+                            KeyValue("service.version", AnyValue.StringValue("1.0.0-test")),
+                            KeyValue("telemetry.sdk.name", AnyValue.StringValue("android")),
+                            KeyValue("device.id", AnyValue.StringValue("test-device")),
+                            KeyValue("org.id", AnyValue.StringValue("test-org")),
+                        ),
+                    ),
+                    scopeLogs = listOf(
+                        ScopeLogs(
+                            scope = InstrumentationScope(name = "ai.octomil.android", version = "1.0.0-test"),
+                            logRecords = logRecords,
+                        ),
+                    ),
+                ),
+            ),
+        )
     }
 
     // =========================================================================
@@ -71,21 +89,21 @@ class TelemetrySenderTest {
 
     @Test
     fun `sendBatch calls sendTelemetryV2 with correct payload`() = runTest {
-        val requestSlot = slot<TelemetryV2BatchRequest>()
+        val requestSlot = slot<ExportLogsServiceRequest>()
         coEvery { mockApi.sendTelemetryV2(capture(requestSlot)) } returns
             Response.success(Unit)
 
         val sender = buildSenderWithMockApi(mockApi)
-        val batch = makeBatch(eventCount = 2)
+        val request = makeOtlpRequest(eventCount = 2)
 
-        sender.sendBatch(batch)
+        sender.sendBatch(request)
 
         coVerify(exactly = 1) { mockApi.sendTelemetryV2(any()) }
 
         val captured = requestSlot.captured
-        assertEquals(2, captured.events.size)
-        assertEquals("inference.completed", captured.events[0].name)
-        assertEquals("android", captured.resource.sdk)
+        val records = captured.resourceLogs.flatMap { it.scopeLogs }.flatMap { it.logRecords }
+        assertEquals(2, records.size)
+        assertEquals("inference.completed", (records[0].body as AnyValue.StringValue).stringValue)
     }
 
     // =========================================================================
@@ -100,7 +118,7 @@ class TelemetrySenderTest {
         val sender = buildSenderWithMockApi(mockApi)
 
         assertFailsWith<IOException> {
-            sender.sendBatch(makeBatch())
+            sender.sendBatch(makeOtlpRequest())
         }
     }
 
@@ -113,9 +131,9 @@ class TelemetrySenderTest {
         coEvery { mockApi.sendTelemetryV2(any()) } returns Response.success(Unit)
 
         val sender = buildSenderWithMockApi(mockApi)
-        val batch = makeBatch(eventName = "funnel.pairing_started")
+        val request = makeOtlpRequest(eventName = "funnel.pairing_started")
 
-        sender.sendBatch(batch)
+        sender.sendBatch(request)
 
         coVerify(exactly = 1) { mockApi.sendTelemetryV2(any()) }
     }
@@ -128,7 +146,7 @@ class TelemetrySenderTest {
         val sender = buildSenderWithMockApi(mockApi)
 
         assertFailsWith<IOException> {
-            sender.sendBatch(makeBatch(eventName = "funnel.test"))
+            sender.sendBatch(makeOtlpRequest(eventName = "funnel.test"))
         }
     }
 
@@ -151,8 +169,8 @@ class TelemetrySenderTest {
             apiKey = "test-api-key-123",
         )
 
-        val batch = makeBatch()
-        val response = api.sendTelemetryV2(batch)
+        val request = makeOtlpRequest()
+        val response = api.sendTelemetryV2(request)
         assertTrue(response.isSuccessful)
 
         val recorded = mockWebServer.takeRequest()
@@ -166,11 +184,11 @@ class TelemetrySenderTest {
     // =========================================================================
 
     private fun buildSenderWithMockApi(api: OctomilApi): TelemetrySender {
-        return TelemetrySender { batch: TelemetryV2BatchRequest ->
-            val response = api.sendTelemetryV2(batch)
+        return TelemetrySender { request: ExportLogsServiceRequest ->
+            val response = api.sendTelemetryV2(request)
             if (!response.isSuccessful) {
                 throw IOException(
-                    "Telemetry v2 batch upload failed: HTTP ${response.code()} ${response.message()}",
+                    "Telemetry OTLP upload failed: HTTP ${response.code()} ${response.message()}",
                 )
             }
         }

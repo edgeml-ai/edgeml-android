@@ -1,6 +1,6 @@
 package ai.octomil.wrapper
 
-import ai.octomil.api.dto.TelemetryV2BatchRequest
+import ai.octomil.api.dto.ExportLogsServiceRequest
 import io.mockk.Runs
 import io.mockk.every
 import io.mockk.just
@@ -262,7 +262,7 @@ class OctomilWrappedInterpreterTest {
 
     @Test
     fun `inference_started emitted before inference`() = runTest(testDispatcher) {
-        val batches = mutableListOf<TelemetryV2BatchRequest>()
+        val batches = mutableListOf<ExportLogsServiceRequest>()
         val sender = TelemetrySender { batch -> batches.add(batch) }
         val queue = createQueue(sender = sender)
         val wrapper = createWrapper(queue = queue, modelId = "my-model")

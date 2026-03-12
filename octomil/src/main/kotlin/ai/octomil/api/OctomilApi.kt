@@ -1,6 +1,6 @@
 package ai.octomil.api
 
-import ai.octomil.api.dto.TelemetryV2BatchRequest
+import ai.octomil.api.dto.ExportLogsServiceRequest
 import ai.octomil.api.dto.AssignmentRequest
 import ai.octomil.api.dto.DevicePolicyResponse
 import ai.octomil.api.dto.DeviceRegistrationRequest
@@ -241,12 +241,24 @@ interface OctomilApi {
     // =========================================================================
 
     /**
-     * Send telemetry events in the v2 OTLP envelope format.
+     * Send telemetry events in the OTLP/JSON Logs format.
      */
     @POST("api/v2/telemetry/events")
     suspend fun sendTelemetryV2(
-        @Body request: TelemetryV2BatchRequest,
+        @Body request: ExportLogsServiceRequest,
     ): Response<Unit>
+
+    // =========================================================================
+    // Control Plane Sync
+    // =========================================================================
+
+    /**
+     * Fetch the latest control-plane configuration (assignments, rollouts).
+     */
+    @GET("api/v1/control/sync")
+    suspend fun syncControl(
+        @Query("org_id") orgId: String,
+    ): Response<ai.octomil.control.ControlSyncResponse>
 
     // =========================================================================
     // Organization Settings
