@@ -89,7 +89,17 @@ data class OctomilConfig(
      * certificate validation and telemetry.
      */
     val serverEnvironment: ServerEnvironment = ServerEnvironment.CLOUD,
-    /** Device ID (auto-generated if not provided) */
+    /**
+     * Client-side device identifier.
+     *
+     * When set, this value is:
+     * - Used as the device identifier during registration (instead of auto-generating one).
+     * - Included in OTLP telemetry resource attributes as `octomil.device_id`.
+     * - Passed to the control plane for sync requests.
+     *
+     * When null, a device identifier is auto-generated on first initialization
+     * and persisted to secure storage.
+     */
     val deviceId: String? = null,
     /** App version for device metadata */
     val appVersion: String? = null,
@@ -281,6 +291,13 @@ data class OctomilConfig(
 
         fun modelId(id: String) = apply { this.modelId = id }
 
+        /**
+         * Set the device identifier.
+         *
+         * When provided, this ID is used for device registration, OTLP telemetry
+         * resource attributes (`octomil.device_id`), and control-plane sync.
+         * Pass null (or omit) to let the SDK auto-generate one on first initialization.
+         */
         fun deviceId(id: String?) = apply { this.deviceId = id }
 
         fun appVersion(version: String?) = apply { this.appVersion = version }

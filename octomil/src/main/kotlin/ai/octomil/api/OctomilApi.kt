@@ -254,10 +254,14 @@ interface OctomilApi {
 
     /**
      * Fetch the latest control-plane configuration (assignments, rollouts).
+     *
+     * @param orgId Organization ID.
+     * @param deviceId Optional client-side device identifier for per-device rollouts.
      */
     @GET("api/v1/control/sync")
     suspend fun syncControl(
         @Query("org_id") orgId: String,
+        @Query("device_id") deviceId: String? = null,
     ): Response<ai.octomil.control.ControlSyncResponse>
 
     // =========================================================================

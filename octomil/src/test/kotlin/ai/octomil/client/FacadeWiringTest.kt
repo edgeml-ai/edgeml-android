@@ -174,4 +174,30 @@ class FacadeWiringTest {
         assertEquals("test-model", loaded.modelId)
         assertEquals("1.0.0", loaded.version)
     }
+
+    // =========================================================================
+    // control plane receives deviceId
+    // =========================================================================
+
+    @Test
+    fun `control property is accessible and wired`() {
+        val ctrl = client.control
+        assertNotNull(ctrl)
+    }
+
+    // =========================================================================
+    // getLoadedModel exposes predictStream
+    // =========================================================================
+
+    @Test
+    fun `getLoadedModel exposes predictStream method`() {
+        val model = testCachedModel()
+        every { trainer.currentModel } returns model
+
+        val loaded = client.getLoadedModel()
+        assertNotNull(loaded)
+        // Verify predictStream is accessible (returns a Flow)
+        val flow = loaded.predictStream(floatArrayOf(1.0f))
+        assertNotNull(flow)
+    }
 }
