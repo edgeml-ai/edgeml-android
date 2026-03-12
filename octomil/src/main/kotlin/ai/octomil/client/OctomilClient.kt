@@ -53,6 +53,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -126,6 +127,25 @@ class OctomilClient private constructor(
 
     /** Network connectivity monitor. Lazily initialized to avoid ClassCastException in test environments. */
     val networkMonitor: NetworkMonitor by lazy { NetworkMonitor.getInstance(this.context) }
+
+    /** Chat completions API (OpenAI-compatible shim backed by Responses). */
+    val chat: ai.octomil.chat.OctomilChat by lazy {
+        val responses = ai.octomil.responses.OctomilResponses()
+        ai.octomil.chat.OctomilChat(
+            modelName = config.modelId,
+            responses = responses,
+        )
+    }
+
+    /** Device hardware and runtime capability profiling. */
+    val capabilities: CapabilitiesClient by lazy {
+        CapabilitiesClient(this.context)
+    }
+
+    /** Telemetry: emit custom events and flush the event buffer. */
+    val telemetry: TelemetryClient by lazy {
+        TelemetryClient(TelemetryQueue.shared)
+    }
 
     // Coroutine scope for background operations
     private val scope = CoroutineScope(SupervisorJob() + mainDispatcher)
@@ -839,6 +859,19 @@ class OctomilClient private constructor(
     fun getCurrentModel(): CachedModel? = trainer.currentModel
 
     /**
+     * Get a [LoadedModel] wrapper for the currently loaded model.
+     *
+     * The wrapper exposes [LoadedModel.predict] and [LoadedModel.warmup]
+     * directly on the model object rather than routing through the client.
+     *
+     * @return The loaded model wrapper, or null if no model is loaded.
+     */
+    fun getLoadedModel(): LoadedModel? {
+        val model = trainer.currentModel ?: return null
+        return LoadedModel(cachedModel = model, trainer = trainer)
+    }
+
+    /**
      * Get information about the loaded model.
      */
     fun getModelInfo(): ModelInfo? {
@@ -1440,13 +1473,20 @@ class OctomilClient private constructor(
     // =========================================================================
 
     /**
-     * Close the client and release resources.
+     * Close the client and release all resources.
+     *
+     * Flushes buffered telemetry, cancels pending work, releases the
+     * TFLite interpreter and delegates, and stops background sync.
+     * After this call the client transitions to [ClientState.CLOSED]
+     * and the singleton reference is cleared.
      */
     suspend fun close() {
         stopHeartbeat()
+        try { telemetry.flush() } catch (_: Exception) { }
         try { networkMonitor.stop() } catch (_: Exception) { }
         trainer.close()
         syncManager.cancelAllSync()
+        scope.cancel()
         _state.value = ClientState.CLOSED
         instance = null
         Timber.i("Octomil client closed")

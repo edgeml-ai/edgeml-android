@@ -69,7 +69,13 @@ data class OctomilConfig(
      * gradient aggregation, and secure aggregation key exchange.
      */
     val serverUrl: String,
-    /** Short-lived device access token for authentication */
+    /**
+     * Authentication token.
+     *
+     * Accepts either a long-lived API key (`sk-...`) or a short-lived device
+     * access token. Use `apiKey` in the [Builder] as the primary parameter;
+     * `deviceAccessToken` is retained as an alias for backward compatibility.
+     */
     val deviceAccessToken: String,
     /** Organization ID */
     val orgId: String,
@@ -190,9 +196,17 @@ data class OctomilConfig(
      */
     val allowDegradedTraining: Boolean = false,
 ) {
+    /**
+     * API key — alias for [deviceAccessToken].
+     *
+     * Prefer this name in new code. Both `apiKey` and `deviceAccessToken`
+     * resolve to the same underlying token field.
+     */
+    val apiKey: String get() = deviceAccessToken
+
     init {
         require(serverUrl.isNotBlank()) { "serverUrl must not be blank" }
-        require(deviceAccessToken.isNotBlank()) { "deviceAccessToken must not be blank" }
+        require(deviceAccessToken.isNotBlank()) { "apiKey / deviceAccessToken must not be blank" }
         require(orgId.isNotBlank()) { "orgId must not be blank" }
         require(modelId.isNotBlank()) { "modelId must not be blank" }
         require(connectionTimeoutMs > 0) { "connectionTimeoutMs must be positive" }
@@ -248,6 +262,19 @@ data class OctomilConfig(
 
         fun serverUrl(url: String) = apply { this.serverUrl = url.trimEnd('/') }
 
+        /**
+         * Set the API key (primary auth parameter).
+         *
+         * This is the recommended way to authenticate. Accepts both long-lived
+         * API keys (`sk-...`) and short-lived device access tokens.
+         */
+        fun apiKey(key: String) = apply { this.deviceAccessToken = key }
+
+        /**
+         * Set the device access token.
+         *
+         * @deprecated Use [apiKey] instead. This is retained for backward compatibility.
+         */
         fun deviceAccessToken(token: String) = apply { this.deviceAccessToken = token }
 
         fun orgId(id: String) = apply { this.orgId = id }
