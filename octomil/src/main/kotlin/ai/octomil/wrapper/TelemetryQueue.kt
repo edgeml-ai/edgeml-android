@@ -581,6 +581,24 @@ class TelemetryQueue internal constructor(
     }
 
     /**
+     * Report that a streaming inference chunk was produced.
+     *
+     * Emits an `inference.chunk_produced` event per the SDK Facade Contract.
+     */
+    fun reportInferenceChunkProduced(modelId: String, chunkIndex: Int) {
+        enqueueV2Event(
+            TelemetryV2Event(
+                name = "inference.chunk_produced",
+                timestamp = formatTimestamp(),
+                attributes = TelemetryAttributes.of(
+                    "model.id" to modelId,
+                    "inference.chunk_index" to chunkIndex,
+                ),
+            ),
+        )
+    }
+
+    /**
      * Report a funnel analytics event. Fire-and-forget via coroutine scope.
      */
     fun reportFunnelEvent(

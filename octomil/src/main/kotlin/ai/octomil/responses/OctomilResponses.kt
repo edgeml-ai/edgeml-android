@@ -8,6 +8,7 @@ import ai.octomil.responses.runtime.RuntimeResponse
 import ai.octomil.responses.runtime.RuntimeToolCall
 import ai.octomil.responses.runtime.RuntimeToolDef
 import ai.octomil.responses.runtime.RuntimeUsage
+import ai.octomil.wrapper.TelemetryQueue
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import java.util.UUID
@@ -35,6 +36,7 @@ class OctomilResponses(
         val textParts = mutableListOf<String>()
         val toolCallBuffers = mutableMapOf<Int, ToolCallBuffer>()
         var lastUsage: RuntimeUsage? = null
+        var chunkIndex = 0
 
         runtime.stream(runtimeRequest).collect { chunk ->
             chunk.text?.let { text ->
@@ -57,6 +59,17 @@ class OctomilResponses(
                     )
                 )
             }
+
+            // Emit inference.chunk_produced telemetry for every chunk
+            try {
+                TelemetryQueue.shared?.reportInferenceChunkProduced(
+                    modelId = request.model,
+                    chunkIndex = chunkIndex,
+                )
+            } catch (_: Exception) {
+                // Telemetry must never crash the streaming flow
+            }
+            chunkIndex++
 
             if (chunk.usage != null) lastUsage = chunk.usage
         }
