@@ -7,6 +7,10 @@ import ai.octomil.responses.ResponseRequest
 import ai.octomil.responses.tools.ToolExecutor
 import ai.octomil.responses.tools.ToolRunner
 
+/**
+ * ADVANCED — MAY: Executes a [Workflow] by running each step in sequence,
+ * piping text output from one step to the next.
+ */
 class WorkflowRunner(
     private val responses: OctomilResponses,
     private val executor: ToolExecutor? = null,

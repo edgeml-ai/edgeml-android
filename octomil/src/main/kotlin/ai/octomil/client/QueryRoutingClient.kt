@@ -14,7 +14,9 @@ import java.util.concurrent.TimeUnit
 // Models
 // =============================================================================
 
-/** Routing policy fetched from the server, cached locally for offline use. */
+/**
+ * ADVANCED — MAY: Routing policy fetched from the server, cached locally for offline use.
+ */
 @Serializable
 data class RoutingPolicy(
     val version: Int,
@@ -241,7 +243,7 @@ private val TIER_ORDER = listOf("fast", "balanced", "quality")
 private val ARITHMETIC_PATTERN = Regex("""^\s*[\d+\-*/().^ ]+\s*$""")
 
 /**
- * Routes queries to the appropriate model tier using a cached [RoutingPolicy].
+ * ADVANCED — MAY: Routes queries to the appropriate model tier using a cached [RoutingPolicy].
  *
  * Performs lightweight local routing: word-count thresholds, keyword matching
  * for complex indicators, and optional deterministic interception for pure

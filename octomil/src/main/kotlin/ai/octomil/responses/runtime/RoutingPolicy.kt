@@ -1,5 +1,8 @@
 package ai.octomil.responses.runtime
 
+/**
+ * ADVANCED — MAY: Policy governing runtime selection in [RouterModelRuntime].
+ */
 sealed interface RoutingPolicy {
     data class Auto(
         val preferLocal: Boolean = true,
