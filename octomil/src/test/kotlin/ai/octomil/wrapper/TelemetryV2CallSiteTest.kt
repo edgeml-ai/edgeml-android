@@ -2,7 +2,8 @@ package ai.octomil.wrapper
 
 import ai.octomil.api.OctomilApi
 import ai.octomil.api.dto.ModelDownloadResponse
-import ai.octomil.api.dto.TelemetryV2BatchRequest
+import ai.octomil.api.dto.AnyValue
+import ai.octomil.api.dto.ExportLogsServiceRequest
 import ai.octomil.api.dto.TelemetryV2Event
 import ai.octomil.api.dto.VersionResolutionResponse
 import ai.octomil.models.ModelDownloadException
@@ -47,7 +48,7 @@ class TelemetryV2CallSiteTest {
     private lateinit var modelManager: ModelManager
     private lateinit var config: ai.octomil.config.OctomilConfig
     private lateinit var telemetryQueue: TelemetryQueue
-    private val capturedBatches = mutableListOf<TelemetryV2BatchRequest>()
+    private val capturedBatches = mutableListOf<ExportLogsServiceRequest>()
 
     @Before
     fun setUp() {
@@ -357,10 +358,34 @@ class TelemetryV2CallSiteTest {
     // =========================================================================
 
     /**
-     * Collect all v2 events from captured batches.
+     * Collect all events from captured OTLP batches, converting back to
+     * TelemetryV2Event for test assertion compatibility.
      */
     private fun collectPendingV2Events(): List<TelemetryV2Event> =
-        capturedBatches.flatMap { it.events }
+        capturedBatches.flatMap { req ->
+            req.resourceLogs.flatMap { rl ->
+                rl.scopeLogs.flatMap { sl ->
+                    sl.logRecords.map { record ->
+                        val name = (record.body as? AnyValue.StringValue)?.stringValue ?: ""
+                        val attrs = (record.attributes ?: emptyList()).associate { kv ->
+                            kv.key to when (val v = kv.value) {
+                                is AnyValue.StringValue -> JsonPrimitive(v.stringValue)
+                                is AnyValue.IntValue -> JsonPrimitive(v.intValue)
+                                is AnyValue.DoubleValue -> JsonPrimitive(v.doubleValue)
+                                is AnyValue.BoolValue -> JsonPrimitive(v.boolValue)
+                            }
+                        }
+                        TelemetryV2Event(
+                            name = name,
+                            timestamp = record.timeUnixNano,
+                            attributes = attrs,
+                            traceId = record.traceId,
+                            spanId = record.spanId,
+                        )
+                    }
+                }
+            }
+        }
 
     private fun sha256Hex(data: ByteArray): String {
         val digest = MessageDigest.getInstance("SHA-256")

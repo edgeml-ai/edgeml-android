@@ -2,8 +2,15 @@ package ai.octomil.sync
 
 import ai.octomil.api.OctomilApi
 import ai.octomil.api.OctomilApiFactory
+import ai.octomil.api.dto.AnyValue
+import ai.octomil.api.dto.ExportLogsServiceRequest
+import ai.octomil.api.dto.InstrumentationScope
+import ai.octomil.api.dto.KeyValue
+import ai.octomil.api.dto.LogRecord
+import ai.octomil.api.dto.OtlpResource
+import ai.octomil.api.dto.ResourceLogs
+import ai.octomil.api.dto.ScopeLogs
 import ai.octomil.api.dto.TelemetryAttributes
-import ai.octomil.api.dto.TelemetryV2BatchRequest
 import ai.octomil.api.dto.TelemetryV2Event
 import ai.octomil.api.dto.TelemetryV2Resource
 import ai.octomil.BuildConfig
@@ -180,17 +187,58 @@ class OctomilSyncWorker(
             )
         }
 
-        // Send as a single v2 batch
+        // Send as a single OTLP/JSON batch
         try {
-            val resource = TelemetryV2Resource(
-                sdk = "android",
-                sdkVersion = BuildConfig.OCTOMIL_VERSION,
-                deviceId = deviceId,
-                platform = "android",
-                orgId = config.orgId,
+            val resourceAttrs = listOfNotNull(
+                KeyValue("service.name", AnyValue.StringValue("octomil-android-sdk")),
+                KeyValue("service.version", AnyValue.StringValue(BuildConfig.OCTOMIL_VERSION)),
+                KeyValue("telemetry.sdk.name", AnyValue.StringValue("android")),
+                KeyValue("telemetry.sdk.language", AnyValue.StringValue("android")),
+                deviceId?.let { KeyValue("device.id", AnyValue.StringValue(it)) },
+                KeyValue("org.id", AnyValue.StringValue(config.orgId)),
             )
-            val batch = TelemetryV2BatchRequest(resource = resource, events = v2Events)
-            val response = api.sendTelemetryV2(batch)
+
+            val logRecords = v2Events.map { ev ->
+                val attrs = ev.attributes.map { (k, v) ->
+                    val anyValue: AnyValue = when {
+                        v.isString -> AnyValue.StringValue(v.content)
+                        v.content.toBooleanStrictOrNull() != null ->
+                            AnyValue.BoolValue(v.content.toBooleanStrict())
+                        v.content.toLongOrNull() != null ->
+                            AnyValue.IntValue(v.content.toLong())
+                        v.content.toDoubleOrNull() != null ->
+                            AnyValue.DoubleValue(v.content.toDouble())
+                        else -> AnyValue.StringValue(v.content)
+                    }
+                    KeyValue(k, anyValue)
+                }
+                LogRecord(
+                    timeUnixNano = "0",
+                    body = AnyValue.StringValue(ev.name),
+                    attributes = attrs.ifEmpty { null },
+                    traceId = ev.traceId,
+                    spanId = ev.spanId,
+                )
+            }
+
+            val otlpRequest = ExportLogsServiceRequest(
+                resourceLogs = listOf(
+                    ResourceLogs(
+                        resource = OtlpResource(attributes = resourceAttrs),
+                        scopeLogs = listOf(
+                            ScopeLogs(
+                                scope = InstrumentationScope(
+                                    name = "ai.octomil.android",
+                                    version = BuildConfig.OCTOMIL_VERSION,
+                                ),
+                                logRecords = logRecords,
+                            ),
+                        ),
+                    ),
+                ),
+            )
+
+            val response = api.sendTelemetryV2(otlpRequest)
             if (response.isSuccessful) {
                 for (event in events) {
                     eventQueue.removeEvent(event.id)
@@ -198,7 +246,7 @@ class OctomilSyncWorker(
                 successCount = events.size
             }
         } catch (e: Exception) {
-            Timber.w(e, "Failed to sync training events via v2")
+            Timber.w(e, "Failed to sync training events via OTLP")
         }
 
         Timber.i("Synced $successCount/${events.size} events")

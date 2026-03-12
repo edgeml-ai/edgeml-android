@@ -1,7 +1,7 @@
 package ai.octomil.experiments
 
 import ai.octomil.api.OctomilApi
-import ai.octomil.api.dto.TelemetryV2BatchRequest
+import ai.octomil.api.dto.ExportLogsServiceRequest
 import ai.octomil.wrapper.TelemetryQueue
 import ai.octomil.wrapper.TelemetrySender
 import io.mockk.coEvery

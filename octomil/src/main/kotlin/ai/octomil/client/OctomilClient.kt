@@ -10,7 +10,14 @@ import ai.octomil.api.dto.HeartbeatRequest
 import ai.octomil.api.dto.ModelUpdateInfo
 import ai.octomil.api.dto.RoundAssignment
 import ai.octomil.api.dto.TelemetryAttributes
-import ai.octomil.api.dto.TelemetryV2BatchRequest
+import ai.octomil.api.dto.AnyValue
+import ai.octomil.api.dto.ExportLogsServiceRequest
+import ai.octomil.api.dto.InstrumentationScope
+import ai.octomil.api.dto.KeyValue
+import ai.octomil.api.dto.LogRecord
+import ai.octomil.api.dto.OtlpResource
+import ai.octomil.api.dto.ResourceLogs
+import ai.octomil.api.dto.ScopeLogs
 import ai.octomil.api.dto.TelemetryV2Event
 import ai.octomil.api.dto.TelemetryV2Resource
 import ai.octomil.config.OctomilConfig
@@ -745,31 +752,60 @@ class OctomilClient private constructor(
         extraAttrs: Map<String, kotlinx.serialization.json.JsonPrimitive> = emptyMap(),
     ) {
         try {
-            val attrs = TelemetryAttributes.of(
+            val allAttrs = TelemetryAttributes.of(
                 "model.id" to modelId,
                 "model.version" to version,
                 "inference.modality" to modality,
                 "inference.session_id" to sessionId,
             ) + extraAttrs
 
-            val event = TelemetryV2Event(
-                name = name,
-                timestamp = java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", java.util.Locale.US).apply {
-                    timeZone = java.util.TimeZone.getTimeZone("UTC")
-                }.format(java.util.Date(timestampMs)),
-                attributes = attrs,
+            val otlpAttrs = allAttrs.map { (k, v) ->
+                val anyValue: AnyValue = when {
+                    v.isString -> AnyValue.StringValue(v.content)
+                    v.content.toBooleanStrictOrNull() != null ->
+                        AnyValue.BoolValue(v.content.toBooleanStrict())
+                    v.content.toLongOrNull() != null ->
+                        AnyValue.IntValue(v.content.toLong())
+                    v.content.toDoubleOrNull() != null ->
+                        AnyValue.DoubleValue(v.content.toDouble())
+                    else -> AnyValue.StringValue(v.content)
+                }
+                KeyValue(k, anyValue)
+            }
+
+            val logRecord = LogRecord(
+                timeUnixNano = "${timestampMs * 1_000_000}",
+                body = AnyValue.StringValue(name),
+                attributes = otlpAttrs.ifEmpty { null },
             )
 
-            val resource = TelemetryV2Resource(
-                sdk = "android",
-                sdkVersion = BuildConfig.OCTOMIL_VERSION,
-                deviceId = _serverDeviceId.value,
-                platform = "android",
-                orgId = config.orgId,
+            val resourceAttrs = listOfNotNull(
+                KeyValue("service.name", AnyValue.StringValue("octomil-android-sdk")),
+                KeyValue("service.version", AnyValue.StringValue(BuildConfig.OCTOMIL_VERSION)),
+                KeyValue("telemetry.sdk.name", AnyValue.StringValue("android")),
+                KeyValue("telemetry.sdk.language", AnyValue.StringValue("android")),
+                _serverDeviceId.value?.let { KeyValue("device.id", AnyValue.StringValue(it)) },
+                KeyValue("org.id", AnyValue.StringValue(config.orgId)),
             )
 
-            val batch = TelemetryV2BatchRequest(resource = resource, events = listOf(event))
-            api.sendTelemetryV2(batch)
+            val otlpRequest = ExportLogsServiceRequest(
+                resourceLogs = listOf(
+                    ResourceLogs(
+                        resource = OtlpResource(attributes = resourceAttrs),
+                        scopeLogs = listOf(
+                            ScopeLogs(
+                                scope = InstrumentationScope(
+                                    name = "ai.octomil.android",
+                                    version = BuildConfig.OCTOMIL_VERSION,
+                                ),
+                                logRecords = listOf(logRecord),
+                            ),
+                        ),
+                    ),
+                ),
+            )
+
+            api.sendTelemetryV2(otlpRequest)
         } catch (e: Exception) {
             Timber.w(e, "Failed to emit v2 $name event")
         }

@@ -2,7 +2,7 @@ package ai.octomil.wrapper
 
 import ai.octomil.BuildConfig
 import ai.octomil.api.OctomilApi
-import ai.octomil.api.dto.TelemetryV2BatchRequest
+import ai.octomil.api.dto.ExportLogsServiceRequest
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -134,19 +134,22 @@ object Octomil {
 
         val api = buildTelemetryApi(serverUrl, apiKey)
 
-        return TelemetrySender { batch: TelemetryV2BatchRequest ->
-            Timber.d("%s: Sending v2 telemetry batch (%d events) to %s", TAG, batch.events.size, serverUrl)
+        return TelemetrySender { request: ExportLogsServiceRequest ->
+            val eventCount = request.resourceLogs
+                .flatMap { it.scopeLogs }
+                .sumOf { it.logRecords.size }
+            Timber.d("%s: Sending OTLP telemetry (%d log records) to %s", TAG, eventCount, serverUrl)
 
-            val response = api.sendTelemetryV2(batch)
+            val response = api.sendTelemetryV2(request)
             if (!response.isSuccessful) {
                 throw IOException(
-                    "Telemetry v2 batch upload failed: HTTP ${response.code()} ${response.message()}",
+                    "Telemetry OTLP upload failed: HTTP ${response.code()} ${response.message()}",
                 )
             }
             Timber.d(
-                "%s: Telemetry v2 batch accepted: %d events",
+                "%s: Telemetry OTLP accepted: %d log records",
                 TAG,
-                batch.events.size,
+                eventCount,
             )
         }
     }
