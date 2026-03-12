@@ -1,11 +1,17 @@
 package ai.octomil.errors
 
+import ai.octomil.generated.ErrorCode as ContractErrorCode
+
 /**
  * Canonical error codes matching SDK_FACADE_CONTRACT.md.
  * All 19 required codes from the server's ErrorCode enum.
  *
  * Each code carries a [retryable] flag indicating whether the operation that
  * produced the error is safe to retry automatically.
+ *
+ * The generated [ContractErrorCode] enum from octomil-contracts defines the
+ * canonical set of wire-format codes. Use [fromContractCode] to map from a
+ * server response string to an [OctomilErrorCode].
  */
 enum class OctomilErrorCode(val retryable: Boolean) {
     NETWORK_UNAVAILABLE(true),
@@ -49,6 +55,24 @@ enum class OctomilErrorCode(val retryable: Boolean) {
             429 -> RATE_LIMITED
             in 500..599 -> SERVER_ERROR
             else -> UNKNOWN
+        }
+
+        /**
+         * Map a wire-format error code string (e.g. "model_not_found") from a
+         * server response to the corresponding [OctomilErrorCode].
+         *
+         * Uses the generated [ContractErrorCode] enum to parse the string,
+         * then maps to the SDK's [OctomilErrorCode]. Unrecognised codes fall
+         * back to [UNKNOWN] per the contract specification.
+         */
+        fun fromContractCode(code: String): OctomilErrorCode {
+            val contractCode = ContractErrorCode.fromCode(code)
+                ?: return UNKNOWN
+            return try {
+                valueOf(contractCode.name)
+            } catch (_: IllegalArgumentException) {
+                UNKNOWN
+            }
         }
     }
 }
