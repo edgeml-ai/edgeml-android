@@ -107,6 +107,11 @@ class OctomilClient private constructor(
     val experiments: ai.octomil.experiments.ExperimentsClient =
         ai.octomil.experiments.ExperimentsClient(api, TelemetryQueue.shared)
 
+    /** Models namespace -- model lifecycle operations (status / load / unload / list / clearCache). */
+    val models: ai.octomil.models.OctomilModels by lazy {
+        ai.octomil.models.OctomilModels(modelManager)
+    }
+
     /** Network connectivity monitor. Lazily initialized to avoid ClassCastException in test environments. */
     val networkMonitor: NetworkMonitor by lazy { NetworkMonitor.getInstance(this.context) }
 

@@ -51,6 +51,9 @@ class ModelManager(
     private val _downloadState = MutableStateFlow<DownloadState>(DownloadState.Idle)
     val downloadState: Flow<DownloadState> = _downloadState.asStateFlow()
 
+    /** Snapshot of the current download state (non-suspending). */
+    val currentDownloadState: DownloadState get() = _downloadState.value
+
     private val json =
         Json {
             ignoreUnknownKeys = true
@@ -59,6 +62,15 @@ class ModelManager(
 
     // In-memory cache metadata
     private var cacheMetadata: MutableMap<String, CachedModel> = mutableMapOf()
+
+    /**
+     * Non-suspending check whether any valid cached model exists for [modelId].
+     *
+     * Reads the in-memory metadata map without acquiring the mutex.
+     * Safe for best-effort status queries (e.g. [OctomilModels.status]).
+     */
+    fun hasCachedModel(modelId: String): Boolean =
+        cacheMetadata.values.any { it.modelId == modelId && it.isValid() }
 
     private val deviceInfo = ai.octomil.sdk.DeviceInfo(context).apply {
         deviceProfileClient = ai.octomil.sdk.DeviceProfileClient(
