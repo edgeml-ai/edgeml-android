@@ -23,10 +23,13 @@ data class ControlSyncResponse(
  *
  * @param api The Retrofit API interface.
  * @param orgId The organization ID used for the sync request.
+ * @param deviceId Optional client-side device identifier. When provided, the
+ *   server can return device-specific assignments and rollout decisions.
  */
 class ControlPlaneClient(
     private val api: OctomilApi,
     private val orgId: String,
+    private val deviceId: String? = null,
 ) {
     private var lastConfigVersion: String? = null
     private var lastAssignments: Map<String, String> = emptyMap()
@@ -39,7 +42,7 @@ class ControlPlaneClient(
     suspend fun refresh(): ControlSyncResult {
         val fetchedAt = System.currentTimeMillis()
         return try {
-            val response = api.syncControl(orgId)
+            val response = api.syncControl(orgId, deviceId)
             if (!response.isSuccessful) {
                 Timber.w("Control sync failed: HTTP %d", response.code())
                 return ControlSyncResult(

@@ -3,9 +3,11 @@ package ai.octomil.config
 import org.junit.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertNull
 
 /**
- * Tests for the [OctomilConfig.apiKey] alias and [OctomilConfig.Builder.apiKey] builder method.
+ * Tests for the [OctomilConfig.apiKey] alias, [OctomilConfig.Builder.apiKey], and
+ * [OctomilConfig.Builder.deviceId] builder methods.
  */
 class ApiKeyConfigTest {
 
@@ -79,5 +81,48 @@ class ApiKeyConfigTest {
                 .modelId("model-456")
                 .build()
         }
+    }
+
+    // =========================================================================
+    // deviceId
+    // =========================================================================
+
+    @Test
+    fun `deviceId defaults to null`() {
+        val config = OctomilConfig.Builder()
+            .serverUrl("https://api.octomil.com")
+            .apiKey("sk-test")
+            .orgId("org-123")
+            .modelId("model-456")
+            .build()
+
+        assertNull(config.deviceId)
+    }
+
+    @Test
+    fun `builder deviceId sets config property`() {
+        val config = OctomilConfig.Builder()
+            .serverUrl("https://api.octomil.com")
+            .apiKey("sk-test")
+            .orgId("org-123")
+            .modelId("model-456")
+            .deviceId("my-device-001")
+            .build()
+
+        assertEquals("my-device-001", config.deviceId)
+    }
+
+    @Test
+    fun `builder deviceId accepts null to clear`() {
+        val config = OctomilConfig.Builder()
+            .serverUrl("https://api.octomil.com")
+            .apiKey("sk-test")
+            .orgId("org-123")
+            .modelId("model-456")
+            .deviceId("my-device-001")
+            .deviceId(null)
+            .build()
+
+        assertNull(config.deviceId)
     }
 }

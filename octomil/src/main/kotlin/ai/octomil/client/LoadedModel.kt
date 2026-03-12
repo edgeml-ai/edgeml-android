@@ -6,6 +6,8 @@ import ai.octomil.models.InferenceOutput
 import ai.octomil.training.TFLiteTrainer
 import ai.octomil.training.TensorInfo
 import ai.octomil.training.WarmupResult
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flow
 
 /**
  * Wrapper around a loaded TFLite model that exposes inference and
@@ -65,15 +67,38 @@ class LoadedModel internal constructor(
         trainer.runInference(input.data)
 
     /**
-     * Stream generative inference (delegates to [OctomilClient.predictStream]).
+     * Stream inference results from the loaded model.
      *
-     * For streaming use cases, prefer calling `client.predictStream()` directly
-     * since it requires additional parameters (modality, engine) that live at
-     * the client level.
+     * Since the underlying TFLite runtime does not natively support token-level
+     * streaming, this wraps [predict] and emits the single [InferenceOutput]
+     * through a cold [Flow]. This satisfies the SDK Facade Contract requirement
+     * that every `LoadedModel` exposes both `predict` and `predictStream`.
+     *
+     * For true streaming with chunked output (e.g. LLM token generation),
+     * use [OctomilClient.predictStream] which resolves a streaming engine
+     * and emits [ai.octomil.inference.InferenceChunk] values.
+     *
+     * @param input Input data as a flat float array.
+     * @return A [Flow] emitting a single [InferenceOutput] (or throwing on failure).
      */
-    // Note: predictStream is intentionally NOT on LoadedModel because it
-    // requires engine resolution and v2 telemetry plumbing that live on the
-    // client. Users should call client.predictStream() instead.
+    fun predictStream(input: FloatArray): Flow<InferenceOutput> = flow {
+        val result = predict(input)
+        emit(result.getOrThrow())
+    }
+
+    /**
+     * Stream inference results from the loaded model with structured input.
+     *
+     * Wraps [predict] and emits the single [InferenceOutput] through a cold
+     * [Flow]. See the overload taking [FloatArray] for details.
+     *
+     * @param input [InferenceInput] with data, shape, and optional name.
+     * @return A [Flow] emitting a single [InferenceOutput] (or throwing on failure).
+     */
+    fun predictStream(input: InferenceInput): Flow<InferenceOutput> = flow {
+        val result = predict(input)
+        emit(result.getOrThrow())
+    }
 
     // =========================================================================
     // Lifecycle

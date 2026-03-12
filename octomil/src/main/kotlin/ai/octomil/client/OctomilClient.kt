@@ -21,6 +21,7 @@ import ai.octomil.api.dto.ScopeLogs
 import ai.octomil.api.dto.TelemetryV2Event
 import ai.octomil.api.dto.TelemetryV2Resource
 import ai.octomil.config.OctomilConfig
+import ai.octomil.generated.OtlpResourceAttribute
 import ai.octomil.models.CachedModel
 import ai.octomil.models.DownloadState
 import ai.octomil.models.InferenceInput
@@ -122,7 +123,7 @@ class OctomilClient private constructor(
 
     /** Control plane client for syncing remote configuration, assignments, and rollouts. */
     val control: ai.octomil.control.ControlPlaneClient by lazy {
-        ai.octomil.control.ControlPlaneClient(api, config.orgId)
+        ai.octomil.control.ControlPlaneClient(api, config.orgId, config.deviceId)
     }
 
     /** Network connectivity monitor. Lazily initialized to avoid ClassCastException in test environments. */
@@ -805,6 +806,7 @@ class OctomilClient private constructor(
                 KeyValue("telemetry.sdk.name", AnyValue.StringValue("android")),
                 KeyValue("telemetry.sdk.language", AnyValue.StringValue("android")),
                 _serverDeviceId.value?.let { KeyValue("device.id", AnyValue.StringValue(it)) },
+                config.deviceId?.let { KeyValue(OtlpResourceAttribute.OCTOMIL_DEVICE_ID, AnyValue.StringValue(it)) },
                 KeyValue("org.id", AnyValue.StringValue(config.orgId)),
             )
 
