@@ -1,5 +1,7 @@
 package ai.octomil.client
 
+import ai.octomil.errors.OctomilErrorCode
+import ai.octomil.errors.OctomilException
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
@@ -202,10 +204,13 @@ class RoutingClient(private val config: RoutingConfig) {
 
         httpClient.newCall(request).execute().use { response ->
             if (!response.isSuccessful) {
-                throw RuntimeException("Cloud inference failed: HTTP ${response.code}")
+                throw OctomilException(
+                    OctomilErrorCode.fromHttpStatus(response.code),
+                    "Cloud inference failed: HTTP ${response.code}",
+                )
             }
             val responseBody = response.body?.string()
-                ?: throw RuntimeException("Cloud inference returned empty body")
+                ?: throw OctomilException(OctomilErrorCode.SERVER_ERROR, "Cloud inference returned empty body")
             return json.decodeFromString(CloudInferenceResponse.serializer(), responseBody)
         }
     }

@@ -1,5 +1,7 @@
 package ai.octomil.runtime.adaptation
 
+import ai.octomil.errors.OctomilErrorCode
+import ai.octomil.errors.OctomilException
 import android.content.Context
 import timber.log.Timber
 import java.io.File
@@ -96,7 +98,8 @@ internal class AdaptiveInterpreter(
 
         // Should never reach here since xnnpack (plain interpreter) is always last
         val loadTimeMs = (System.nanoTime() - loadStart) / 1_000_000.0
-        throw RuntimeException(
+        throw OctomilException(
+            OctomilErrorCode.MODEL_LOAD_FAILED,
             "All delegates failed to load model: ${modelFile.name}. " +
                 "Tried: ${chain.joinToString()}, all failed.",
         )
@@ -112,7 +115,7 @@ internal class AdaptiveInterpreter(
      */
     fun predict(input: ByteBuffer, output: ByteBuffer) {
         val interp = interpreter
-            ?: throw IllegalStateException("Interpreter not loaded. Call load() first.")
+            ?: throw OctomilException(OctomilErrorCode.MODEL_LOAD_FAILED, "Interpreter not loaded. Call load() first.")
 
         try {
             val method = interp.javaClass.getMethod(
@@ -122,7 +125,7 @@ internal class AdaptiveInterpreter(
             )
             method.invoke(interp, input, output)
         } catch (e: Exception) {
-            throw RuntimeException("Inference failed on delegate $activeDelegate: ${e.message}", e)
+            throw OctomilException(OctomilErrorCode.INFERENCE_FAILED, "Inference failed on delegate $activeDelegate: ${e.message}", e)
         }
     }
 

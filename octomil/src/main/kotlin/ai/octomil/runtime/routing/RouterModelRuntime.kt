@@ -1,5 +1,7 @@
 package ai.octomil.runtime.routing
 
+import ai.octomil.errors.OctomilErrorCode
+import ai.octomil.errors.OctomilException
 import ai.octomil.runtime.core.ModelRuntime
 import ai.octomil.runtime.core.RuntimeCapabilities
 import ai.octomil.runtime.core.RuntimeChunk
@@ -39,11 +41,11 @@ internal class RouterModelRuntime(
         return when (policy) {
             is RoutingPolicy.LocalOnly -> {
                 localFactory?.invoke("local")
-                    ?: throw IllegalStateException("No local runtime available")
+                    ?: throw OctomilException(OctomilErrorCode.RUNTIME_UNAVAILABLE, "No local runtime available")
             }
             is RoutingPolicy.CloudOnly -> {
                 cloudFactory?.invoke("cloud")
-                    ?: throw IllegalStateException("No cloud runtime available")
+                    ?: throw OctomilException(OctomilErrorCode.RUNTIME_UNAVAILABLE, "No cloud runtime available")
             }
             is RoutingPolicy.Auto -> {
                 val local = localFactory?.invoke("local")
@@ -51,9 +53,9 @@ internal class RouterModelRuntime(
                     local
                 } else if (policy.fallback == "cloud") {
                     cloudFactory?.invoke("cloud")
-                        ?: throw IllegalStateException("No cloud runtime for fallback")
+                        ?: throw OctomilException(OctomilErrorCode.RUNTIME_UNAVAILABLE, "No cloud runtime for fallback")
                 } else {
-                    throw IllegalStateException("No local runtime and fallback disabled")
+                    throw OctomilException(OctomilErrorCode.RUNTIME_UNAVAILABLE, "No local runtime and fallback disabled")
                 }
             }
         }

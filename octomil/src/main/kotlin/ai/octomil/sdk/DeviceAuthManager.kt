@@ -1,5 +1,7 @@
 package ai.octomil.sdk
 
+import ai.octomil.errors.OctomilErrorCode
+import ai.octomil.errors.OctomilException
 import android.content.Context
 import android.util.Base64
 import kotlinx.coroutines.CoroutineDispatcher
@@ -112,7 +114,7 @@ class DeviceAuthManager internal constructor(
 
     suspend fun refresh(): DeviceTokenState =
         withContext(ioDispatcher) {
-            val current = stateStore.load() ?: throw IllegalStateException("No token state stored")
+            val current = stateStore.load() ?: throw OctomilException(OctomilErrorCode.AUTHENTICATION_FAILED, "No token state stored")
 
             val response =
                 transport.postJson(
@@ -144,7 +146,7 @@ class DeviceAuthManager internal constructor(
 
     suspend fun getAccessToken(refreshIfExpiringWithinSeconds: Long = 30): String =
         withContext(ioDispatcher) {
-            val state = stateStore.load() ?: throw IllegalStateException("No token state stored")
+            val state = stateStore.load() ?: throw OctomilException(OctomilErrorCode.AUTHENTICATION_FAILED, "No token state stored")
             val thresholdMillis = nowMillisProvider() + (refreshIfExpiringWithinSeconds * 1000)
             if (thresholdMillis >= state.expiresAtEpochMillis) {
                 return@withContext try {
