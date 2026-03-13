@@ -59,6 +59,8 @@ enum class ErrorCode(
     AUTHENTICATION_FAILED("authentication_failed", ErrorCategory.AUTH, RetryClass.NEVER, false, SuggestedAction.REAUTHENTICATE),
     FORBIDDEN("forbidden", ErrorCategory.AUTH, RetryClass.NEVER, false, SuggestedAction.CHECK_PERMISSIONS),
     DEVICE_NOT_REGISTERED("device_not_registered", ErrorCategory.AUTH, RetryClass.NEVER, false, SuggestedAction.REGISTER_DEVICE),
+    TOKEN_EXPIRED("token_expired", ErrorCategory.AUTH, RetryClass.NEVER, false, SuggestedAction.REAUTHENTICATE),
+    DEVICE_REVOKED("device_revoked", ErrorCategory.AUTH, RetryClass.NEVER, false, SuggestedAction.REGISTER_DEVICE),
     NETWORK_UNAVAILABLE("network_unavailable", ErrorCategory.NETWORK, RetryClass.BACKOFF_SAFE, true, SuggestedAction.RETRY_OR_FALLBACK),
     REQUEST_TIMEOUT("request_timeout", ErrorCategory.NETWORK, RetryClass.CONDITIONAL, true, SuggestedAction.RETRY_OR_FALLBACK),
     SERVER_ERROR("server_error", ErrorCategory.NETWORK, RetryClass.BACKOFF_SAFE, true, SuggestedAction.RETRY),
