@@ -1,5 +1,7 @@
 package ai.octomil.models
 
+import ai.octomil.errors.OctomilErrorCode
+import ai.octomil.errors.OctomilException
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import java.io.File
@@ -108,12 +110,15 @@ sealed class DownloadState {
 
 /**
  * Exception thrown when model download fails.
+ *
+ * Extends [OctomilException] so callers can catch the unified exception type.
+ * The local [ErrorCode] is mapped to the canonical [OctomilErrorCode].
  */
 class ModelDownloadException(
     message: String,
     cause: Throwable? = null,
-    val errorCode: ErrorCode = ErrorCode.UNKNOWN,
-) : Exception(message, cause) {
+    val downloadErrorCode: ErrorCode = ErrorCode.UNKNOWN,
+) : OctomilException(downloadErrorCode.toOctomilErrorCode(), message, cause) {
     enum class ErrorCode {
         NETWORK_ERROR,
         NOT_FOUND,
@@ -122,7 +127,18 @@ class ModelDownloadException(
         IO_ERROR,
         UNAUTHORIZED,
         SERVER_ERROR,
-        UNKNOWN,
+        UNKNOWN;
+
+        fun toOctomilErrorCode(): OctomilErrorCode = when (this) {
+            NETWORK_ERROR -> OctomilErrorCode.NETWORK_UNAVAILABLE
+            NOT_FOUND -> OctomilErrorCode.MODEL_NOT_FOUND
+            CHECKSUM_MISMATCH -> OctomilErrorCode.CHECKSUM_MISMATCH
+            INSUFFICIENT_STORAGE -> OctomilErrorCode.INSUFFICIENT_STORAGE
+            IO_ERROR -> OctomilErrorCode.DOWNLOAD_FAILED
+            UNAUTHORIZED -> OctomilErrorCode.INVALID_API_KEY
+            SERVER_ERROR -> OctomilErrorCode.SERVER_ERROR
+            UNKNOWN -> OctomilErrorCode.UNKNOWN
+        }
     }
 }
 

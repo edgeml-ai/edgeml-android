@@ -212,7 +212,7 @@ class ModelManager(
                     try {
                         TelemetryQueue.shared?.reportDeployFailed(
                             modelId,
-                            e.errorCode.name,
+                            e.downloadErrorCode.name,
                             e.message ?: "unknown",
                         )
                     } catch (_: Exception) {
@@ -225,7 +225,7 @@ class ModelManager(
                         ModelDownloadException(
                             "Download failed: ${e.message}",
                             cause = e,
-                            errorCode = ModelDownloadException.ErrorCode.UNKNOWN,
+                            downloadErrorCode = ModelDownloadException.ErrorCode.UNKNOWN,
                         )
                     _downloadState.value = DownloadState.Failed(downloadException)
                     Result.failure(downloadException)
@@ -243,7 +243,7 @@ class ModelManager(
         if (!versionResponse.isSuccessful) {
             throw ModelDownloadException(
                 "Failed to get version: ${versionResponse.code()}",
-                errorCode =
+                downloadErrorCode =
                     when (versionResponse.code()) {
                         401, 403 -> ModelDownloadException.ErrorCode.UNAUTHORIZED
                         404 -> ModelDownloadException.ErrorCode.NOT_FOUND
@@ -299,7 +299,7 @@ class ModelManager(
         if (!response.isSuccessful) {
             throw ModelDownloadException(
                 "Failed to resolve model format: ${response.code()}",
-                errorCode = ModelDownloadException.ErrorCode.NETWORK_ERROR,
+                downloadErrorCode = ModelDownloadException.ErrorCode.NETWORK_ERROR,
             )
         }
         return response.body()
@@ -321,7 +321,7 @@ class ModelManager(
         if (!downloadResponse.isSuccessful) {
             throw ModelDownloadException(
                 "Failed to get download URL: ${downloadResponse.code()}",
-                errorCode = ModelDownloadException.ErrorCode.NETWORK_ERROR,
+                downloadErrorCode = ModelDownloadException.ErrorCode.NETWORK_ERROR,
             )
         }
 
@@ -443,7 +443,7 @@ class ModelManager(
         storage.getServerDeviceId()
             ?: throw ModelDownloadException(
                 "Device not registered",
-                errorCode = ModelDownloadException.ErrorCode.UNAUTHORIZED,
+                downloadErrorCode = ModelDownloadException.ErrorCode.UNAUTHORIZED,
             )
 
     private suspend fun downloadModel(
@@ -461,7 +461,7 @@ class ModelManager(
             if (availableSpace < expectedSize * 2) {
                 throw ModelDownloadException(
                     "Insufficient storage: need ${expectedSize * 2} bytes, have $availableSpace",
-                    errorCode = ModelDownloadException.ErrorCode.INSUFFICIENT_STORAGE,
+                    downloadErrorCode = ModelDownloadException.ErrorCode.INSUFFICIENT_STORAGE,
                 )
             }
 
@@ -476,7 +476,7 @@ class ModelManager(
             if (!response.isSuccessful) {
                 throw ModelDownloadException(
                     "Download failed: ${response.code}",
-                    errorCode = ModelDownloadException.ErrorCode.NETWORK_ERROR,
+                    downloadErrorCode = ModelDownloadException.ErrorCode.NETWORK_ERROR,
                 )
             }
 
@@ -484,7 +484,7 @@ class ModelManager(
                 response.body
                     ?: throw ModelDownloadException(
                         "Empty response body",
-                        errorCode = ModelDownloadException.ErrorCode.NETWORK_ERROR,
+                        downloadErrorCode = ModelDownloadException.ErrorCode.NETWORK_ERROR,
                     )
 
             val totalBytes = body.contentLength().takeIf { it > 0 } ?: expectedSize
@@ -528,7 +528,7 @@ class ModelManager(
                 throw ModelDownloadException(
                     "IO error during download: ${e.message}",
                     cause = e,
-                    errorCode = ModelDownloadException.ErrorCode.IO_ERROR,
+                    downloadErrorCode = ModelDownloadException.ErrorCode.IO_ERROR,
                 )
             }
         }
@@ -547,7 +547,7 @@ class ModelManager(
             }
             throw ModelDownloadException(
                 "Checksum mismatch: expected $expectedChecksum, got $actualChecksum",
-                errorCode = ModelDownloadException.ErrorCode.CHECKSUM_MISMATCH,
+                downloadErrorCode = ModelDownloadException.ErrorCode.CHECKSUM_MISMATCH,
             )
         }
     }

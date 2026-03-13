@@ -107,7 +107,7 @@ class OctomilModelsTest {
 
     @Test
     fun `status returns ERROR when download failed`() {
-        val error = ModelDownloadException("failed", errorCode = ModelDownloadException.ErrorCode.NETWORK_ERROR)
+        val error = ModelDownloadException("failed", downloadErrorCode = ModelDownloadException.ErrorCode.NETWORK_ERROR)
         every { modelManager.currentDownloadState } returns DownloadState.Failed(error)
 
         val status = models.status("my-model")
@@ -189,7 +189,7 @@ class OctomilModelsTest {
     fun `load throws when download fails`() = runTest {
         coEvery { modelManager.getCachedModel("test-model", null) } returns null
         coEvery { modelManager.ensureModelAvailable(modelId = "test-model") } returns Result.failure(
-            ModelDownloadException("failed", errorCode = ModelDownloadException.ErrorCode.NETWORK_ERROR),
+            ModelDownloadException("failed", downloadErrorCode = ModelDownloadException.ErrorCode.NETWORK_ERROR),
         )
 
         models.load("test-model")
