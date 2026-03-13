@@ -113,6 +113,23 @@ enum class OctomilErrorCode {
                 UNKNOWN
             }
         }
+
+        /**
+         * Resolve an [OctomilErrorCode] from a server error response.
+         *
+         * Prefers the wire-format `code` string (e.g. "model_not_found") when
+         * available, falling back to HTTP status code mapping.
+         *
+         * @param code The optional error code string from the server response body.
+         * @param httpStatus The HTTP status code from the response.
+         */
+        fun fromServerResponse(code: String?, httpStatus: Int): OctomilErrorCode {
+            if (code != null) {
+                val resolved = fromContractCode(code)
+                if (resolved != UNKNOWN) return resolved
+            }
+            return fromHttpStatus(httpStatus)
+        }
     }
 }
 
