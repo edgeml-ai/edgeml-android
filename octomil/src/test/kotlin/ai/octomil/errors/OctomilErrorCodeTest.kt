@@ -14,8 +14,8 @@ class OctomilErrorCodeTest {
     // =========================================================================
 
     @Test
-    fun `has exactly 19 canonical error codes`() {
-        assertEquals(19, OctomilErrorCode.entries.size)
+    fun `has exactly 31 canonical error codes`() {
+        assertEquals(31, OctomilErrorCode.entries.size)
     }
 
     @Test
@@ -27,6 +27,7 @@ class OctomilErrorCodeTest {
             "INVALID_API_KEY",
             "AUTHENTICATION_FAILED",
             "FORBIDDEN",
+            "DEVICE_NOT_REGISTERED",
             "MODEL_NOT_FOUND",
             "MODEL_DISABLED",
             "DOWNLOAD_FAILED",
@@ -38,7 +39,18 @@ class OctomilErrorCodeTest {
             "INSUFFICIENT_MEMORY",
             "RATE_LIMITED",
             "INVALID_INPUT",
+            "UNSUPPORTED_MODALITY",
+            "CONTEXT_TOO_LARGE",
+            "VERSION_NOT_FOUND",
+            "ACCELERATOR_UNAVAILABLE",
+            "STREAM_INTERRUPTED",
+            "POLICY_DENIED",
+            "CLOUD_FALLBACK_DISALLOWED",
+            "MAX_TOOL_ROUNDS_EXCEEDED",
+            "CONTROL_SYNC_FAILED",
+            "ASSIGNMENT_NOT_FOUND",
             "CANCELLED",
+            "APP_BACKGROUNDED",
             "UNKNOWN",
         )
         val actual = OctomilErrorCode.entries.map { it.name }.toSet()
@@ -55,10 +67,14 @@ class OctomilErrorCodeTest {
             OctomilErrorCode.NETWORK_UNAVAILABLE,
             OctomilErrorCode.REQUEST_TIMEOUT,
             OctomilErrorCode.SERVER_ERROR,
+            OctomilErrorCode.RATE_LIMITED,
             OctomilErrorCode.DOWNLOAD_FAILED,
             OctomilErrorCode.CHECKSUM_MISMATCH,
+            OctomilErrorCode.MODEL_LOAD_FAILED,
             OctomilErrorCode.INFERENCE_FAILED,
-            OctomilErrorCode.RATE_LIMITED,
+            OctomilErrorCode.STREAM_INTERRUPTED,
+            OctomilErrorCode.CONTROL_SYNC_FAILED,
+            OctomilErrorCode.APP_BACKGROUNDED,
         )
         for (code in OctomilErrorCode.entries) {
             if (code in retryable) {
@@ -200,5 +216,48 @@ class OctomilErrorCodeTest {
                 ex.retryable,
             )
         }
+    }
+
+    // =========================================================================
+    // fromContractCode
+    // =========================================================================
+
+    @Test
+    fun `fromContractCode maps known code string`() {
+        assertEquals(OctomilErrorCode.MODEL_NOT_FOUND, OctomilErrorCode.fromContractCode("model_not_found"))
+    }
+
+    @Test
+    fun `fromContractCode returns UNKNOWN for unrecognised code`() {
+        assertEquals(OctomilErrorCode.UNKNOWN, OctomilErrorCode.fromContractCode("totally_bogus_code"))
+    }
+
+    // =========================================================================
+    // fromServerResponse
+    // =========================================================================
+
+    @Test
+    fun `fromServerResponse prefers code over HTTP status`() {
+        // code=rate_limited should win even though HTTP 500 would map to SERVER_ERROR
+        assertEquals(
+            OctomilErrorCode.RATE_LIMITED,
+            OctomilErrorCode.fromServerResponse("rate_limited", 500),
+        )
+    }
+
+    @Test
+    fun `fromServerResponse falls back to HTTP status when code is null`() {
+        assertEquals(
+            OctomilErrorCode.FORBIDDEN,
+            OctomilErrorCode.fromServerResponse(null, 403),
+        )
+    }
+
+    @Test
+    fun `fromServerResponse falls back to HTTP status when code is unrecognised`() {
+        assertEquals(
+            OctomilErrorCode.SERVER_ERROR,
+            OctomilErrorCode.fromServerResponse("not_a_real_code", 502),
+        )
     }
 }
