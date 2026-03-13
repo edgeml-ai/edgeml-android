@@ -33,7 +33,7 @@ class PairingModelsTest {
             "download_url": "https://s3.example.com/model.tflite",
             "download_format": "tensorflow_lite",
             "download_size_bytes": 4200000,
-            "device_tier": "flagship",
+            "device_class": "flagship",
             "quantization": "float16",
             "executor": "gpu"
         }
@@ -49,7 +49,7 @@ class PairingModelsTest {
         assertEquals("https://s3.example.com/model.tflite", session.downloadUrl)
         assertEquals("tensorflow_lite", session.downloadFormat)
         assertEquals(4200000L, session.downloadSizeBytes)
-        assertEquals("flagship", session.deviceTier)
+        assertEquals("flagship", session.deviceClass)
         assertEquals("float16", session.quantization)
         assertEquals("gpu", session.executor)
     }
@@ -88,7 +88,7 @@ class PairingModelsTest {
             downloadUrl = "https://example.com/download",
             downloadFormat = "tensorflow_lite",
             downloadSizeBytes = 1024L,
-            deviceTier = "mid_range",
+            deviceClass = "mid_range",
             quantization = "int8",
             executor = "cpu",
         )
