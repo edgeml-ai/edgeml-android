@@ -1,38 +1,77 @@
 package ai.octomil.errors
 
+import ai.octomil.generated.ErrorCategory
 import ai.octomil.generated.ErrorCode as ContractErrorCode
+import ai.octomil.generated.RetryClass
+import ai.octomil.generated.SuggestedAction
 
 /**
  * Canonical error codes matching SDK_FACADE_CONTRACT.md.
- * All 19 required codes from the server's ErrorCode enum.
+ * All 31 codes from the server's ErrorCode enum.
  *
- * Each code carries a [retryable] flag indicating whether the operation that
- * produced the error is safe to retry automatically.
+ * Error metadata ([retryable], [category], [retryClass], [fallbackEligible],
+ * [suggestedAction]) is derived from the generated [ContractErrorCode] taxonomy
+ * so it stays in sync with the contract without manual maintenance.
  *
  * The generated [ContractErrorCode] enum from octomil-contracts defines the
  * canonical set of wire-format codes. Use [fromContractCode] to map from a
  * server response string to an [OctomilErrorCode].
  */
-enum class OctomilErrorCode(val retryable: Boolean) {
-    NETWORK_UNAVAILABLE(true),
-    REQUEST_TIMEOUT(true),
-    SERVER_ERROR(true),
-    INVALID_API_KEY(false),
-    AUTHENTICATION_FAILED(false),
-    FORBIDDEN(false),
-    MODEL_NOT_FOUND(false),
-    MODEL_DISABLED(false),
-    DOWNLOAD_FAILED(true),
-    CHECKSUM_MISMATCH(true),
-    INSUFFICIENT_STORAGE(false),
-    RUNTIME_UNAVAILABLE(false),
-    MODEL_LOAD_FAILED(false),
-    INFERENCE_FAILED(true),
-    INSUFFICIENT_MEMORY(false),
-    RATE_LIMITED(true),
-    INVALID_INPUT(false),
-    CANCELLED(false),
-    UNKNOWN(false);
+enum class OctomilErrorCode {
+    NETWORK_UNAVAILABLE,
+    REQUEST_TIMEOUT,
+    SERVER_ERROR,
+    INVALID_API_KEY,
+    AUTHENTICATION_FAILED,
+    FORBIDDEN,
+    DEVICE_NOT_REGISTERED,
+    MODEL_NOT_FOUND,
+    MODEL_DISABLED,
+    DOWNLOAD_FAILED,
+    CHECKSUM_MISMATCH,
+    INSUFFICIENT_STORAGE,
+    RUNTIME_UNAVAILABLE,
+    MODEL_LOAD_FAILED,
+    INFERENCE_FAILED,
+    INSUFFICIENT_MEMORY,
+    RATE_LIMITED,
+    INVALID_INPUT,
+    UNSUPPORTED_MODALITY,
+    CONTEXT_TOO_LARGE,
+    VERSION_NOT_FOUND,
+    ACCELERATOR_UNAVAILABLE,
+    STREAM_INTERRUPTED,
+    POLICY_DENIED,
+    CLOUD_FALLBACK_DISALLOWED,
+    MAX_TOOL_ROUNDS_EXCEEDED,
+    CONTROL_SYNC_FAILED,
+    ASSIGNMENT_NOT_FOUND,
+    CANCELLED,
+    APP_BACKGROUNDED,
+    UNKNOWN;
+
+    /**
+     * Maps this SDK error code to the generated contract [ContractErrorCode].
+     * Falls back to [ContractErrorCode.UNKNOWN] for SDK-specific codes
+     * that don't exist in the contract.
+     */
+    private fun toContractCode(): ContractErrorCode =
+        ContractErrorCode.fromCode(name.lowercase()) ?: ContractErrorCode.UNKNOWN
+
+    /** Whether the operation that produced this error is safe to retry. */
+    val retryable: Boolean get() = toContractCode().retryClass != RetryClass.NEVER
+
+    /** The error category from the contract taxonomy. */
+    val category: ErrorCategory get() = toContractCode().category
+
+    /** The retry classification from the contract taxonomy. */
+    val retryClass: RetryClass get() = toContractCode().retryClass
+
+    /** Whether this error is eligible for cloud fallback. */
+    val fallbackEligible: Boolean get() = toContractCode().fallbackEligible
+
+    /** The suggested remediation action from the contract taxonomy. */
+    val suggestedAction: SuggestedAction get() = toContractCode().suggestedAction
 
     companion object {
         /**
@@ -89,10 +128,20 @@ class OctomilException(
     message: String,
     cause: Throwable? = null,
 ) : Exception(message, cause) {
-    /**
-     * Whether the operation that produced this error is safe to retry.
-     */
+    /** Whether the operation that produced this error is safe to retry. */
     val retryable: Boolean get() = errorCode.retryable
+
+    /** The error category from the contract taxonomy. */
+    val category: ErrorCategory get() = errorCode.category
+
+    /** The retry classification from the contract taxonomy. */
+    val retryClass: RetryClass get() = errorCode.retryClass
+
+    /** Whether this error is eligible for cloud fallback. */
+    val fallbackEligible: Boolean get() = errorCode.fallbackEligible
+
+    /** The suggested remediation action from the contract taxonomy. */
+    val suggestedAction: SuggestedAction get() = errorCode.suggestedAction
 
     override fun toString(): String =
         "OctomilException(code=$errorCode, retryable=$retryable, message=$message)"
