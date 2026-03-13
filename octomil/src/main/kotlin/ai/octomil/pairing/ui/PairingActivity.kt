@@ -2,6 +2,7 @@ package ai.octomil.pairing.ui
 
 import ai.octomil.api.OctomilApi
 import ai.octomil.api.OctomilApiFactory
+import ai.octomil.config.AuthConfig
 import ai.octomil.config.OctomilConfig
 import ai.octomil.tryitout.TryItOutActivity
 import android.content.Context
@@ -132,9 +133,7 @@ class PairingActivity : ComponentActivity() {
         }
 
         val config = OctomilConfig.Builder()
-            .serverUrl(serverUrl)
-            .deviceAccessToken("pairing") // Placeholder — pairing endpoints are unauthenticated
-            .orgId("pairing") // Pairing endpoints don't require org auth
+            .auth(AuthConfig.DeviceToken(deviceId = "pairing", bootstrapToken = "pairing", serverUrl = serverUrl))
             .modelId("pairing") // Placeholder — not used during pairing
             .build()
 

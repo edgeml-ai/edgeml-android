@@ -229,6 +229,7 @@ data class OctomilConfig(
     init {
         if (auth.serverUrl.isBlank()) throw OctomilException(OctomilErrorCode.INVALID_INPUT, "serverUrl must not be blank")
         if (auth.token.isBlank()) throw OctomilException(OctomilErrorCode.INVALID_API_KEY, "apiKey / bootstrapToken must not be blank")
+        if (auth is AuthConfig.OrgApiKey && auth.orgId.isBlank()) throw OctomilException(OctomilErrorCode.INVALID_INPUT, "orgId must not be blank")
         if (modelId.isBlank()) throw OctomilException(OctomilErrorCode.INVALID_INPUT, "modelId must not be blank")
         if (connectionTimeoutMs <= 0) throw OctomilException(OctomilErrorCode.INVALID_INPUT, "connectionTimeoutMs must be positive")
         if (readTimeoutMs <= 0) throw OctomilException(OctomilErrorCode.INVALID_INPUT, "readTimeoutMs must be positive")
@@ -247,6 +248,10 @@ data class OctomilConfig(
      */
     class Builder {
         private var auth: AuthConfig? = null
+        // Legacy flat-field accumulator — used by serverUrl/apiKey/deviceAccessToken/orgId convenience methods.
+        private var _serverUrl: String? = null
+        private var _token: String? = null
+        private var _orgId: String? = null
         private var modelId: String = ""
         private var serverEnvironment: ServerEnvironment = ServerEnvironment.CLOUD
         private var deviceId: String? = null
@@ -286,6 +291,18 @@ data class OctomilConfig(
          * [AuthConfig.DeviceToken] for device token authentication.
          */
         fun auth(auth: AuthConfig) = apply { this.auth = auth }
+
+        /** Convenience: set the server URL (builds an [AuthConfig.OrgApiKey] on [build]). */
+        fun serverUrl(url: String) = apply { this._serverUrl = url }
+
+        /** Convenience: set the API key (builds an [AuthConfig.OrgApiKey] on [build]). */
+        fun apiKey(key: String) = apply { this._token = key }
+
+        /** Convenience: alias for [apiKey]. */
+        fun deviceAccessToken(token: String) = apply { this._token = token }
+
+        /** Convenience: set the org ID (builds an [AuthConfig.OrgApiKey] on [build]). */
+        fun orgId(id: String) = apply { this._orgId = id }
 
         fun modelId(id: String) = apply { this.modelId = id }
 
@@ -370,10 +387,18 @@ data class OctomilConfig(
 
         fun build(): OctomilConfig {
             val resolvedAuth = auth
-                ?: throw OctomilException(
-                    OctomilErrorCode.INVALID_INPUT,
-                    "auth must be set. Use auth(AuthConfig.OrgApiKey(...)) or auth(AuthConfig.DeviceToken(...))",
-                )
+                ?: if (_token != null || _serverUrl != null || _orgId != null) {
+                    AuthConfig.OrgApiKey(
+                        apiKey = _token ?: "",
+                        orgId = _orgId ?: "",
+                        serverUrl = _serverUrl ?: DEFAULT_SERVER_URL,
+                    )
+                } else {
+                    throw OctomilException(
+                        OctomilErrorCode.INVALID_INPUT,
+                        "auth must be set. Use auth(AuthConfig.OrgApiKey(...)) or auth(AuthConfig.DeviceToken(...))",
+                    )
+                }
             return OctomilConfig(
                 auth = resolvedAuth,
                 modelId = modelId,

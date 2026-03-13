@@ -1,5 +1,6 @@
 package ai.octomil.config
 
+import ai.octomil.errors.OctomilException
 import org.junit.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -73,7 +74,7 @@ class ApiKeyConfigTest {
 
     @Test
     fun `blank apiKey fails validation`() {
-        assertFailsWith<IllegalArgumentException> {
+        assertFailsWith<OctomilException> {
             OctomilConfig.Builder()
                 .serverUrl("https://api.octomil.com")
                 .apiKey("")
