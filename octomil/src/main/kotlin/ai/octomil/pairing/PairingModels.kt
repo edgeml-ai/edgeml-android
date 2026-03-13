@@ -28,8 +28,8 @@ data class PairingSession(
     val downloadFormat: String? = null,
     @SerialName("download_size_bytes")
     val downloadSizeBytes: Long? = null,
-    @SerialName("device_tier")
-    val deviceTier: String? = null,
+    @SerialName("device_class")
+    val deviceClass: String? = null,
     @SerialName("quantization")
     val quantization: String? = null,
     @SerialName("executor")
