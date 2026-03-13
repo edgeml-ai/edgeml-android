@@ -41,9 +41,7 @@ class ModelManagerTest {
         modelId: String = "test-model",
         modelCacheSizeBytes: Long = 10 * 1024 * 1024L,
     ) = ai.octomil.config.OctomilConfig(
-        serverUrl = "https://test.octomil.com",
-        deviceAccessToken = "test-token",
-        orgId = "test-org",
+        auth = ai.octomil.config.AuthConfig.OrgApiKey(apiKey = "test-token", orgId = "test-org", serverUrl = "https://test.octomil.com"),
         modelId = modelId,
         enableBackgroundSync = false,
         enableHeartbeat = false,

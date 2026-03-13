@@ -1233,7 +1233,7 @@ class OctomilClient private constructor(
      * @param roundId Optional federated learning round ID.
      * @return A pair of (eligibility check result, training outcome or null if skipped).
      */
-    suspend fun trainIfEligible(
+    internal suspend fun trainIfEligible(
         dataProvider: TrainingDataProvider,
         deviceStateMonitor: DeviceStateMonitor,
         trainingConfig: TrainingConfig = TrainingConfig(),

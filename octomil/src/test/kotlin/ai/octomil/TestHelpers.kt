@@ -1,5 +1,6 @@
 package ai.octomil
 
+import ai.octomil.config.AuthConfig
 import ai.octomil.config.OctomilConfig
 import ai.octomil.models.CachedModel
 
@@ -26,9 +27,7 @@ fun testConfig(
     debugMode: Boolean = false,
 ): OctomilConfig =
     OctomilConfig(
-        serverUrl = serverUrl,
-        deviceAccessToken = deviceAccessToken,
-        orgId = orgId,
+        auth = AuthConfig.OrgApiKey(apiKey = deviceAccessToken, orgId = orgId, serverUrl = serverUrl),
         modelId = modelId,
         deviceId = deviceId,
         enableBackgroundSync = enableBackgroundSync,

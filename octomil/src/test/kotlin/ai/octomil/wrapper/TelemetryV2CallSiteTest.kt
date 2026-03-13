@@ -56,9 +56,7 @@ class TelemetryV2CallSiteTest {
         cacheDir.mkdirs()
 
         config = ai.octomil.config.OctomilConfig(
-            serverUrl = "https://test.octomil.com",
-            deviceAccessToken = "test-token",
-            orgId = "test-org",
+            auth = ai.octomil.config.AuthConfig.OrgApiKey(apiKey = "test-token", orgId = "test-org", serverUrl = "https://test.octomil.com"),
             modelId = "test-model",
             enableBackgroundSync = false,
             enableHeartbeat = false,

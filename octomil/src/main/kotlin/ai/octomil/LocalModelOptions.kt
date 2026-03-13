@@ -1,5 +1,6 @@
 package ai.octomil
 
+import ai.octomil.config.AuthConfig
 import ai.octomil.config.OctomilConfig
 
 /**
@@ -39,9 +40,7 @@ data class LocalModelOptions(
      * but are never accessed on the inference path.
      */
     internal fun toInternalConfig(): OctomilConfig = OctomilConfig(
-        serverUrl = "https://localhost",
-        deviceAccessToken = "local",
-        orgId = "local",
+        auth = AuthConfig.OrgApiKey(apiKey = "local", orgId = "local", serverUrl = "https://localhost"),
         modelId = "local",
         enableGpuAcceleration = enableGpu,
         enableFloat16Inference = enableFloat16,

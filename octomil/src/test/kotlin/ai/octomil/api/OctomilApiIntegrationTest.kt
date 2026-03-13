@@ -18,6 +18,7 @@ import ai.octomil.api.dto.ModelVersionResponse
 import ai.octomil.api.dto.TrainingEventRequest
 import ai.octomil.api.dto.TrainingMetrics
 import ai.octomil.api.dto.VersionResolutionResponse
+import ai.octomil.config.AuthConfig
 import ai.octomil.config.OctomilConfig
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.encodeToString
@@ -56,9 +57,7 @@ class OctomilApiIntegrationTest {
 
         config =
             OctomilConfig(
-                serverUrl = server.url("/").toString().trimEnd('/'),
-                deviceAccessToken = "test-token-123",
-                orgId = "test-org",
+                auth = AuthConfig.OrgApiKey(apiKey = "test-token-123", orgId = "test-org", serverUrl = server.url("/").toString().trimEnd('/')),
                 modelId = "test-model",
                 debugMode = false,
                 maxRetries = 0, // No retries in integration tests -- retry logic tested separately

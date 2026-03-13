@@ -1,4 +1,5 @@
 // Auto-generated from octomil-contracts. Do not edit.
+package ai.octomil.generated
 
 enum class AuthType(val code: String) {
     ORG_API_KEY("org_api_key"),
