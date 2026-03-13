@@ -64,7 +64,7 @@ object TrainingEligibility {
      * @param requireUnmeteredNetwork Whether to require an unmetered (WiFi) connection.
      * @return [EligibilityResult] indicating whether training should proceed.
      */
-    fun checkEligibility(
+    internal fun checkEligibility(
         deviceState: DeviceState,
         isConnected: Boolean,
         isMetered: Boolean,
