@@ -12,7 +12,7 @@
     <uses-permission android:name="android.permission.WAKE_LOCK" />
 
     <application>
-        <!-- WorkManager initialization provider -->
+        <!-- Disable automatic WorkManager initialization (SDK manages its own) -->
         <provider
             android:name="androidx.startup.InitializationProvider"
             android:authorities="${applicationId}.androidx-startup"
@@ -22,9 +22,6 @@
                 android:name="androidx.work.WorkManagerInitializer"
                 android:value="androidx.startup"
                 tools:node="remove" />
-            <meta-data
-                android:name="ai.octomil.OctomilInitializer"
-                android:value="androidx.startup" />
         </provider>
 
     </application>
