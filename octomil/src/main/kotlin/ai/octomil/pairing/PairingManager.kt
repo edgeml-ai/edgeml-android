@@ -419,12 +419,15 @@ class PairingManager(
 
 /**
  * Exception thrown when a pairing operation fails.
+ *
+ * Extends [ai.octomil.errors.OctomilException] with the pairing error code mapped
+ * to the canonical [ai.octomil.errors.OctomilErrorCode].
  */
 class PairingException(
     message: String,
-    val errorCode: ErrorCode = ErrorCode.UNKNOWN,
+    val pairingErrorCode: ErrorCode = ErrorCode.UNKNOWN,
     cause: Throwable? = null,
-) : Exception(message, cause) {
+) : ai.octomil.errors.OctomilException(pairingErrorCode.toOctomilErrorCode(), message, cause) {
 
     enum class ErrorCode {
         /** Network or HTTP error. */
@@ -456,6 +459,19 @@ class PairingException(
 
         /** Unknown error. */
         UNKNOWN;
+
+        fun toOctomilErrorCode(): ai.octomil.errors.OctomilErrorCode = when (this) {
+            NETWORK_ERROR -> ai.octomil.errors.OctomilErrorCode.NETWORK_UNAVAILABLE
+            NOT_FOUND -> ai.octomil.errors.OctomilErrorCode.MODEL_NOT_FOUND
+            EXPIRED -> ai.octomil.errors.OctomilErrorCode.REQUEST_TIMEOUT
+            CANCELLED -> ai.octomil.errors.OctomilErrorCode.CANCELLED
+            UNAUTHORIZED -> ai.octomil.errors.OctomilErrorCode.AUTHENTICATION_FAILED
+            SERVER_ERROR -> ai.octomil.errors.OctomilErrorCode.SERVER_ERROR
+            TIMEOUT -> ai.octomil.errors.OctomilErrorCode.REQUEST_TIMEOUT
+            DOWNLOAD_FAILED -> ai.octomil.errors.OctomilErrorCode.DOWNLOAD_FAILED
+            BENCHMARK_FAILED -> ai.octomil.errors.OctomilErrorCode.UNKNOWN
+            UNKNOWN -> ai.octomil.errors.OctomilErrorCode.UNKNOWN
+        }
 
         companion object {
             fun fromHttpStatus(code: Int): ErrorCode = when (code) {

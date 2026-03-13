@@ -71,7 +71,7 @@ object DeepLinkPairing {
             val result = manager.pair(action.token, timeoutMs)
             Result.success(result.report)
         } catch (e: PairingException) {
-            Timber.e(e, "Deep link pairing failed: %s", e.errorCode)
+            Timber.e(e, "Deep link pairing failed: %s", e.pairingErrorCode)
             Result.failure(e)
         } catch (e: Exception) {
             Timber.e(e, "Unexpected error during deep link pairing")

@@ -139,7 +139,7 @@ class PairingManagerTest {
             pairingManager.connect("INVALID")
         }
 
-        assertEquals(PairingException.ErrorCode.NOT_FOUND, ex.errorCode)
+        assertEquals(PairingException.ErrorCode.NOT_FOUND, ex.pairingErrorCode)
     }
 
     @Test
@@ -151,7 +151,7 @@ class PairingManagerTest {
             pairingManager.connect("CODE")
         }
 
-        assertEquals(PairingException.ErrorCode.SERVER_ERROR, ex.errorCode)
+        assertEquals(PairingException.ErrorCode.SERVER_ERROR, ex.pairingErrorCode)
     }
 
     @Test
@@ -162,7 +162,7 @@ class PairingManagerTest {
             pairingManager.connect("CODE")
         }
 
-        assertEquals(PairingException.ErrorCode.SERVER_ERROR, ex.errorCode)
+        assertEquals(PairingException.ErrorCode.SERVER_ERROR, ex.pairingErrorCode)
     }
 
     // =========================================================================
@@ -242,7 +242,7 @@ class PairingManagerTest {
             pairingManager.waitForDeployment("ABC123", timeoutMs = 5_000L)
         }
 
-        assertEquals(PairingException.ErrorCode.EXPIRED, ex.errorCode)
+        assertEquals(PairingException.ErrorCode.EXPIRED, ex.pairingErrorCode)
     }
 
     @Test
@@ -260,7 +260,7 @@ class PairingManagerTest {
             pairingManager.waitForDeployment("ABC123", timeoutMs = 5_000L)
         }
 
-        assertEquals(PairingException.ErrorCode.CANCELLED, ex.errorCode)
+        assertEquals(PairingException.ErrorCode.CANCELLED, ex.pairingErrorCode)
     }
 
     @Test
@@ -278,7 +278,7 @@ class PairingManagerTest {
             pairingManager.waitForDeployment("ABC123", timeoutMs = 50L)
         }
 
-        assertEquals(PairingException.ErrorCode.TIMEOUT, ex.errorCode)
+        assertEquals(PairingException.ErrorCode.TIMEOUT, ex.pairingErrorCode)
     }
 
     @Test
@@ -290,7 +290,7 @@ class PairingManagerTest {
             pairingManager.waitForDeployment("ABC123", timeoutMs = 5_000L)
         }
 
-        assertEquals(PairingException.ErrorCode.SERVER_ERROR, ex.errorCode)
+        assertEquals(PairingException.ErrorCode.SERVER_ERROR, ex.pairingErrorCode)
     }
 
     @Test
@@ -310,7 +310,7 @@ class PairingManagerTest {
             pairingManager.waitForDeployment("ABC123", timeoutMs = 5_000L)
         }
 
-        assertEquals(PairingException.ErrorCode.SERVER_ERROR, ex.errorCode)
+        assertEquals(PairingException.ErrorCode.SERVER_ERROR, ex.pairingErrorCode)
         assertTrue(ex.message!!.contains("download URL is missing"))
     }
 
@@ -483,7 +483,7 @@ class PairingManagerTest {
             pairingManager.downloadModel(deployment)
         }
 
-        assertEquals(PairingException.ErrorCode.DOWNLOAD_FAILED, ex.errorCode)
+        assertEquals(PairingException.ErrorCode.DOWNLOAD_FAILED, ex.pairingErrorCode)
 
         mockServer.shutdown()
     }

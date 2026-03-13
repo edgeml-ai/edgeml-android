@@ -185,9 +185,11 @@ class ExperimentsClient(
 
 /**
  * Exception thrown when an experiment operation fails.
+ *
+ * Extends [ai.octomil.errors.OctomilException] with [ai.octomil.errors.OctomilErrorCode.ASSIGNMENT_NOT_FOUND].
  */
 class ExperimentException(
     message: String,
     val experimentId: String? = null,
     cause: Throwable? = null,
-) : Exception(message, cause)
+) : ai.octomil.errors.OctomilException(ai.octomil.errors.OctomilErrorCode.ASSIGNMENT_NOT_FOUND, message, cause)

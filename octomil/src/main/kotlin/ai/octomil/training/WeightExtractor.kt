@@ -524,8 +524,10 @@ class WeightExtractor(
 
 /**
  * Exception thrown when weight extraction fails.
+ *
+ * Extends [ai.octomil.errors.OctomilException] with [ai.octomil.errors.OctomilErrorCode.INFERENCE_FAILED].
  */
 class WeightExtractionException(
     message: String,
     cause: Throwable? = null,
-) : Exception(message, cause)
+) : ai.octomil.errors.OctomilException(ai.octomil.errors.OctomilErrorCode.INFERENCE_FAILED, message, cause)
