@@ -152,7 +152,7 @@ enum class OctomilErrorCode {
  * The [retryable] convenience property delegates to the error code so callers
  * can decide whether to retry without inspecting the enum directly.
  */
-class OctomilException(
+open class OctomilException(
     val errorCode: OctomilErrorCode,
     message: String,
     cause: Throwable? = null,
