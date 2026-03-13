@@ -1,5 +1,7 @@
 package ai.octomil.config
 
+import ai.octomil.errors.OctomilErrorCode
+import ai.octomil.errors.OctomilException
 import kotlinx.serialization.Serializable
 
 /**
@@ -225,19 +227,19 @@ data class OctomilConfig(
     val authDeviceId: String? get() = (auth as? AuthConfig.DeviceToken)?.deviceId
 
     init {
-        require(auth.serverUrl.isNotBlank()) { "serverUrl must not be blank" }
-        require(auth.token.isNotBlank()) { "apiKey / bootstrapToken must not be blank" }
-        require(modelId.isNotBlank()) { "modelId must not be blank" }
-        require(connectionTimeoutMs > 0) { "connectionTimeoutMs must be positive" }
-        require(readTimeoutMs > 0) { "readTimeoutMs must be positive" }
-        require(writeTimeoutMs > 0) { "writeTimeoutMs must be positive" }
-        require(maxRetries >= 0) { "maxRetries must be non-negative" }
-        require(retryDelayMs > 0) { "retryDelayMs must be positive" }
-        require(modelCacheSizeBytes > 0) { "modelCacheSizeBytes must be positive" }
-        require(numThreads > 0) { "numThreads must be positive" }
-        require(syncIntervalMinutes >= 15) { "syncIntervalMinutes must be at least 15" }
-        require(heartbeatIntervalSeconds >= 60) { "heartbeatIntervalSeconds must be at least 60" }
-        require(minBatteryLevel in 0..100) { "minBatteryLevel must be 0-100" }
+        if (auth.serverUrl.isBlank()) throw OctomilException(OctomilErrorCode.INVALID_INPUT, "serverUrl must not be blank")
+        if (auth.token.isBlank()) throw OctomilException(OctomilErrorCode.INVALID_API_KEY, "apiKey / bootstrapToken must not be blank")
+        if (modelId.isBlank()) throw OctomilException(OctomilErrorCode.INVALID_INPUT, "modelId must not be blank")
+        if (connectionTimeoutMs <= 0) throw OctomilException(OctomilErrorCode.INVALID_INPUT, "connectionTimeoutMs must be positive")
+        if (readTimeoutMs <= 0) throw OctomilException(OctomilErrorCode.INVALID_INPUT, "readTimeoutMs must be positive")
+        if (writeTimeoutMs <= 0) throw OctomilException(OctomilErrorCode.INVALID_INPUT, "writeTimeoutMs must be positive")
+        if (maxRetries < 0) throw OctomilException(OctomilErrorCode.INVALID_INPUT, "maxRetries must be non-negative")
+        if (retryDelayMs <= 0) throw OctomilException(OctomilErrorCode.INVALID_INPUT, "retryDelayMs must be positive")
+        if (modelCacheSizeBytes <= 0) throw OctomilException(OctomilErrorCode.INVALID_INPUT, "modelCacheSizeBytes must be positive")
+        if (numThreads <= 0) throw OctomilException(OctomilErrorCode.INVALID_INPUT, "numThreads must be positive")
+        if (syncIntervalMinutes < 15) throw OctomilException(OctomilErrorCode.INVALID_INPUT, "syncIntervalMinutes must be at least 15")
+        if (heartbeatIntervalSeconds < 60) throw OctomilException(OctomilErrorCode.INVALID_INPUT, "heartbeatIntervalSeconds must be at least 60")
+        if (minBatteryLevel !in 0..100) throw OctomilException(OctomilErrorCode.INVALID_INPUT, "minBatteryLevel must be 0-100")
     }
 
     /**
@@ -367,9 +369,11 @@ data class OctomilConfig(
         fun allowDegradedTraining(allowed: Boolean) = apply { this.allowDegradedTraining = allowed }
 
         fun build(): OctomilConfig {
-            val resolvedAuth = requireNotNull(auth) {
-                "auth must be set. Use auth(AuthConfig.OrgApiKey(...)) or auth(AuthConfig.DeviceToken(...))"
-            }
+            val resolvedAuth = auth
+                ?: throw OctomilException(
+                    OctomilErrorCode.INVALID_INPUT,
+                    "auth must be set. Use auth(AuthConfig.OrgApiKey(...)) or auth(AuthConfig.DeviceToken(...))",
+                )
             return OctomilConfig(
                 auth = resolvedAuth,
                 modelId = modelId,
