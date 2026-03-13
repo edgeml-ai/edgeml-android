@@ -90,8 +90,13 @@ class OctomilErrorCodeTest {
     // =========================================================================
 
     @Test
-    fun `fromHttpStatus maps 401 to INVALID_API_KEY`() {
-        assertEquals(OctomilErrorCode.INVALID_API_KEY, OctomilErrorCode.fromHttpStatus(401))
+    fun `fromHttpStatus maps 400 to INVALID_INPUT`() {
+        assertEquals(OctomilErrorCode.INVALID_INPUT, OctomilErrorCode.fromHttpStatus(400))
+    }
+
+    @Test
+    fun `fromHttpStatus maps 401 to AUTHENTICATION_FAILED`() {
+        assertEquals(OctomilErrorCode.AUTHENTICATION_FAILED, OctomilErrorCode.fromHttpStatus(401))
     }
 
     @Test

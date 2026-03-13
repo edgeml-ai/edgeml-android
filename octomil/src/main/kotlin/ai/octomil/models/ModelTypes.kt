@@ -135,7 +135,7 @@ class ModelDownloadException(
             CHECKSUM_MISMATCH -> OctomilErrorCode.CHECKSUM_MISMATCH
             INSUFFICIENT_STORAGE -> OctomilErrorCode.INSUFFICIENT_STORAGE
             IO_ERROR -> OctomilErrorCode.DOWNLOAD_FAILED
-            UNAUTHORIZED -> OctomilErrorCode.INVALID_API_KEY
+            UNAUTHORIZED -> OctomilErrorCode.AUTHENTICATION_FAILED
             SERVER_ERROR -> OctomilErrorCode.SERVER_ERROR
             UNKNOWN -> OctomilErrorCode.UNKNOWN
         }

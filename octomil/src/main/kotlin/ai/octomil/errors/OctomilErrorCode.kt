@@ -77,17 +77,21 @@ enum class OctomilErrorCode {
         /**
          * Map an HTTP status code to the most appropriate [OctomilErrorCode].
          *
-         * Covers the standard error responses from the Octomil API:
-         * - 401 -> INVALID_API_KEY
+         * This is a lossy fallback — prefer [fromServerResponse] which uses the
+         * wire-format `code` field when available.
+         *
+         * - 400 -> INVALID_INPUT
+         * - 401 -> AUTHENTICATION_FAILED (too broad for INVALID_API_KEY)
          * - 403 -> FORBIDDEN
-         * - 404 -> MODEL_NOT_FOUND
+         * - 404 -> MODEL_NOT_FOUND (assumes model endpoints; server `code` is more precise)
          * - 408 -> REQUEST_TIMEOUT
          * - 429 -> RATE_LIMITED
          * - 5xx -> SERVER_ERROR
-         * - Other 4xx -> UNKNOWN
+         * - Other -> UNKNOWN
          */
         fun fromHttpStatus(code: Int): OctomilErrorCode = when (code) {
-            401 -> INVALID_API_KEY
+            400 -> INVALID_INPUT
+            401 -> AUTHENTICATION_FAILED
             403 -> FORBIDDEN
             404 -> MODEL_NOT_FOUND
             408 -> REQUEST_TIMEOUT
