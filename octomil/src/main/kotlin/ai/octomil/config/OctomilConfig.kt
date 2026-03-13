@@ -1,5 +1,7 @@
 package ai.octomil.config
 
+import ai.octomil.errors.OctomilErrorCode
+import ai.octomil.errors.OctomilException
 import kotlinx.serialization.Serializable
 
 /**
@@ -35,9 +37,22 @@ enum class ServerEnvironment {
  * ## Cloud (simplest)
  * ```kotlin
  * val config = OctomilConfig.Builder()
- *     .serverUrl("https://api.octomil.com")
- *     .deviceAccessToken("<short-lived-device-token>")
- *     .orgId("your-org-id")
+ *     .auth(AuthConfig.OrgApiKey(
+ *         apiKey = "edg_...",
+ *         orgId = "your-org-id",
+ *     ))
+ *     .modelId("model-123")
+ *     .build()
+ * ```
+ *
+ * ## Device Token
+ * ```kotlin
+ * val config = OctomilConfig.Builder()
+ *     .auth(AuthConfig.DeviceToken(
+ *         deviceId = "dev_abc",
+ *         bootstrapToken = token,
+ *         serverUrl = "https://api.octomil.com",
+ *     ))
  *     .modelId("model-123")
  *     .build()
  * ```
@@ -45,12 +60,14 @@ enum class ServerEnvironment {
  * ## VPC / On-premises
  * ```kotlin
  * val config = OctomilConfig.Builder()
- *     .serverUrl("https://octomil.internal.mycompany.com")
+ *     .auth(AuthConfig.OrgApiKey(
+ *         apiKey = "edg_...",
+ *         orgId = "your-org-id",
+ *         serverUrl = "https://octomil.internal.mycompany.com",
+ *     ))
  *     .serverEnvironment(ServerEnvironment.VPC)
- *     .deviceAccessToken(token)
- *     .orgId("your-org-id")
  *     .modelId("model-123")
- *     .certificatePins(listOf("AABB..."))        // pin your internal CA
+ *     .certificatePins(listOf("AABB..."))
  *     .pinnedHostname("octomil.internal.mycompany.com")
  *     .build()
  * ```
@@ -58,27 +75,15 @@ enum class ServerEnvironment {
 @Serializable
 data class OctomilConfig(
     /**
-     * Base URL of the Octomil server.
+     * Authentication configuration.
      *
-     * This is the HTTP(S) endpoint where the Octomil coordination server is running.
-     * - **Cloud**: `https://api.octomil.com` (managed service)
-     * - **VPC**: Your internal load balancer URL (e.g., `https://octomil.internal.company.com`)
-     * - **On-premises**: Your local server URL (e.g., `https://octomil.local:8443`)
+     * Use [AuthConfig.OrgApiKey] for API key authentication or
+     * [AuthConfig.DeviceToken] for device token authentication.
      *
-     * The server handles device registration, model distribution, round coordination,
-     * gradient aggregation, and secure aggregation key exchange.
+     * Server URL, org ID, and bearer token are derived from this config.
      */
-    val serverUrl: String,
-    /**
-     * Authentication token.
-     *
-     * Accepts either a long-lived API key (`sk-...`) or a short-lived device
-     * access token. Use `apiKey` in the [Builder] as the primary parameter;
-     * `deviceAccessToken` is retained as an alias for backward compatibility.
-     */
-    val deviceAccessToken: String,
-    /** Organization ID */
-    val orgId: String,
+    @kotlinx.serialization.Transient
+    val auth: AuthConfig = AuthConfig.OrgApiKey(apiKey = "", orgId = "", serverUrl = DEFAULT_SERVER_URL),
     /** Model ID to use for training/inference */
     val modelId: String,
     /**
@@ -206,38 +211,42 @@ data class OctomilConfig(
      */
     val allowDegradedTraining: Boolean = false,
 ) {
-    /**
-     * API key — alias for [deviceAccessToken].
-     *
-     * Prefer this name in new code. Both `apiKey` and `deviceAccessToken`
-     * resolve to the same underlying token field.
-     */
-    val apiKey: String get() = deviceAccessToken
+    /** Base URL of the Octomil server, derived from [auth]. */
+    val serverUrl: String get() = auth.serverUrl
+
+    /** Organization ID, derived from [auth]. */
+    val orgId: String get() = auth.orgId
+
+    /** Authentication token (API key or bootstrap token), derived from [auth]. */
+    val deviceAccessToken: String get() = auth.token
+
+    /** API key — alias for [deviceAccessToken]. */
+    val apiKey: String get() = auth.token
+
+    /** Device ID from auth config, if using device token auth. */
+    val authDeviceId: String? get() = (auth as? AuthConfig.DeviceToken)?.deviceId
 
     init {
-        require(serverUrl.isNotBlank()) { "serverUrl must not be blank" }
-        require(deviceAccessToken.isNotBlank()) { "apiKey / deviceAccessToken must not be blank" }
-        require(orgId.isNotBlank()) { "orgId must not be blank" }
-        require(modelId.isNotBlank()) { "modelId must not be blank" }
-        require(connectionTimeoutMs > 0) { "connectionTimeoutMs must be positive" }
-        require(readTimeoutMs > 0) { "readTimeoutMs must be positive" }
-        require(writeTimeoutMs > 0) { "writeTimeoutMs must be positive" }
-        require(maxRetries >= 0) { "maxRetries must be non-negative" }
-        require(retryDelayMs > 0) { "retryDelayMs must be positive" }
-        require(modelCacheSizeBytes > 0) { "modelCacheSizeBytes must be positive" }
-        require(numThreads > 0) { "numThreads must be positive" }
-        require(syncIntervalMinutes >= 15) { "syncIntervalMinutes must be at least 15" }
-        require(heartbeatIntervalSeconds >= 60) { "heartbeatIntervalSeconds must be at least 60" }
-        require(minBatteryLevel in 0..100) { "minBatteryLevel must be 0-100" }
+        if (auth.serverUrl.isBlank()) throw OctomilException(OctomilErrorCode.INVALID_INPUT, "serverUrl must not be blank")
+        if (auth.token.isBlank()) throw OctomilException(OctomilErrorCode.INVALID_API_KEY, "apiKey / bootstrapToken must not be blank")
+        if (modelId.isBlank()) throw OctomilException(OctomilErrorCode.INVALID_INPUT, "modelId must not be blank")
+        if (connectionTimeoutMs <= 0) throw OctomilException(OctomilErrorCode.INVALID_INPUT, "connectionTimeoutMs must be positive")
+        if (readTimeoutMs <= 0) throw OctomilException(OctomilErrorCode.INVALID_INPUT, "readTimeoutMs must be positive")
+        if (writeTimeoutMs <= 0) throw OctomilException(OctomilErrorCode.INVALID_INPUT, "writeTimeoutMs must be positive")
+        if (maxRetries < 0) throw OctomilException(OctomilErrorCode.INVALID_INPUT, "maxRetries must be non-negative")
+        if (retryDelayMs <= 0) throw OctomilException(OctomilErrorCode.INVALID_INPUT, "retryDelayMs must be positive")
+        if (modelCacheSizeBytes <= 0) throw OctomilException(OctomilErrorCode.INVALID_INPUT, "modelCacheSizeBytes must be positive")
+        if (numThreads <= 0) throw OctomilException(OctomilErrorCode.INVALID_INPUT, "numThreads must be positive")
+        if (syncIntervalMinutes < 15) throw OctomilException(OctomilErrorCode.INVALID_INPUT, "syncIntervalMinutes must be at least 15")
+        if (heartbeatIntervalSeconds < 60) throw OctomilException(OctomilErrorCode.INVALID_INPUT, "heartbeatIntervalSeconds must be at least 60")
+        if (minBatteryLevel !in 0..100) throw OctomilException(OctomilErrorCode.INVALID_INPUT, "minBatteryLevel must be 0-100")
     }
 
     /**
      * Builder for [OctomilConfig].
      */
     class Builder {
-        private var serverUrl: String = ""
-        private var deviceAccessToken: String = ""
-        private var orgId: String = ""
+        private var auth: AuthConfig? = null
         private var modelId: String = ""
         private var serverEnvironment: ServerEnvironment = ServerEnvironment.CLOUD
         private var deviceId: String? = null
@@ -270,24 +279,13 @@ data class OctomilConfig(
         private var pinnedHostname: String = ""
         private var allowDegradedTraining: Boolean = false
 
-        fun serverUrl(url: String) = apply { this.serverUrl = url.trimEnd('/') }
-
         /**
-         * Set the API key (primary auth parameter).
+         * Set the authentication configuration.
          *
-         * This is the recommended way to authenticate. Accepts both long-lived
-         * API keys (`sk-...`) and short-lived device access tokens.
+         * Use [AuthConfig.OrgApiKey] for API key authentication or
+         * [AuthConfig.DeviceToken] for device token authentication.
          */
-        fun apiKey(key: String) = apply { this.deviceAccessToken = key }
-
-        /**
-         * Set the device access token.
-         *
-         * @deprecated Use [apiKey] instead. This is retained for backward compatibility.
-         */
-        fun deviceAccessToken(token: String) = apply { this.deviceAccessToken = token }
-
-        fun orgId(id: String) = apply { this.orgId = id }
+        fun auth(auth: AuthConfig) = apply { this.auth = auth }
 
         fun modelId(id: String) = apply { this.modelId = id }
 
@@ -370,11 +368,14 @@ data class OctomilConfig(
          */
         fun allowDegradedTraining(allowed: Boolean) = apply { this.allowDegradedTraining = allowed }
 
-        fun build(): OctomilConfig =
-            OctomilConfig(
-                serverUrl = serverUrl,
-                deviceAccessToken = deviceAccessToken,
-                orgId = orgId,
+        fun build(): OctomilConfig {
+            val resolvedAuth = auth
+                ?: throw OctomilException(
+                    OctomilErrorCode.INVALID_INPUT,
+                    "auth must be set. Use auth(AuthConfig.OrgApiKey(...)) or auth(AuthConfig.DeviceToken(...))",
+                )
+            return OctomilConfig(
+                auth = resolvedAuth,
                 modelId = modelId,
                 serverEnvironment = serverEnvironment,
                 deviceId = deviceId,
@@ -407,6 +408,7 @@ data class OctomilConfig(
                 pinnedHostname = pinnedHostname,
                 allowDegradedTraining = allowDegradedTraining,
             )
+        }
     }
 
     companion object {

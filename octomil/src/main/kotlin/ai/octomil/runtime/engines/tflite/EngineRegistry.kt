@@ -20,8 +20,12 @@ typealias EngineFactory = (context: Context, modelFile: File?) -> StreamingInfer
 
 /**
  * Thrown when [EngineRegistry.resolve] cannot find a factory for the requested combination.
+ *
+ * Extends [ai.octomil.errors.OctomilException] with [ai.octomil.errors.OctomilErrorCode.RUNTIME_UNAVAILABLE].
  */
-class EngineResolutionException(message: String) : RuntimeException(message)
+class EngineResolutionException(message: String) : ai.octomil.errors.OctomilException(
+    ai.octomil.errors.OctomilErrorCode.RUNTIME_UNAVAILABLE, message,
+)
 
 /**
  * Thread-safe singleton registry mapping (Modality, Engine?) to engine factories.

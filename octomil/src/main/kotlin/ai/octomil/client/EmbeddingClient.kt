@@ -1,5 +1,7 @@
 package ai.octomil.client
 
+import ai.octomil.errors.OctomilErrorCode
+import ai.octomil.errors.OctomilException
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
@@ -82,11 +84,14 @@ class EmbeddingClient(
 
         httpClient.newCall(request).execute().use { response ->
             if (!response.isSuccessful) {
-                throw RuntimeException("Embeddings request failed: HTTP ${response.code}")
+                throw OctomilException(
+                    OctomilErrorCode.fromHttpStatus(response.code),
+                    "Embeddings request failed: HTTP ${response.code}",
+                )
             }
 
             val body = response.body?.string()
-                ?: throw RuntimeException("Embeddings request returned empty body")
+                ?: throw OctomilException(OctomilErrorCode.SERVER_ERROR, "Embeddings request returned empty body")
 
             val parsed = json.decodeFromString<EmbeddingResponse>(body)
 

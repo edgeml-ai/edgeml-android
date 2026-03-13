@@ -489,6 +489,10 @@ data class GradientUpdateResponse(
 
 /**
  * Error response from the server.
+ *
+ * The [code] field carries the canonical error code string (e.g. "model_not_found")
+ * from the server's structured error envelope. Use
+ * [ai.octomil.errors.OctomilErrorCode.fromContractCode] to map it to the SDK enum.
  */
 @Serializable
 data class ErrorResponse(
@@ -496,6 +500,8 @@ data class ErrorResponse(
     val detail: String,
     @SerialName("status_code")
     val statusCode: Int? = null,
+    @SerialName("code")
+    val code: String? = null,
 )
 
 /**

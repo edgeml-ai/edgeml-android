@@ -123,7 +123,7 @@ class PairingViewModel(
                     deployment.modelName, deployment.modelVersion,
                 )
             } catch (e: PairingException) {
-                Timber.e(e, "Pairing UI: PairingException code=%s", e.errorCode)
+                Timber.e(e, "Pairing UI: PairingException code=%s", e.pairingErrorCode)
                 _state.value = PairingState.Error(
                     message = mapErrorMessage(e),
                     isRetryable = isRetryable(e),
@@ -153,7 +153,7 @@ class PairingViewModel(
         /**
          * Map a [PairingException] to a human-readable error message.
          */
-        fun mapErrorMessage(e: PairingException): String = when (e.errorCode) {
+        fun mapErrorMessage(e: PairingException): String = when (e.pairingErrorCode) {
             PairingException.ErrorCode.EXPIRED ->
                 "Pairing session has expired. Please scan a new QR code."
             PairingException.ErrorCode.CANCELLED ->
@@ -179,7 +179,7 @@ class PairingViewModel(
         /**
          * Whether the error is retryable.
          */
-        fun isRetryable(e: PairingException): Boolean = when (e.errorCode) {
+        fun isRetryable(e: PairingException): Boolean = when (e.pairingErrorCode) {
             PairingException.ErrorCode.EXPIRED,
             PairingException.ErrorCode.CANCELLED,
             PairingException.ErrorCode.NOT_FOUND,

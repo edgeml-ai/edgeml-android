@@ -1,8 +1,12 @@
 package ai.octomil
 
+import ai.octomil.errors.OctomilErrorCode
+import ai.octomil.errors.OctomilException
+
 /**
  * Thrown when [Octomil.load] cannot find a model by name in any resolution source.
  *
+ * Extends [OctomilException] with [OctomilErrorCode.MODEL_NOT_FOUND].
  * The [message] includes actionable guidance on how to make the model available.
  *
  * @property modelName The model name that was searched for.
@@ -10,7 +14,7 @@ package ai.octomil
 class ModelNotFoundException(
     val modelName: String,
     message: String = buildMessage(modelName),
-) : Exception(message) {
+) : OctomilException(OctomilErrorCode.MODEL_NOT_FOUND, message) {
 
     companion object {
         private fun buildMessage(name: String): String =

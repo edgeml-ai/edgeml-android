@@ -524,8 +524,10 @@ class WeightExtractor(
 
 /**
  * Exception thrown when weight extraction fails.
+ *
+ * Extends [ai.octomil.errors.OctomilException].
  */
 class WeightExtractionException(
     message: String,
     cause: Throwable? = null,
-) : Exception(message, cause)
+) : ai.octomil.errors.OctomilException(ai.octomil.errors.OctomilErrorCode.TRAINING_FAILED, message, cause)

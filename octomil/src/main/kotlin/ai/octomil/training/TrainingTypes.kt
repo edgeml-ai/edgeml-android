@@ -197,7 +197,8 @@ data class TrainingOutcome(
  */
 class MissingTrainingSignatureException(
     availableSignatures: List<String>,
-) : IllegalStateException(
+) : ai.octomil.errors.OctomilException(
+    ai.octomil.errors.OctomilErrorCode.TRAINING_NOT_SUPPORTED,
     "Model does not have a 'train' signature and cannot perform on-device gradient updates. " +
         "Available signatures: $availableSignatures. " +
         "Either export your model with training signatures " +

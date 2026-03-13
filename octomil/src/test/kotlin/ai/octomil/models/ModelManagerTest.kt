@@ -113,7 +113,7 @@ class ModelManagerTest {
 
         assertTrue(result.isFailure)
         val error = result.exceptionOrNull() as ModelDownloadException
-        assertEquals(ModelDownloadException.ErrorCode.UNAUTHORIZED, error.errorCode)
+        assertEquals(ModelDownloadException.ErrorCode.UNAUTHORIZED, error.downloadErrorCode)
     }
 
     @Test
@@ -125,7 +125,7 @@ class ModelManagerTest {
 
         assertTrue(result.isFailure)
         val error = result.exceptionOrNull() as ModelDownloadException
-        assertEquals(ModelDownloadException.ErrorCode.NOT_FOUND, error.errorCode)
+        assertEquals(ModelDownloadException.ErrorCode.NOT_FOUND, error.downloadErrorCode)
     }
 
     @Test
@@ -137,7 +137,7 @@ class ModelManagerTest {
 
         assertTrue(result.isFailure)
         val error = result.exceptionOrNull() as ModelDownloadException
-        assertEquals(ModelDownloadException.ErrorCode.SERVER_ERROR, error.errorCode)
+        assertEquals(ModelDownloadException.ErrorCode.SERVER_ERROR, error.downloadErrorCode)
     }
 
     @Test
@@ -148,7 +148,7 @@ class ModelManagerTest {
 
         assertTrue(result.isFailure)
         val error = result.exceptionOrNull() as ModelDownloadException
-        assertEquals(ModelDownloadException.ErrorCode.UNAUTHORIZED, error.errorCode)
+        assertEquals(ModelDownloadException.ErrorCode.UNAUTHORIZED, error.downloadErrorCode)
     }
 
     // =========================================================================
@@ -317,7 +317,7 @@ class ModelManagerTest {
 
         assertTrue(result.isFailure)
         val error = result.exceptionOrNull() as ModelDownloadException
-        assertEquals(ModelDownloadException.ErrorCode.CHECKSUM_MISMATCH, error.errorCode)
+        assertEquals(ModelDownloadException.ErrorCode.CHECKSUM_MISMATCH, error.downloadErrorCode)
 
         server.shutdown()
     }
@@ -434,7 +434,7 @@ class ModelManagerTest {
 
         assertTrue(result.isFailure)
         val error = result.exceptionOrNull() as ModelDownloadException
-        assertEquals(ModelDownloadException.ErrorCode.NETWORK_ERROR, error.errorCode)
+        assertEquals(ModelDownloadException.ErrorCode.NETWORK_ERROR, error.downloadErrorCode)
     }
 
     // =========================================================================

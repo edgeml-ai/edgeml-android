@@ -1,6 +1,7 @@
 package ai.octomil
 
 import ai.octomil.config.OctomilConfig
+import ai.octomil.errors.OctomilException
 import org.junit.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -73,7 +74,7 @@ class OctomilConfigTest {
 
     @Test
     fun `config requires non-blank server URL`() {
-        assertFailsWith<IllegalArgumentException> {
+        assertFailsWith<OctomilException> {
             OctomilConfig
                 .Builder()
                 .serverUrl("")
@@ -86,7 +87,7 @@ class OctomilConfigTest {
 
     @Test
     fun `config requires non-blank API key`() {
-        assertFailsWith<IllegalArgumentException> {
+        assertFailsWith<OctomilException> {
             OctomilConfig
                 .Builder()
                 .serverUrl("https://api.octomil.com")
@@ -99,7 +100,7 @@ class OctomilConfigTest {
 
     @Test
     fun `config requires non-blank org ID`() {
-        assertFailsWith<IllegalArgumentException> {
+        assertFailsWith<OctomilException> {
             OctomilConfig
                 .Builder()
                 .serverUrl("https://api.octomil.com")
@@ -112,7 +113,7 @@ class OctomilConfigTest {
 
     @Test
     fun `config requires non-blank model ID`() {
-        assertFailsWith<IllegalArgumentException> {
+        assertFailsWith<OctomilException> {
             OctomilConfig
                 .Builder()
                 .serverUrl("https://api.octomil.com")
@@ -125,7 +126,7 @@ class OctomilConfigTest {
 
     @Test
     fun `config validates timeout values`() {
-        assertFailsWith<IllegalArgumentException> {
+        assertFailsWith<OctomilException> {
             OctomilConfig
                 .Builder()
                 .serverUrl("https://api.octomil.com")
@@ -136,7 +137,7 @@ class OctomilConfigTest {
                 .build()
         }
 
-        assertFailsWith<IllegalArgumentException> {
+        assertFailsWith<OctomilException> {
             OctomilConfig
                 .Builder()
                 .serverUrl("https://api.octomil.com")
@@ -150,7 +151,7 @@ class OctomilConfigTest {
 
     @Test
     fun `config validates sync interval minimum`() {
-        assertFailsWith<IllegalArgumentException> {
+        assertFailsWith<OctomilException> {
             OctomilConfig
                 .Builder()
                 .serverUrl("https://api.octomil.com")
@@ -164,7 +165,7 @@ class OctomilConfigTest {
 
     @Test
     fun `config validates battery level range`() {
-        assertFailsWith<IllegalArgumentException> {
+        assertFailsWith<OctomilException> {
             OctomilConfig
                 .Builder()
                 .serverUrl("https://api.octomil.com")
@@ -175,7 +176,7 @@ class OctomilConfigTest {
                 .build()
         }
 
-        assertFailsWith<IllegalArgumentException> {
+        assertFailsWith<OctomilException> {
             OctomilConfig
                 .Builder()
                 .serverUrl("https://api.octomil.com")

@@ -101,7 +101,7 @@ data class ServerModelContract(
     fun requireValidInput(input: FloatArray) {
         val error = validateInput(input)
         if (error != null) {
-            throw IllegalArgumentException(error)
+            throw ai.octomil.errors.OctomilException(ai.octomil.errors.OctomilErrorCode.INVALID_INPUT, error)
         }
     }
 }

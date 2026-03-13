@@ -6,8 +6,8 @@ import ai.octomil.generated.RetryClass
 import ai.octomil.generated.SuggestedAction
 
 /**
- * Canonical error codes matching SDK_FACADE_CONTRACT.md.
- * All 31 codes from the server's ErrorCode enum.
+ * Canonical error codes matching the octomil-contracts error taxonomy.
+ * 34 SDK-facing codes mapping to 36 contract codes (token_expired → AUTHENTICATION_FAILED, device_revoked → FORBIDDEN).
  *
  * Error metadata ([retryable], [category], [retryClass], [fallbackEligible],
  * [suggestedAction]) is derived from the generated [ContractErrorCode] taxonomy
@@ -44,6 +44,9 @@ enum class OctomilErrorCode {
     POLICY_DENIED,
     CLOUD_FALLBACK_DISALLOWED,
     MAX_TOOL_ROUNDS_EXCEEDED,
+    TRAINING_FAILED,
+    TRAINING_NOT_SUPPORTED,
+    WEIGHT_UPLOAD_FAILED,
     CONTROL_SYNC_FAILED,
     ASSIGNMENT_NOT_FOUND,
     CANCELLED,
@@ -77,17 +80,21 @@ enum class OctomilErrorCode {
         /**
          * Map an HTTP status code to the most appropriate [OctomilErrorCode].
          *
-         * Covers the standard error responses from the Octomil API:
-         * - 401 -> INVALID_API_KEY
+         * This is a lossy fallback — prefer [fromServerResponse] which uses the
+         * wire-format `code` field when available.
+         *
+         * - 400 -> INVALID_INPUT
+         * - 401 -> AUTHENTICATION_FAILED (too broad for INVALID_API_KEY)
          * - 403 -> FORBIDDEN
-         * - 404 -> MODEL_NOT_FOUND
+         * - 404 -> MODEL_NOT_FOUND (assumes model endpoints; server `code` is more precise)
          * - 408 -> REQUEST_TIMEOUT
          * - 429 -> RATE_LIMITED
          * - 5xx -> SERVER_ERROR
-         * - Other 4xx -> UNKNOWN
+         * - Other -> UNKNOWN
          */
         fun fromHttpStatus(code: Int): OctomilErrorCode = when (code) {
-            401 -> INVALID_API_KEY
+            400 -> INVALID_INPUT
+            401 -> AUTHENTICATION_FAILED
             403 -> FORBIDDEN
             404 -> MODEL_NOT_FOUND
             408 -> REQUEST_TIMEOUT
@@ -107,11 +114,33 @@ enum class OctomilErrorCode {
         fun fromContractCode(code: String): OctomilErrorCode {
             val contractCode = ContractErrorCode.fromCode(code)
                 ?: return UNKNOWN
-            return try {
-                valueOf(contractCode.name)
-            } catch (_: IllegalArgumentException) {
-                UNKNOWN
+            // Codes that exist in the contract but map to a different SDK code
+            return when (contractCode) {
+                ContractErrorCode.TOKEN_EXPIRED -> AUTHENTICATION_FAILED
+                ContractErrorCode.DEVICE_REVOKED -> FORBIDDEN
+                else -> try {
+                    valueOf(contractCode.name)
+                } catch (_: IllegalArgumentException) {
+                    UNKNOWN
+                }
             }
+        }
+
+        /**
+         * Resolve an [OctomilErrorCode] from a server error response.
+         *
+         * Prefers the wire-format `code` string (e.g. "model_not_found") when
+         * available, falling back to HTTP status code mapping.
+         *
+         * @param code The optional error code string from the server response body.
+         * @param httpStatus The HTTP status code from the response.
+         */
+        fun fromServerResponse(code: String?, httpStatus: Int): OctomilErrorCode {
+            if (code != null) {
+                val resolved = fromContractCode(code)
+                if (resolved != UNKNOWN) return resolved
+            }
+            return fromHttpStatus(httpStatus)
         }
     }
 }

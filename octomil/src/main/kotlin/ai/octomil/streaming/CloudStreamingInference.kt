@@ -1,5 +1,7 @@
 package ai.octomil.streaming
 
+import ai.octomil.errors.OctomilErrorCode
+import ai.octomil.errors.OctomilException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
@@ -90,11 +92,14 @@ class CloudStreamingClient(
 
         httpClient.newCall(request).execute().use { response ->
             if (!response.isSuccessful) {
-                throw RuntimeException("Cloud streaming inference failed: HTTP ${response.code}")
+                throw OctomilException(
+                    OctomilErrorCode.fromHttpStatus(response.code),
+                    "Cloud streaming inference failed: HTTP ${response.code}",
+                )
             }
 
             val body = response.body
-                ?: throw RuntimeException("Cloud streaming inference returned empty body")
+                ?: throw OctomilException(OctomilErrorCode.SERVER_ERROR, "Cloud streaming inference returned empty body")
 
             BufferedReader(InputStreamReader(body.byteStream())).use { reader ->
                 var line: String?

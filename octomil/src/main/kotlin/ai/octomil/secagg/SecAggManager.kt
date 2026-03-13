@@ -370,8 +370,10 @@ data class SecAggSessionInfo(
 
 /**
  * Exception thrown when SecAgg protocol operations fail.
+ *
+ * Extends [ai.octomil.errors.OctomilException] with [ai.octomil.errors.OctomilErrorCode.UNKNOWN].
  */
 class SecAggException(
     message: String,
     cause: Throwable? = null,
-) : Exception(message, cause)
+) : ai.octomil.errors.OctomilException(ai.octomil.errors.OctomilErrorCode.UNKNOWN, message, cause)

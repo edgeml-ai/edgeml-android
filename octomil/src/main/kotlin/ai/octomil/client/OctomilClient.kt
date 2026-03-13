@@ -185,7 +185,10 @@ class OctomilClient private constructor(
          */
         fun getInstance(): OctomilClient =
             instance
-                ?: throw IllegalStateException("OctomilClient not initialized. Call Builder.build() first.")
+                ?: throw ai.octomil.errors.OctomilException(
+                    ai.octomil.errors.OctomilErrorCode.INVALID_INPUT,
+                    "OctomilClient not initialized. Call Builder.build() first.",
+                )
 
         /**
          * Check if the client is initialized.
@@ -1596,7 +1599,10 @@ class OctomilClient private constructor(
         fun build(): OctomilClient {
             val cfg =
                 config
-                    ?: throw IllegalStateException("Configuration is required. Call config() first.")
+                    ?: throw ai.octomil.errors.OctomilException(
+                        ai.octomil.errors.OctomilErrorCode.INVALID_INPUT,
+                        "Configuration is required. Call config() first.",
+                    )
 
             // Setup logging in debug mode
             if (cfg.debugMode && Timber.treeCount == 0) {

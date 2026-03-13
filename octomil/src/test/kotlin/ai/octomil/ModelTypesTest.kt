@@ -345,10 +345,10 @@ class ModelTypesTest {
 
     @Test
     fun `DownloadState Failed carries exception`() {
-        val error = ModelDownloadException("fail", errorCode = ModelDownloadException.ErrorCode.NETWORK_ERROR)
+        val error = ModelDownloadException("fail", downloadErrorCode = ModelDownloadException.ErrorCode.NETWORK_ERROR)
         val state = DownloadState.Failed(error)
         assertEquals(error, state.error)
-        assertEquals(ModelDownloadException.ErrorCode.NETWORK_ERROR, state.error.errorCode)
+        assertEquals(ModelDownloadException.ErrorCode.NETWORK_ERROR, state.error.downloadErrorCode)
     }
 
     // =========================================================================
@@ -360,22 +360,22 @@ class ModelTypesTest {
         val exception =
             ModelDownloadException(
                 "Checksum mismatch",
-                errorCode = ModelDownloadException.ErrorCode.CHECKSUM_MISMATCH,
+                downloadErrorCode = ModelDownloadException.ErrorCode.CHECKSUM_MISMATCH,
             )
         assertEquals("Checksum mismatch", exception.message)
-        assertEquals(ModelDownloadException.ErrorCode.CHECKSUM_MISMATCH, exception.errorCode)
+        assertEquals(ModelDownloadException.ErrorCode.CHECKSUM_MISMATCH, exception.downloadErrorCode)
     }
 
     @Test
     fun `ModelDownloadException defaults to UNKNOWN error code`() {
         val exception = ModelDownloadException("something went wrong")
-        assertEquals(ModelDownloadException.ErrorCode.UNKNOWN, exception.errorCode)
+        assertEquals(ModelDownloadException.ErrorCode.UNKNOWN, exception.downloadErrorCode)
     }
 
     @Test
     fun `ModelDownloadException preserves cause`() {
         val cause = RuntimeException("disk full")
-        val exception = ModelDownloadException("IO error", cause = cause, errorCode = ModelDownloadException.ErrorCode.IO_ERROR)
+        val exception = ModelDownloadException("IO error", cause = cause, downloadErrorCode = ModelDownloadException.ErrorCode.IO_ERROR)
         assertEquals(cause, exception.cause)
     }
 

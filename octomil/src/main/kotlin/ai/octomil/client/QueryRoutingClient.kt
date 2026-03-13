@@ -471,10 +471,10 @@ class QueryRouter(
                 if (pos < tokens.size && tokens[pos] == ")") pos++ // consume ')'
                 return result
             }
-            if (pos >= tokens.size) throw IllegalStateException("Unexpected end of expression")
+            if (pos >= tokens.size) throw ai.octomil.errors.OctomilException(ai.octomil.errors.OctomilErrorCode.INVALID_INPUT, "Unexpected end of expression")
             val token = tokens[pos++]
             return token.toDoubleOrNull()
-                ?: throw IllegalStateException("Expected number, got: $token")
+                ?: throw ai.octomil.errors.OctomilException(ai.octomil.errors.OctomilErrorCode.INVALID_INPUT, "Expected number, got: $token")
         }
     }
 

@@ -1,5 +1,7 @@
 package ai.octomil.responses
 
+import ai.octomil.errors.OctomilErrorCode
+import ai.octomil.errors.OctomilException
 import ai.octomil.runtime.core.ModelRuntime
 import ai.octomil.runtime.core.ModelRuntimeRegistry
 import ai.octomil.runtime.core.RuntimeChunk
@@ -110,7 +112,7 @@ class OctomilResponses(
     private fun resolveRuntime(model: String): ModelRuntime {
         val runtime = runtimeResolver?.invoke(model)
             ?: ModelRuntimeRegistry.resolve(model)
-            ?: throw IllegalStateException("No ModelRuntime registered for model: $model")
+            ?: throw OctomilException(OctomilErrorCode.RUNTIME_UNAVAILABLE, "No ModelRuntime registered for model: $model")
         return runtime
     }
 

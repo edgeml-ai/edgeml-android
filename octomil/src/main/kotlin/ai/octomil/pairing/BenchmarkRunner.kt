@@ -477,8 +477,10 @@ fun BenchmarkReport.toBenchmarkResult(): ai.octomil.runtime.engines.tflite.Bench
 
 /**
  * Exception thrown when benchmarking fails.
+ *
+ * Extends [ai.octomil.errors.OctomilException] with [ai.octomil.errors.OctomilErrorCode.UNKNOWN].
  */
 class BenchmarkException(
     message: String,
     cause: Throwable? = null,
-) : Exception(message, cause)
+) : ai.octomil.errors.OctomilException(ai.octomil.errors.OctomilErrorCode.UNKNOWN, message, cause)
