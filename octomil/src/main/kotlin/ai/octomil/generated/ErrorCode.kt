@@ -9,6 +9,7 @@ enum class ErrorCategory(val code: String) {
     DEVICE("device"),
     RUNTIME("runtime"),
     POLICY("policy"),
+    TRAINING("training"),
     CONTROL("control"),
     LIFECYCLE("lifecycle"),
     UNKNOWN("unknown");
@@ -83,6 +84,9 @@ enum class ErrorCode(
     POLICY_DENIED("policy_denied", ErrorCategory.POLICY, RetryClass.NEVER, false, SuggestedAction.CHECK_POLICY),
     CLOUD_FALLBACK_DISALLOWED("cloud_fallback_disallowed", ErrorCategory.POLICY, RetryClass.NEVER, false, SuggestedAction.CHANGE_POLICY_OR_FIX_LOCAL),
     MAX_TOOL_ROUNDS_EXCEEDED("max_tool_rounds_exceeded", ErrorCategory.POLICY, RetryClass.NEVER, false, SuggestedAction.INCREASE_LIMIT_OR_SIMPLIFY),
+    TRAINING_FAILED("training_failed", ErrorCategory.TRAINING, RetryClass.CONDITIONAL, false, SuggestedAction.RETRY),
+    TRAINING_NOT_SUPPORTED("training_not_supported", ErrorCategory.TRAINING, RetryClass.NEVER, false, SuggestedAction.FIX_REQUEST),
+    WEIGHT_UPLOAD_FAILED("weight_upload_failed", ErrorCategory.TRAINING, RetryClass.BACKOFF_SAFE, false, SuggestedAction.RETRY),
     CONTROL_SYNC_FAILED("control_sync_failed", ErrorCategory.CONTROL, RetryClass.BACKOFF_SAFE, false, SuggestedAction.RETRY),
     ASSIGNMENT_NOT_FOUND("assignment_not_found", ErrorCategory.CONTROL, RetryClass.NEVER, false, SuggestedAction.CHECK_ASSIGNMENT),
     CANCELLED("cancelled", ErrorCategory.LIFECYCLE, RetryClass.NEVER, false, SuggestedAction.NONE),

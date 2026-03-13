@@ -14,8 +14,8 @@ class OctomilErrorCodeTest {
     // =========================================================================
 
     @Test
-    fun `has exactly 31 canonical error codes`() {
-        assertEquals(31, OctomilErrorCode.entries.size)
+    fun `has exactly 34 canonical error codes`() {
+        assertEquals(34, OctomilErrorCode.entries.size)
     }
 
     @Test
@@ -47,6 +47,9 @@ class OctomilErrorCodeTest {
             "POLICY_DENIED",
             "CLOUD_FALLBACK_DISALLOWED",
             "MAX_TOOL_ROUNDS_EXCEEDED",
+            "TRAINING_FAILED",
+            "TRAINING_NOT_SUPPORTED",
+            "WEIGHT_UPLOAD_FAILED",
             "CONTROL_SYNC_FAILED",
             "ASSIGNMENT_NOT_FOUND",
             "CANCELLED",
@@ -73,6 +76,8 @@ class OctomilErrorCodeTest {
             OctomilErrorCode.MODEL_LOAD_FAILED,
             OctomilErrorCode.INFERENCE_FAILED,
             OctomilErrorCode.STREAM_INTERRUPTED,
+            OctomilErrorCode.TRAINING_FAILED,
+            OctomilErrorCode.WEIGHT_UPLOAD_FAILED,
             OctomilErrorCode.CONTROL_SYNC_FAILED,
             OctomilErrorCode.APP_BACKGROUNDED,
         )
