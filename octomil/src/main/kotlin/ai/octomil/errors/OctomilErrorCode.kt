@@ -6,8 +6,8 @@ import ai.octomil.generated.RetryClass
 import ai.octomil.generated.SuggestedAction
 
 /**
- * Canonical error codes matching SDK_FACADE_CONTRACT.md.
- * All 31 codes from the server's ErrorCode enum.
+ * Canonical error codes matching the octomil-contracts error taxonomy.
+ * 34 SDK-facing codes mapping to 36 contract codes (token_expired → AUTHENTICATION_FAILED, device_revoked → FORBIDDEN).
  *
  * Error metadata ([retryable], [category], [retryClass], [fallbackEligible],
  * [suggestedAction]) is derived from the generated [ContractErrorCode] taxonomy
@@ -114,10 +114,15 @@ enum class OctomilErrorCode {
         fun fromContractCode(code: String): OctomilErrorCode {
             val contractCode = ContractErrorCode.fromCode(code)
                 ?: return UNKNOWN
-            return try {
-                valueOf(contractCode.name)
-            } catch (_: IllegalArgumentException) {
-                UNKNOWN
+            // Codes that exist in the contract but map to a different SDK code
+            return when (contractCode) {
+                ContractErrorCode.TOKEN_EXPIRED -> AUTHENTICATION_FAILED
+                ContractErrorCode.DEVICE_REVOKED -> FORBIDDEN
+                else -> try {
+                    valueOf(contractCode.name)
+                } catch (_: IllegalArgumentException) {
+                    UNKNOWN
+                }
             }
         }
 
