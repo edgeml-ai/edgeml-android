@@ -1,5 +1,4 @@
 // Auto-generated telemetry event names.
-package ai.octomil.generated
 
 object TelemetryEvent {
     const val INFERENCE_STARTED = "inference.started"

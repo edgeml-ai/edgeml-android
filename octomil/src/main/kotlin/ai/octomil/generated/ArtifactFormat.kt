@@ -1,5 +1,4 @@
 // Auto-generated from octomil-contracts. Do not edit.
-package ai.octomil.generated
 
 enum class ArtifactFormat(val code: String) {
     COREML("coreml"),

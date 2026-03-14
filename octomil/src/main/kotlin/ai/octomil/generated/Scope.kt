@@ -1,5 +1,4 @@
 // Auto-generated from octomil-contracts. Do not edit.
-package ai.octomil.generated
 
 enum class Scope(val code: String) {
     CATALOG_READ("catalog:read"),
