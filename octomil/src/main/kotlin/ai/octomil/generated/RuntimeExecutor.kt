@@ -1,5 +1,4 @@
 // Auto-generated from octomil-contracts. Do not edit.
-package ai.octomil.generated
 
 enum class RuntimeExecutor(val code: String) {
     COREML("coreml"),
@@ -9,7 +8,14 @@ enum class RuntimeExecutor(val code: String) {
     LLAMACPP("llamacpp"),
     MNN("mnn"),
     TRANSFORMERSJS("transformersjs"),
-    CLOUD("cloud");
+    CLOUD("cloud"),
+    OLLAMA("ollama"),
+    WHISPER("whisper"),
+    MLC("mlc"),
+    CACTUS("cactus"),
+    SAMSUNG_ONE("samsung_one"),
+    EXECUTORCH("executorch"),
+    ECHO("echo");
 
     companion object {
         fun fromCode(code: String): RuntimeExecutor? =
