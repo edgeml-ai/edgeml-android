@@ -16,7 +16,6 @@ dependencyResolutionManagement {
 
 rootProject.name = "octomil-android"
 include(":octomil")
-include(":sample")
 
 // llama.cpp Android library — composite build from reference project.
 // The :lib module compiles llama.cpp from source via CMake (NDK 29 + CMake 3.31.6).
