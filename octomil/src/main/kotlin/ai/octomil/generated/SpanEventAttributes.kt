@@ -1,3 +1,5 @@
+package ai.octomil.generated
+
 // Auto-generated span event attribute key constants.
 
 object SpanEventAttribute {
@@ -18,6 +20,8 @@ object SpanEventAttribute {
     const val OCTOMIL_CHECKSUM_ALGORITHM = "octomil.checksum.algorithm"
     const val OCTOMIL_RUNTIME_EXECUTOR = "octomil.runtime.executor"
     const val OCTOMIL_RUNTIME_INIT_MS = "octomil.runtime.init_ms"
+    const val OCTOMIL_TOOL_EXTRACTION_STRATEGY = "octomil.tool.extraction_strategy"
+    const val OCTOMIL_TOOL_RAW_TEXT_PREVIEW = "octomil.tool.raw_text_preview"
 
     val EVENT_REQUIRED_ATTRIBUTES: Map<String, List<String>> = mapOf(
         "first_token" to listOf("octomil.ttft_ms"),
@@ -29,5 +33,7 @@ object SpanEventAttribute {
         "download_completed" to listOf("octomil.download.duration_ms", "octomil.download.bytes"),
         "checksum_verified" to listOf(),
         "runtime_initialized" to listOf("octomil.runtime.executor", "octomil.runtime.init_ms"),
+        "tool_call_parse_succeeded" to listOf("octomil.tool.name", "octomil.tool.extraction_strategy"),
+        "tool_call_parse_failed" to listOf("octomil.tool.extraction_strategy"),
     )
 }

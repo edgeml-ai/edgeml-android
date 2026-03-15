@@ -195,6 +195,15 @@ class PairingManager(
                     )
                 }
 
+                PairingStatus.ERROR -> {
+                    val errorMsg = session.errorMessage
+                        ?: "Server encountered an error during deployment"
+                    throw PairingException(
+                        errorMsg,
+                        PairingException.ErrorCode.SERVER_ERROR,
+                    )
+                }
+
                 PairingStatus.PENDING, PairingStatus.CONNECTED -> {
                     // Still waiting, continue polling
                 }

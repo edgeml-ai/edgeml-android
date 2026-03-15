@@ -1,3 +1,5 @@
+package ai.octomil.generated
+
 // Auto-generated OTLP resource attribute keys.
 
 object OtlpResourceAttribute {

@@ -1,3 +1,5 @@
+package ai.octomil.generated
+
 // Auto-generated telemetry event names.
 
 object TelemetryEvent {

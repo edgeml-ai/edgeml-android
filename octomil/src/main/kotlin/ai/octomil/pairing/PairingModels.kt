@@ -22,6 +22,8 @@ data class PairingSession(
     val modelVersion: String? = null,
     @SerialName("status")
     val status: PairingStatus,
+    @SerialName("error_message")
+    val errorMessage: String? = null,
     @SerialName("download_url")
     val downloadUrl: String? = null,
     @SerialName("download_format")
@@ -58,6 +60,9 @@ enum class PairingStatus {
 
     @SerialName("cancelled")
     CANCELLED,
+
+    @SerialName("error")
+    ERROR,
 }
 
 /**
