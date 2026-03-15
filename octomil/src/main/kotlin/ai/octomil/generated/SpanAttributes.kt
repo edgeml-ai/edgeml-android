@@ -12,6 +12,7 @@ object SpanAttribute {
     const val DEVICE_CLASS = "device.class"
     const val FALLBACK_REASON = "fallback.reason"
     const val ERROR_TYPE = "error.type"
+    const val TOOL_CALL_TIER = "tool.call_tier"
     const val MODEL_SOURCE_FORMAT = "model.source_format"
     const val MODEL_SIZE_BYTES = "model.size_bytes"
     const val TOOL_NAME = "tool.name"
