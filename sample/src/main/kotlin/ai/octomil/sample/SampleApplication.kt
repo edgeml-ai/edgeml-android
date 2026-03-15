@@ -5,8 +5,10 @@ import ai.octomil.client.OctomilClient
 import ai.octomil.config.OctomilConfig
 import ai.octomil.config.PrivacyConfiguration
 import ai.octomil.discovery.DiscoveryManager
+import ai.octomil.pairing.ui.PairingActivity
 import ai.octomil.sample.chat.LlamaCppRuntime
 import android.app.Application
+import android.content.Intent
 import android.provider.Settings
 import timber.log.Timber
 
@@ -31,6 +33,17 @@ class SampleApplication : Application() {
         // Register llama.cpp as the LLM runtime for GGUF models
         LLMRuntimeRegistry.factory = { modelFile ->
             LlamaCppRuntime(modelFile, this)
+        }
+
+        // Wire "Try it out" button in PairingActivity → MainActivity chat route.
+        // After pairing completes, this launches the main activity with a deep link
+        // to the chat screen for the paired model.
+        PairingActivity.onTryItOutHandler = { context, modelName, _ ->
+            val intent = Intent(context, MainActivity::class.java).apply {
+                putExtra("navigate_to_chat", modelName)
+                flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
+            }
+            context.startActivity(intent)
         }
 
         // Initialize Octomil SDK

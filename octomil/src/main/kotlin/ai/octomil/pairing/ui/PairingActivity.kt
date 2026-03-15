@@ -4,7 +4,6 @@ import ai.octomil.api.OctomilApi
 import ai.octomil.api.OctomilApiFactory
 import ai.octomil.config.AuthConfig
 import ai.octomil.config.OctomilConfig
-import ai.octomil.tryitout.TryItOutActivity
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
@@ -83,19 +82,17 @@ class PairingActivity : ComponentActivity() {
                         Timber.d("PairingActivity: user tapped 'Try it out'")
                         val successState = viewModel.state.value as? PairingState.Success
                         if (successState != null) {
-                            // Legacy path: launches TryItOutActivity (deprecated).
-                            // Apps using LLMRuntime + ChatScreen should intercept
-                            // this callback and navigate to their own chat UI instead.
-                            @Suppress("DEPRECATION")
-                            val tryItOutIntent = TryItOutActivity.createIntent(
-                                context = this@PairingActivity,
-                                modelName = successState.modelName,
-                                modelVersion = successState.modelVersion,
-                                sizeBytes = successState.sizeBytes,
-                                runtime = successState.runtime,
-                                modality = successState.modality,
-                            )
-                            startActivity(tryItOutIntent)
+                            val handler = onTryItOutHandler
+                            if (handler != null) {
+                                handler.invoke(
+                                    this@PairingActivity,
+                                    successState.modelName,
+                                    successState.modelVersion,
+                                )
+                            } else {
+                                Timber.w("No onTryItOutHandler registered. Set PairingActivity.onTryItOutHandler in Application.onCreate().")
+                                finish()
+                            }
                         }
                     },
                     onOpenDashboard = {
@@ -145,6 +142,17 @@ class PairingActivity : ComponentActivity() {
     }
 
     companion object {
+
+        /**
+         * Handler invoked when the user taps "Try it out" after pairing.
+         *
+         * Set this in `Application.onCreate()` to navigate to your chat UI.
+         * Receives (context, modelName, modelVersion).
+         *
+         * If null, the activity logs a warning and finishes.
+         */
+        @Volatile
+        var onTryItOutHandler: ((Context, String, String) -> Unit)? = null
 
         private const val EXTRA_TOKEN = "ai.octomil.pairing.EXTRA_TOKEN"
         private const val EXTRA_HOST = "ai.octomil.pairing.EXTRA_HOST"

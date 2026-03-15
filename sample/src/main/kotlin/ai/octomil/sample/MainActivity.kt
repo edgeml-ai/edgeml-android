@@ -4,6 +4,7 @@ import ai.octomil.pairing.ui.OctomilPairingTheme
 import ai.octomil.sample.chat.ChatScreen
 import ai.octomil.sample.chat.ChatViewModel
 import android.app.Application
+import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -43,10 +44,25 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        // Extract chat deep link from PairingActivity handler
+        val chatModelName = intent?.getStringExtra("navigate_to_chat")
+
         setContent {
             OctomilPairingTheme {
-                AppNavigation()
+                AppNavigation(initialChatModel = chatModelName)
             }
+        }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        // Handle re-launch with SINGLE_TOP — store for recomposition
+        setIntent(intent)
+        val chatModelName = intent.getStringExtra("navigate_to_chat")
+        if (chatModelName != null) {
+            // Force recreate to pick up the new intent
+            recreate()
         }
     }
 }
@@ -58,8 +74,16 @@ object Routes {
 }
 
 @Composable
-fun AppNavigation() {
+fun AppNavigation(initialChatModel: String? = null) {
     val navController = rememberNavController()
+
+    // If launched with a chat deep link, navigate immediately
+    if (initialChatModel != null) {
+        val encoded = URLEncoder.encode(initialChatModel, "UTF-8")
+        androidx.compose.runtime.LaunchedEffect(initialChatModel) {
+            navController.navigate("chat/$encoded")
+        }
+    }
 
     NavHost(navController = navController, startDestination = Routes.HOME) {
         composable(Routes.HOME) {
