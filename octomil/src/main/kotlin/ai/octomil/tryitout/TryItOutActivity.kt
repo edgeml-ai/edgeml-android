@@ -39,7 +39,17 @@ import java.nio.ByteOrder
  * zero-filled array. To use a real interpreter, subclass this activity and
  * override [createInferenceRunner], or register a custom factory via
  * [setInferenceRunnerFactory] before the activity is created.
+ *
+ * @deprecated Use ChatScreen composable with LLMRuntime instead.
+ * This activity uses FloatArray-based inference which is incompatible with
+ * LLM text generation. It also requires a manifest entry to function.
+ * Migrate to ChatScreen + ChatViewModel + LLMRuntimeRegistry for GGUF
+ * model inference. Will be removed in a future SDK version.
  */
+@Deprecated(
+    message = "Use ChatScreen composable with LLMRuntime instead",
+    level = DeprecationLevel.WARNING,
+)
 class TryItOutActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {

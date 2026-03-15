@@ -42,11 +42,8 @@
             </intent-filter>
         </activity>
 
-        <!-- Try It Out activity -->
-        <activity
-            android:name="ai.octomil.tryitout.TryItOutActivity"
-            android:exported="false"
-            android:theme="@style/Theme.OctomilSample" />
+        <!-- TryItOutActivity removed: replaced by ChatScreen composable.
+             See ChatViewModel + LLMRuntimeRegistry for the new inference path. -->
 
     </application>
 </manifest>

@@ -83,6 +83,10 @@ class PairingActivity : ComponentActivity() {
                         Timber.d("PairingActivity: user tapped 'Try it out'")
                         val successState = viewModel.state.value as? PairingState.Success
                         if (successState != null) {
+                            // Legacy path: launches TryItOutActivity (deprecated).
+                            // Apps using LLMRuntime + ChatScreen should intercept
+                            // this callback and navigate to their own chat UI instead.
+                            @Suppress("DEPRECATION")
                             val tryItOutIntent = TryItOutActivity.createIntent(
                                 context = this@PairingActivity,
                                 modelName = successState.modelName,
