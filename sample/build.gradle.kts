@@ -19,7 +19,7 @@ android {
 
     defaultConfig {
         applicationId = "ai.octomil.sample"
-        minSdk = 24
+        minSdk = 33  // llama.cpp native lib requires API 33+
         targetSdk = 36
         versionCode = 1
         versionName = "1.2.0"
@@ -79,6 +79,9 @@ android {
 dependencies {
     implementation(project(":octomil"))
 
+    // llama.cpp inference engine (GGUF models on Android ARM64/x86_64)
+    implementation("com.arm.aichat:lib")
+
     implementation("org.jetbrains.kotlin:kotlin-stdlib:2.3.10")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2")
 
@@ -98,6 +101,7 @@ dependencies {
     implementation("androidx.activity:activity-compose:1.10.1")
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.10.0")
     implementation("androidx.lifecycle:lifecycle-runtime-compose:2.10.0")
+    implementation("androidx.navigation:navigation-compose:2.9.0")
     debugImplementation("androidx.compose.ui:ui-tooling")
 
     implementation("com.google.android.material:material:1.13.0")
