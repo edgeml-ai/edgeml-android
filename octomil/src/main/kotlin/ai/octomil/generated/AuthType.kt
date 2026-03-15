@@ -1,3 +1,5 @@
+package ai.octomil.generated
+
 // Auto-generated from octomil-contracts. Do not edit.
 
 enum class AuthType(val code: String) {

@@ -1,3 +1,5 @@
+package ai.octomil.generated
+
 // Auto-generated metric view constants.
 
 data class MetricView(

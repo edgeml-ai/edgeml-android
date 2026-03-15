@@ -1,3 +1,5 @@
+package ai.octomil.generated
+
 // Auto-generated span attribute key constants.
 
 object SpanAttribute {
