@@ -1,9 +1,11 @@
 package ai.octomil.sample
 
+import ai.octomil.chat.LLMRuntimeRegistry
 import ai.octomil.client.OctomilClient
 import ai.octomil.config.OctomilConfig
 import ai.octomil.config.PrivacyConfiguration
 import ai.octomil.discovery.DiscoveryManager
+import ai.octomil.sample.chat.LlamaCppRuntime
 import android.app.Application
 import android.provider.Settings
 import timber.log.Timber
@@ -25,6 +27,11 @@ class SampleApplication : Application() {
 
         // Initialize Timber for logging
         Timber.plant(Timber.DebugTree())
+
+        // Register llama.cpp as the LLM runtime for GGUF models
+        LLMRuntimeRegistry.factory = { modelFile ->
+            LlamaCppRuntime(modelFile, this)
+        }
 
         // Initialize Octomil SDK
         initializeOctomil()
