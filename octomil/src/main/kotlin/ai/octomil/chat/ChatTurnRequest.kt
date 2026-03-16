@@ -1,7 +1,5 @@
 package ai.octomil.chat
 
-import ai.octomil.responses.ContentPart
-
 /**
  * Request to submit a user turn and receive an assistant response.
  *
@@ -10,7 +8,6 @@ import ai.octomil.responses.ContentPart
 data class ChatTurnRequest(
     val threadId: String,
     val input: String,
-    val inputParts: List<ContentPart>? = null,
     val config: ChatTurnConfig? = null,
 )
 

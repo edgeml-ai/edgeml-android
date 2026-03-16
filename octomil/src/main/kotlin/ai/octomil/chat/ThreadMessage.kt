@@ -1,7 +1,5 @@
 package ai.octomil.chat
 
-import ai.octomil.responses.ContentPart
-
 /**
  * A single message within a chat thread.
  *
@@ -13,7 +11,6 @@ data class ThreadMessage(
     val threadId: String,
     val role: String,
     val content: String? = null,
-    val contentParts: List<ContentPart>? = null,
     val toolCalls: List<ToolCall>? = null,
     val toolCallId: String? = null,
     val metrics: GenerationMetrics? = null,
