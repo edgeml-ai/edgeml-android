@@ -5,7 +5,8 @@ package ai.octomil.generated
 enum class AuthType(val code: String) {
     ORG_API_KEY("org_api_key"),
     DEVICE_TOKEN("device_token"),
-    SERVICE_TOKEN("service_token");
+    SERVICE_TOKEN("service_token"),
+    PUBLISHABLE_KEY("publishable_key");
 
     companion object {
         fun fromCode(code: String): AuthType? =

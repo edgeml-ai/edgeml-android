@@ -7,14 +7,24 @@ import kotlin.test.assertFailsWith
 class AuthConfigTest {
 
     // =========================================================================
-    // PublishableKey
+    // PublishableKey — valid keys
     // =========================================================================
 
     @Test
-    fun `PublishableKey accepts key with oct_pub_ prefix`() {
-        val config = AuthConfig.PublishableKey("oct_pub_abc123")
-        assertEquals("oct_pub_abc123", config.key)
+    fun `PublishableKey accepts key with oct_pub_test_ prefix`() {
+        val config = AuthConfig.PublishableKey("oct_pub_test_abc123")
+        assertEquals("oct_pub_test_abc123", config.key)
     }
+
+    @Test
+    fun `PublishableKey accepts key with oct_pub_live_ prefix`() {
+        val config = AuthConfig.PublishableKey("oct_pub_live_abc123")
+        assertEquals("oct_pub_live_abc123", config.key)
+    }
+
+    // =========================================================================
+    // PublishableKey — rejected keys
+    // =========================================================================
 
     @Test
     fun `PublishableKey rejects key without oct_pub_ prefix`() {
@@ -38,10 +48,33 @@ class AuthConfigTest {
     }
 
     @Test
-    fun `PublishableKey accepts key with only prefix`() {
-        // "oct_pub_" alone is technically valid per the require check
-        val config = AuthConfig.PublishableKey("oct_pub_")
-        assertEquals("oct_pub_", config.key)
+    fun `PublishableKey rejects bare oct_pub_ without environment`() {
+        assertFailsWith<IllegalArgumentException> {
+            AuthConfig.PublishableKey("oct_pub_abc123")
+        }
+    }
+
+    @Test
+    fun `PublishableKey rejects oct_pub_ alone`() {
+        assertFailsWith<IllegalArgumentException> {
+            AuthConfig.PublishableKey("oct_pub_")
+        }
+    }
+
+    // =========================================================================
+    // PublishableKey — environment property
+    // =========================================================================
+
+    @Test
+    fun `environment returns test for oct_pub_test_ key`() {
+        val config = AuthConfig.PublishableKey("oct_pub_test_abc123")
+        assertEquals("test", config.environment)
+    }
+
+    @Test
+    fun `environment returns live for oct_pub_live_ key`() {
+        val config = AuthConfig.PublishableKey("oct_pub_live_abc123")
+        assertEquals("live", config.environment)
     }
 
     // =========================================================================
