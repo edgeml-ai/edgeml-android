@@ -8,6 +8,8 @@ data class RuntimeRequest(
     val stop: List<String>? = null,
     val toolDefinitions: List<RuntimeToolDef>? = null,
     val jsonSchema: String? = null,
+    val mediaData: ByteArray? = null,
+    val mediaType: String? = null,
 )
 
 data class RuntimeToolDef(

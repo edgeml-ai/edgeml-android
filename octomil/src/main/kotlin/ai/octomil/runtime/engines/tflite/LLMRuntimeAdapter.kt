@@ -16,7 +16,7 @@ internal class LLMRuntimeAdapter(
     override val capabilities: RuntimeCapabilities = RuntimeCapabilities(
         supportsToolCalls = false,
         supportsStructuredOutput = false,
-        supportsMultimodalInput = false,
+        supportsMultimodalInput = llmRuntime.supportsVision() || llmRuntime.supportsAudio(),
         supportsStreaming = true,
     ),
 ) : ModelRuntime {
@@ -26,7 +26,13 @@ internal class LLMRuntimeAdapter(
         val tokens = mutableListOf<String>()
         var tokenCount = 0
 
-        llmRuntime.generate(request.prompt, config).collect { token ->
+        val flow = if (request.mediaData != null) {
+            llmRuntime.generateMultimodal(request.prompt, request.mediaData, config)
+        } else {
+            llmRuntime.generate(request.prompt, config)
+        }
+
+        flow.collect { token ->
             tokens.add(token)
             tokenCount++
         }
@@ -45,9 +51,12 @@ internal class LLMRuntimeAdapter(
 
     override fun stream(request: RuntimeRequest): Flow<RuntimeChunk> {
         val config = request.toGenerateConfig()
-        return llmRuntime.generate(request.prompt, config).map { token ->
-            RuntimeChunk(text = token)
+        val flow = if (request.mediaData != null) {
+            llmRuntime.generateMultimodal(request.prompt, request.mediaData, config)
+        } else {
+            llmRuntime.generate(request.prompt, config)
         }
+        return flow.map { token -> RuntimeChunk(text = token) }
     }
 
     override fun close() {
