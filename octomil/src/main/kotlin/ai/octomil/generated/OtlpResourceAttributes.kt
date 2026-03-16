@@ -12,6 +12,7 @@ object OtlpResourceAttribute {
     const val OCTOMIL_DEVICE_ID = "octomil.device.id"
     const val OCTOMIL_PLATFORM = "octomil.platform"
     const val OCTOMIL_SDK_SURFACE = "octomil.sdk.surface"
+    const val OCTOMIL_INSTALL_ID = "octomil.install.id"
     const val OCTOMIL_DEVICE_CLASS = "octomil.device.class"
     const val OCTOMIL_AVAILABLE_RUNTIMES = "octomil.available_runtimes"
     const val OCTOMIL_ACCELERATORS = "octomil.accelerators"

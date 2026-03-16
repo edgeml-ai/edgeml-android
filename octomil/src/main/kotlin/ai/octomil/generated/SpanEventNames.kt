@@ -39,6 +39,7 @@ object SpanEventName {
     const val DESIRED_STATE_FETCHED = "desired_state_fetched"
     const val OBSERVED_STATE_REPORTED = "observed_state_reported"
     const val STATE_DRIFT_DETECTED = "state_drift_detected"
+    const val DEVICE_REGISTERED = "device.registered"
 
     val EVENT_PARENT_SPAN: Map<String, String> = mapOf(
         "first_token" to "octomil.response",
@@ -77,5 +78,6 @@ object SpanEventName {
         "desired_state_fetched" to "octomil.device.sync",
         "observed_state_reported" to "octomil.device.sync",
         "state_drift_detected" to "octomil.device.sync",
+        "device.registered" to "octomil.control.register",
     )
 }
