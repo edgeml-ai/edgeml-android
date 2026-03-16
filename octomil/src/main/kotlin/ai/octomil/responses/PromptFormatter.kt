@@ -45,6 +45,7 @@ object PromptFormatter {
                             is ContentPart.Text -> sb.append(part.text)
                             is ContentPart.Image -> sb.append("[image]")
                             is ContentPart.Audio -> sb.append("[audio]")
+                            is ContentPart.Video -> sb.append("[video]")
                             is ContentPart.File -> sb.append("[file: ${part.filename ?: "attachment"}]")
                         }
                     }
