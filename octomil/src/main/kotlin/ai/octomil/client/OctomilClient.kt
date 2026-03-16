@@ -253,8 +253,8 @@ class OctomilClient private constructor(
         if (serverId == null) {
             val result = registerDevice(deviceIdentifier)
             if (result.isFailure) {
-                _state.value = ClientState.ERROR
-                throw result.exceptionOrNull() ?: Exception("Device registration failed")
+                Timber.w("Device registration failed — continuing without server identity")
+                return null
             }
             serverId = storage.getServerDeviceId()
         }
