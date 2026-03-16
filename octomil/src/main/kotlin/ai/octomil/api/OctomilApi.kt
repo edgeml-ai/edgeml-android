@@ -265,6 +265,29 @@ interface OctomilApi {
     ): Response<ai.octomil.control.ControlSyncResponse>
 
     // =========================================================================
+    // Control Plane — Observed & Desired State
+    // =========================================================================
+
+    /**
+     * Report observed device state (artifact statuses, active model, etc.).
+     * Contract: devices.observed_state (1.4.0).
+     */
+    @POST("api/v1/devices/{device_id}/observed-state")
+    suspend fun reportObservedState(
+        @Path("device_id") deviceId: String,
+        @Body request: ai.octomil.control.ObservedStateRequest,
+    ): Response<Unit>
+
+    /**
+     * Fetch server-authoritative desired state for a device.
+     * Contract: devices.desired_state (1.4.0).
+     */
+    @GET("api/v1/devices/{device_id}/desired-state")
+    suspend fun fetchDesiredState(
+        @Path("device_id") deviceId: String,
+    ): Response<ai.octomil.control.DesiredStateResponse>
+
+    // =========================================================================
     // Organization Settings
     // =========================================================================
 
