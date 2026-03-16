@@ -2,7 +2,8 @@ package ai.octomil.speech
 
 import ai.octomil.ModelResolver
 import android.content.Context
-import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 /**
  * Public API for on-device speech transcription.
@@ -33,7 +34,7 @@ class OctomilAudio internal constructor(
      * @throws IllegalStateException if no speech runtime factory is registered.
      * @throws IllegalStateException if the model cannot be found.
      */
-    fun streamingSession(modelName: String): SpeechSession {
+    suspend fun streamingSession(modelName: String): SpeechSession = withContext(Dispatchers.IO) {
         val context = contextProvider()
             ?: throw IllegalStateException("Octomil not initialized — call Octomil.init(context) first")
         val factory = SpeechRuntimeRegistry.factory
@@ -51,7 +52,7 @@ class OctomilAudio internal constructor(
             ?: throw IllegalStateException("Cannot determine model directory for $modelName")
 
         val runtime = factory(dir)
-        return runtime.startSession()
+        runtime.startSession()
     }
 
     /**
