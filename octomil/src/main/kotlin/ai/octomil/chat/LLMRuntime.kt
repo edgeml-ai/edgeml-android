@@ -24,6 +24,19 @@ interface LLMRuntime {
     /** Generate text from a prompt, emitting tokens as they are produced. */
     fun generate(prompt: String, config: GenerateConfig = GenerateConfig()): Flow<String>
 
+    /** Generate from a multimodal prompt (text + media bytes), emitting tokens. */
+    fun generateMultimodal(
+        text: String,
+        mediaData: ByteArray,
+        config: GenerateConfig = GenerateConfig(),
+    ): Flow<String> = throw UnsupportedOperationException("Multimodal not supported by this runtime")
+
+    /** Whether this runtime has vision (image) support loaded. */
+    fun supportsVision(): Boolean = false
+
+    /** Whether this runtime has audio support loaded. */
+    fun supportsAudio(): Boolean = false
+
     /** Release resources held by this runtime. */
     fun close()
 }

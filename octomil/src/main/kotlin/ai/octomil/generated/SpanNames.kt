@@ -10,6 +10,12 @@ object SpanName {
     const val OCTOMIL_TOOL_EXECUTE = "octomil.tool.execute"
     const val OCTOMIL_FALLBACK_CLOUD = "octomil.fallback.cloud"
     const val OCTOMIL_ROLLOUT_SYNC = "octomil.rollout.sync"
+    const val OCTOMIL_ARTIFACT_DOWNLOAD = "octomil.artifact.download"
+    const val OCTOMIL_ARTIFACT_ACTIVATION = "octomil.artifact.activation"
+    const val OCTOMIL_FEDERATION_ROUND = "octomil.federation.round"
+    const val OCTOMIL_TRAINING_JOB = "octomil.training.job"
+    const val OCTOMIL_DEVICE_SYNC = "octomil.device.sync"
+    const val OCTOMIL_TELEMETRY_UPLOAD = "octomil.telemetry.upload"
 
     val ALL_SPAN_NAMES = listOf(
         OCTOMIL_RESPONSE,
@@ -19,5 +25,11 @@ object SpanName {
         OCTOMIL_TOOL_EXECUTE,
         OCTOMIL_FALLBACK_CLOUD,
         OCTOMIL_ROLLOUT_SYNC,
+        OCTOMIL_ARTIFACT_DOWNLOAD,
+        OCTOMIL_ARTIFACT_ACTIVATION,
+        OCTOMIL_FEDERATION_ROUND,
+        OCTOMIL_TRAINING_JOB,
+        OCTOMIL_DEVICE_SYNC,
+        OCTOMIL_TELEMETRY_UPLOAD,
     )
 }

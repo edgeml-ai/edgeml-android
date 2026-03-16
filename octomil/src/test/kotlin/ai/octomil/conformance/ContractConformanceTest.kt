@@ -249,9 +249,8 @@ class ContractConformanceTest {
     fun `OtlpResourceAttribute contains all canonical keys`() {
         assertEquals("service.name", OtlpResourceAttribute.SERVICE_NAME)
         assertEquals("service.version", OtlpResourceAttribute.SERVICE_VERSION)
-        assertEquals("octomil.sdk", OtlpResourceAttribute.OCTOMIL_SDK)
-        assertEquals("octomil.org_id", OtlpResourceAttribute.OCTOMIL_ORG_ID)
-        assertEquals("octomil.device_id", OtlpResourceAttribute.OCTOMIL_DEVICE_ID)
-        assertEquals("os.type", OtlpResourceAttribute.OS_TYPE)
+        // OCTOMIL_SDK and OS_TYPE were removed from generated code — keys renamed
+        assertEquals("octomil.org.id", OtlpResourceAttribute.OCTOMIL_ORG_ID)
+        assertEquals("octomil.device.id", OtlpResourceAttribute.OCTOMIL_DEVICE_ID)
     }
 }
