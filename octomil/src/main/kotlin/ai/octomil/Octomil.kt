@@ -1,7 +1,10 @@
 package ai.octomil
 
+import ai.octomil.audio.OctomilAudio
 import ai.octomil.chat.LLMRuntimeRegistry
 import ai.octomil.chat.OctomilChat
+import ai.octomil.manifest.AppManifest
+import ai.octomil.manifest.ModelCatalogService
 import ai.octomil.models.CachedModel
 import ai.octomil.responses.OctomilResponses
 import ai.octomil.runtime.core.Engine
@@ -9,6 +12,7 @@ import ai.octomil.runtime.core.ModelRuntimeRegistry
 import ai.octomil.runtime.engines.tflite.EngineRegistry
 import ai.octomil.runtime.engines.tflite.LLMRuntimeAdapter
 import ai.octomil.runtime.engines.tflite.Modality
+import ai.octomil.text.OctomilText
 import ai.octomil.training.TFLiteTrainer
 import ai.octomil.workflows.WorkflowRunner
 import android.content.Context
@@ -30,6 +34,58 @@ import java.io.File
 object Octomil {
 
     private var appContext: Context? = null
+    private var _catalog: ModelCatalogService? = null
+
+    /** Model catalog bootstrapped from an [AppManifest], or null if not configured. */
+    val catalog: ModelCatalogService? get() = _catalog
+
+    /** Audio API (transcription). Requires [configure] with a TRANSCRIPTION model. */
+    val audio: OctomilAudio = OctomilAudio { _catalog }
+
+    /** Text prediction API. Requires [configure] with a KEYBOARD_PREDICTION model. */
+    val text: OctomilText = OctomilText { _catalog }
+
+    /**
+     * Configure the SDK with a declarative [AppManifest].
+     *
+     * Calls [init] internally, then bootstraps all manifest entries so that
+     * capability-based runtime resolution is available immediately.
+     *
+     * ```kotlin
+     * val manifest = AppManifest(
+     *     models = listOf(
+     *         AppModelEntry(
+     *             id = "phi-4-mini",
+     *             capability = ModelCapability.CHAT,
+     *             delivery = DeliveryMode.MANAGED,
+     *             routingPolicy = RoutingPolicy.LOCAL_FIRST,
+     *         ),
+     *     ),
+     * )
+     * Octomil.configure(context, manifest)
+     * ```
+     *
+     * @param context Android context (application context is retained).
+     * @param manifest Declarative model manifest.
+     * @param serverUrl Base URL for cloud/managed models.
+     * @param apiKey API key for cloud/managed models.
+     */
+    suspend fun configure(
+        context: Context,
+        manifest: AppManifest,
+        serverUrl: String = "https://api.octomil.com",
+        apiKey: String? = null,
+    ) {
+        init(context)
+        val catalog = ModelCatalogService(
+            manifest = manifest,
+            context = context.applicationContext,
+            serverUrl = serverUrl,
+            apiKey = apiKey,
+        )
+        catalog.bootstrap()
+        _catalog = catalog
+    }
 
     /**
      * Initialize the Octomil SDK with an Android context.
