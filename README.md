@@ -167,6 +167,16 @@ ai.octomil
 └── storage/             # Android Keystore-backed secure storage
 ```
 
+## Octomil Manifest
+
+The [Octomil Manifest](https://github.com/octomil/octomil-python#manifest) (`octomil.yaml`) is a declarative config file that describes which models your app needs, their delivery mode (`bundled`, `managed`, or `cloud`), and which capability each model serves. Generate it with the CLI:
+
+```bash
+octomil manifest init
+```
+
+The Android SDK reads `octomil.yaml` via `AppManifest` and `ModelCatalogService` to handle model downloads and runtime resolution automatically.
+
 ## Contributing
 
 See [CONTRIBUTING.md](CONTRIBUTING.md).
