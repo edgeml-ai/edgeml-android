@@ -14,6 +14,7 @@ enum class ArtifactResourceKind(val code: String) {
     ADAPTER("adapter"),
     MANIFEST("manifest"),
     SIGNATURE("signature"),
+    PROJECTOR("projector"),
     METADATA("metadata");
 
     companion object {

@@ -133,7 +133,7 @@ class OctomilClient private constructor(
     val chat: ai.octomil.chat.OctomilChat by lazy {
         val responses = ai.octomil.responses.OctomilResponses()
         ai.octomil.chat.OctomilChat(
-            modelName = config.modelId,
+            modelName = config.modelId ?: "default",
             responses = responses,
         )
     }
@@ -264,7 +264,7 @@ class OctomilClient private constructor(
     private suspend fun ensureModelLoaded() {
         // Pass config.modelId explicitly to avoid evaluating the default-parameter
         // expression on the ModelManager mock (whose `config` field is null in tests).
-        val modelId = config.modelId
+        val modelId = config.modelId ?: error("modelId required for server-connected flows")
         val modelResult = modelManager.ensureModelAvailable(modelId = modelId)
         if (modelResult.isFailure) {
             Timber.w("Model download failed, checking for cached model")
@@ -671,7 +671,7 @@ class OctomilClient private constructor(
                 .randomUUID()
                 .toString()
         val deviceId = _serverDeviceId.value
-        val resolvedModelId = modelId ?: config.modelId
+        val resolvedModelId = modelId ?: config.modelId ?: error("modelId required for training")
         val resolvedVersion = version ?: "latest"
 
         return kotlinx.coroutines.flow.flow {
@@ -1096,7 +1096,7 @@ class OctomilClient private constructor(
                 val trainingStartNanos = System.nanoTime()
                 try {
                     TelemetryQueue.shared?.reportTrainingStarted(
-                        modelId = config.modelId,
+                        modelId = config.modelId ?: "",
                         roundId = roundId ?: "",
                     )
                 } catch (_: Exception) {
@@ -1127,7 +1127,7 @@ class OctomilClient private constructor(
                 try {
                     val trainingDurationMs = (System.nanoTime() - trainingStartNanos) / 1_000_000.0
                     TelemetryQueue.shared?.reportTrainingCompleted(
-                        modelId = config.modelId,
+                        modelId = config.modelId ?: "",
                         durationMs = trainingDurationMs,
                         loss = trainingResult.loss,
                         accuracy = trainingResult.accuracy,
@@ -1208,7 +1208,7 @@ class OctomilClient private constructor(
                 // Emit training.failed v2 telemetry
                 try {
                     TelemetryQueue.shared?.reportTrainingFailed(
-                        config.modelId,
+                        config.modelId ?: "",
                         e.message ?: "unknown",
                     )
                 } catch (_: Exception) {
@@ -1280,7 +1280,7 @@ class OctomilClient private constructor(
 
             try {
                 val response = api.listRounds(
-                    modelId = config.modelId,
+                    modelId = config.modelId ?: "",
                     state = "waiting_for_updates",
                     deviceId = deviceId,
                 )

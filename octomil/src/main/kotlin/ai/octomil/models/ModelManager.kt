@@ -110,7 +110,7 @@ class ModelManager(
      * @return The cached model
      */
     suspend fun ensureModelAvailable(
-        modelId: String = config.modelId,
+        modelId: String = config.modelId ?: error("modelId required for model download"),
         forceDownload: Boolean = false,
     ): Result<CachedModel> =
         withContext(ioDispatcher) {
@@ -337,7 +337,7 @@ class ModelManager(
      * @return Cached model or null if not found
      */
     suspend fun getCachedModel(
-        modelId: String = config.modelId,
+        modelId: String = config.modelId ?: error("modelId required for cache lookup"),
         version: String? = null,
     ): CachedModel? =
         withContext(ioDispatcher) {

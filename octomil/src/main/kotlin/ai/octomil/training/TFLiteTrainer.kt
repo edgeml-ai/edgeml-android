@@ -1261,7 +1261,8 @@ class TFLiteTrainer(
     private fun fetchVendorDelegateConfig(): List<VendorDelegateInfo> {
         return try {
             val soc = getSocIdentifier()
-            val url = "${config.serverUrl}/api/v1/models/${config.modelId}/optimized-config/$soc"
+            val modelId = config.modelId ?: return emptyList()
+            val url = "${config.serverUrl}/api/v1/models/$modelId/optimized-config/$soc"
 
             val connection = java.net.URL(url).openConnection() as java.net.HttpURLConnection
             connection.requestMethod = "GET"

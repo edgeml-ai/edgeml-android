@@ -84,8 +84,8 @@ data class OctomilConfig(
      */
     @kotlinx.serialization.Transient
     val auth: AuthConfig = AuthConfig.OrgApiKey(apiKey = "", orgId = "", serverUrl = DEFAULT_SERVER_URL),
-    /** Model ID to use for training/inference */
-    val modelId: String,
+    /** Model ID to use for server-connected training/inference. Null for manifest-only apps. */
+    val modelId: String? = null,
     /**
      * Deployment environment. Defaults to [ServerEnvironment.CLOUD].
      *
@@ -230,7 +230,7 @@ data class OctomilConfig(
         if (auth.serverUrl.isBlank()) throw OctomilException(OctomilErrorCode.INVALID_INPUT, "serverUrl must not be blank")
         if (auth.token.isBlank()) throw OctomilException(OctomilErrorCode.INVALID_API_KEY, "apiKey / bootstrapToken must not be blank")
         if (auth is AuthConfig.OrgApiKey && auth.orgId.isBlank()) throw OctomilException(OctomilErrorCode.INVALID_INPUT, "orgId must not be blank")
-        if (modelId.isBlank()) throw OctomilException(OctomilErrorCode.INVALID_INPUT, "modelId must not be blank")
+        if (modelId != null && modelId.isBlank()) throw OctomilException(OctomilErrorCode.INVALID_INPUT, "modelId must not be blank when set")
         if (connectionTimeoutMs <= 0) throw OctomilException(OctomilErrorCode.INVALID_INPUT, "connectionTimeoutMs must be positive")
         if (readTimeoutMs <= 0) throw OctomilException(OctomilErrorCode.INVALID_INPUT, "readTimeoutMs must be positive")
         if (writeTimeoutMs <= 0) throw OctomilException(OctomilErrorCode.INVALID_INPUT, "writeTimeoutMs must be positive")
@@ -252,7 +252,7 @@ data class OctomilConfig(
         private var _serverUrl: String? = null
         private var _token: String? = null
         private var _orgId: String? = null
-        private var modelId: String = ""
+        private var modelId: String? = null
         private var serverEnvironment: ServerEnvironment = ServerEnvironment.CLOUD
         private var deviceId: String? = null
         private var appVersion: String? = null
@@ -304,7 +304,7 @@ data class OctomilConfig(
         /** Convenience: set the org ID (builds an [AuthConfig.OrgApiKey] on [build]). */
         fun orgId(id: String) = apply { this._orgId = id }
 
-        fun modelId(id: String) = apply { this.modelId = id }
+        fun modelId(id: String?) = apply { this.modelId = id }
 
         /**
          * Set the device identifier.
