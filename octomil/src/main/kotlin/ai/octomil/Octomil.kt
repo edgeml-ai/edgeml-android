@@ -101,6 +101,9 @@ object Octomil {
         _manifest = manifest
         _monitoring = monitoring
 
+        // Seed the persistent install ID early so TelemetryQueue picks it up
+        ai.octomil.utils.InstallId.getOrCreate(context.applicationContext)
+
         // Populate DeviceContext immediately with a random UUID installation ID
         val storage = SecureStorage.getInstance(context.applicationContext)
         val installationId = DeviceContext.getOrCreateInstallationId(storage)

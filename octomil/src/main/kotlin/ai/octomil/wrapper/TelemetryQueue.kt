@@ -21,6 +21,7 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonPrimitive
 import ai.octomil.BuildConfig
 import ai.octomil.generated.OtlpResourceAttribute
+import ai.octomil.utils.InstallId
 import ai.octomil.api.dto.AnyValue
 import ai.octomil.api.dto.ExportLogsServiceRequest
 import ai.octomil.api.dto.InstrumentationScope
@@ -251,6 +252,7 @@ class TelemetryQueue internal constructor(
             res.deviceId?.let { KeyValue("device.id", AnyValue.StringValue(it)) },
             res.deviceId?.let { KeyValue(OtlpResourceAttribute.OCTOMIL_DEVICE_ID, AnyValue.StringValue(it)) },
             res.orgId?.let { KeyValue("org.id", AnyValue.StringValue(it)) },
+            InstallId.getCached()?.let { KeyValue(OtlpResourceAttribute.OCTOMIL_INSTALL_ID, AnyValue.StringValue(it)) },
         )
 
         val logRecords = events.map { ev ->
