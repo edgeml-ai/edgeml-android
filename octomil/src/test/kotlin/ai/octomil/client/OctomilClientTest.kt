@@ -662,7 +662,7 @@ class OctomilClientTest {
 
         coVerify {
             api.listRounds(
-                modelId = config.modelId,
+                modelId = config.modelId!!,
                 state = "waiting_for_updates",
                 deviceId = "dev-1",
             )
@@ -680,7 +680,7 @@ class OctomilClientTest {
     ) = RoundAssignment(
         id = id,
         orgId = "test-org",
-        modelId = config.modelId,
+        modelId = config.modelId!!,
         versionId = "v1",
         state = state,
         minClients = 5,

@@ -1,7 +1,11 @@
 package ai.octomil
 
+import ai.octomil.audio.OctomilAudio
 import ai.octomil.chat.LLMRuntimeRegistry
 import ai.octomil.chat.OctomilChat
+import ai.octomil.generated.DeliveryMode
+import ai.octomil.manifest.AppManifest
+import ai.octomil.manifest.ModelCatalogService
 import ai.octomil.models.CachedModel
 import ai.octomil.responses.OctomilResponses
 import ai.octomil.runtime.core.Engine
@@ -9,10 +13,22 @@ import ai.octomil.runtime.core.ModelRuntimeRegistry
 import ai.octomil.runtime.engines.tflite.EngineRegistry
 import ai.octomil.runtime.engines.tflite.LLMRuntimeAdapter
 import ai.octomil.runtime.engines.tflite.Modality
+import ai.octomil.sdk.DeviceContext
+import ai.octomil.sdk.MonitoringConfig
+import ai.octomil.storage.SecureStorage
+import ai.octomil.text.OctomilText
 import ai.octomil.training.TFLiteTrainer
 import ai.octomil.workflows.WorkflowRunner
 import android.content.Context
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import timber.log.Timber
 import java.io.File
+import kotlin.math.min
+import kotlin.random.Random
 
 /**
  * Local-first entry point for Octomil inference.
@@ -30,6 +46,99 @@ import java.io.File
 object Octomil {
 
     private var appContext: Context? = null
+    private var _catalog: ModelCatalogService? = null
+    private var _deviceContext: DeviceContext? = null
+    private var _manifest: AppManifest? = null
+    private var _monitoring: MonitoringConfig = MonitoringConfig()
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
+    /** Device context for registration state and auth headers. Null if not configured. */
+    val deviceContext: DeviceContext? get() = _deviceContext
+
+    /** Model catalog bootstrapped from an [AppManifest], or null if not configured. */
+    val catalog: ModelCatalogService? get() = _catalog
+
+    /** Audio API (transcription). Requires [configure] with a TRANSCRIPTION model. */
+    val audio: OctomilAudio = OctomilAudio { _catalog }
+
+    /** Text prediction API. Requires [configure] with a KEYBOARD_PREDICTION model. */
+    val text: OctomilText = OctomilText { _catalog }
+
+    /**
+     * Configure the SDK with a declarative [AppManifest].
+     *
+     * Calls [init] internally, then bootstraps all manifest entries so that
+     * capability-based runtime resolution is available immediately.
+     *
+     * ```kotlin
+     * val manifest = AppManifest(
+     *     models = listOf(
+     *         AppModelEntry(
+     *             id = "phi-4-mini",
+     *             capability = ModelCapability.CHAT,
+     *             delivery = DeliveryMode.MANAGED,
+     *             routingPolicy = RoutingPolicy.LOCAL_FIRST,
+     *         ),
+     *     ),
+     * )
+     * Octomil.configure(context, manifest)
+     * ```
+     *
+     * @param context Android context (application context is retained).
+     * @param manifest Declarative model manifest.
+     * @param serverUrl Base URL for cloud/managed models.
+     * @param apiKey API key for cloud/managed models.
+     */
+    suspend fun configure(
+        context: Context,
+        manifest: AppManifest,
+        serverUrl: String = "https://api.octomil.com",
+        apiKey: String? = null,
+        auth: ai.octomil.sdk.AuthConfig? = null,
+        monitoring: MonitoringConfig = MonitoringConfig(),
+    ) {
+        init(context)
+        _manifest = manifest
+        _monitoring = monitoring
+
+        // Populate DeviceContext immediately with a random UUID installation ID
+        val storage = SecureStorage.getInstance(context.applicationContext)
+        val installationId = DeviceContext.getOrCreateInstallationId(storage)
+        val orgId = when (auth) {
+            is ai.octomil.sdk.AuthConfig.PublishableKey -> null // resolved server-side
+            is ai.octomil.sdk.AuthConfig.BootstrapToken -> null
+            is ai.octomil.sdk.AuthConfig.Anonymous -> null
+            null -> null
+        }
+        val appId = when (auth) {
+            is ai.octomil.sdk.AuthConfig.Anonymous -> auth.appId
+            else -> null
+        }
+        val deviceCtx = DeviceContext(
+            installationId = installationId,
+            orgId = orgId,
+            appId = appId,
+        )
+        // Restore cached token from secure storage; registrationState stays PENDING
+        DeviceContext.restoreCachedToken(deviceCtx, storage)
+        _deviceContext = deviceCtx
+
+        val catalog = ModelCatalogService(
+            manifest = manifest,
+            context = context.applicationContext,
+            serverUrl = serverUrl,
+            apiKey = apiKey,
+        )
+        catalog.bootstrap()
+        _catalog = catalog
+
+        // Launch background registration if the gate is open
+        if (shouldAutoRegister(auth, manifest, monitoring)) {
+            scope.launch {
+                backgroundRegister(serverUrl, auth!!)
+            }
+        }
+    }
 
     /**
      * Initialize the Octomil SDK with an Android context.
@@ -66,7 +175,9 @@ object Octomil {
      * )
      * ```
      */
-    val responses: OctomilResponses by lazy { OctomilResponses() }
+    val responses: OctomilResponses by lazy {
+        OctomilResponses(catalogProvider = { _catalog })
+    }
 
     /**
      * Workflow runner for multi-step orchestrated inference pipelines.
@@ -326,6 +437,57 @@ object Octomil {
             ModelRuntimeRegistry.register(name) { adapter }
         }
         return OctomilResponses()
+    }
+
+    /**
+     * Gate: auto-register only when auth is provided AND the manifest has
+     * managed/cloud models or monitoring is enabled.
+     */
+    private fun shouldAutoRegister(
+        auth: ai.octomil.sdk.AuthConfig?,
+        manifest: AppManifest,
+        monitoring: MonitoringConfig,
+    ): Boolean {
+        if (auth == null) return false
+        val hasManagedOrCloud = manifest.models.any {
+            it.delivery == DeliveryMode.MANAGED || it.delivery == DeliveryMode.CLOUD
+        }
+        return hasManagedOrCloud || monitoring.enabled
+    }
+
+    /**
+     * Background device registration with exponential backoff (1s, 2s, 4s... max 5min) + jitter.
+     * Never throws — failures update [DeviceContext.registrationState] to FAILED.
+     */
+    private suspend fun backgroundRegister(
+        serverUrl: String,
+        auth: ai.octomil.sdk.AuthConfig,
+    ) {
+        val ctx = _deviceContext ?: return
+        val maxBackoffMs = 5 * 60 * 1000L // 5 minutes
+        var backoffMs = 1000L
+
+        for (attempt in 1..10) {
+            try {
+                // TODO: Call actual registration API endpoint when available.
+                // For now, this is a placeholder that will be wired to the server API.
+                Timber.d("Background registration attempt $attempt for installation ${ctx.installationId}")
+
+                // If we reach here without exception, registration succeeded
+                // The actual API call will populate serverDeviceId and token via ctx.updateRegistered()
+                break
+            } catch (e: Exception) {
+                Timber.w(e, "Background registration attempt $attempt failed")
+                if (attempt == 10) {
+                    ctx.markFailed()
+                    Timber.w("Background registration exhausted retries — marking FAILED")
+                    return
+                }
+                val jitter = Random.nextLong(0, backoffMs / 4)
+                delay(backoffMs + jitter)
+                backoffMs = min(backoffMs * 2, maxBackoffMs)
+            }
+        }
     }
 
     private fun resolveEngine(filename: String, engine: Engine): Engine {

@@ -173,7 +173,7 @@ class OctomilSyncWorker(
         // Build v2 events from the queued training events
         val v2Events = events.map { event ->
             val attrs = mutableMapOf<String, JsonPrimitive>(
-                "model.id" to JsonPrimitive(config.modelId),
+                "model.id" to JsonPrimitive(config.modelId ?: ""),
                 "model.version" to JsonPrimitive(version),
                 "device.id" to JsonPrimitive(deviceId),
             )
