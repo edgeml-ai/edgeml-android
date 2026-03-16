@@ -114,11 +114,14 @@ object Octomil {
             is ai.octomil.sdk.AuthConfig.Anonymous -> auth.appId
             else -> null
         }
-        _deviceContext = DeviceContext(
+        val deviceCtx = DeviceContext(
             installationId = installationId,
             orgId = orgId,
             appId = appId,
         )
+        // Restore cached token from secure storage; registrationState stays PENDING
+        DeviceContext.restoreCachedToken(deviceCtx, storage)
+        _deviceContext = deviceCtx
 
         val catalog = ModelCatalogService(
             manifest = manifest,

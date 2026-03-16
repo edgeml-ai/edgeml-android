@@ -42,6 +42,11 @@ class DeviceContext(
         }
     }
 
+    /**
+     * Telemetry resource attributes keyed by installationId.
+     * Available immediately — no auth token required.
+     * The backend accepts pre-registration events keyed by installationId.
+     */
     fun telemetryResource(): Map<String, String> {
         val resource = mutableMapOf(
             "device.id" to installationId,
@@ -70,8 +75,23 @@ class DeviceContext(
         _tokenState.value = TokenState.Expired
     }
 
+    /**
+     * Restore a cached token into the token state flow.
+     * Registration state remains PENDING — revalidated via heartbeat/token freshness.
+     */
+    internal fun restoreCachedToken(accessToken: String, expiresAt: Long) {
+        if (expiresAt > System.currentTimeMillis()) {
+            _tokenState.value = TokenState.Valid(accessToken, expiresAt)
+        } else {
+            _tokenState.value = TokenState.Expired
+        }
+        // registrationState stays PENDING — never trust stale disk state
+    }
+
     companion object {
         private const val INSTALLATION_ID_KEY = "octomil_installation_id"
+        internal const val CACHED_TOKEN_KEY = "octomil_cached_access_token"
+        internal const val CACHED_TOKEN_EXPIRES_KEY = "octomil_cached_token_expires_at"
 
         suspend fun getOrCreateInstallationId(
             storage: ai.octomil.storage.SecureStorage,
@@ -81,6 +101,19 @@ class DeviceContext(
             val id = UUID.randomUUID().toString()
             storage.putString(INSTALLATION_ID_KEY, id)
             return id
+        }
+
+        /**
+         * Restore cached token from secure storage into a DeviceContext.
+         * Registration state is NOT restored — always starts PENDING on relaunch.
+         */
+        suspend fun restoreCachedToken(
+            context: DeviceContext,
+            storage: ai.octomil.storage.SecureStorage,
+        ) {
+            val token = storage.getString(CACHED_TOKEN_KEY) ?: return
+            val expiresAt = storage.getLong(CACHED_TOKEN_EXPIRES_KEY, 0L)
+            context.restoreCachedToken(token, expiresAt)
         }
     }
 }
