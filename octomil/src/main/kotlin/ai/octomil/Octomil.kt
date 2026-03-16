@@ -122,7 +122,9 @@ object Octomil {
      * )
      * ```
      */
-    val responses: OctomilResponses by lazy { OctomilResponses() }
+    val responses: OctomilResponses by lazy {
+        OctomilResponses(catalogProvider = { _catalog })
+    }
 
     /**
      * Workflow runner for multi-step orchestrated inference pipelines.

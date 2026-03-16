@@ -2,6 +2,8 @@ package ai.octomil.responses
 
 import ai.octomil.errors.OctomilErrorCode
 import ai.octomil.errors.OctomilException
+import ai.octomil.manifest.ModelCatalogService
+import ai.octomil.manifest.ModelRef
 import ai.octomil.runtime.core.ModelRuntime
 import ai.octomil.runtime.core.ModelRuntimeRegistry
 import ai.octomil.runtime.core.RuntimeChunk
@@ -17,11 +19,12 @@ import java.util.UUID
 
 class OctomilResponses(
     private val runtimeResolver: ((String) -> ModelRuntime?)? = null,
+    private val catalogProvider: (() -> ModelCatalogService?)? = null,
 ) {
     private val responseCache = LinkedHashMap<String, Response>(100, 0.75f, true)
 
     suspend fun create(request: ResponseRequest): Response {
-        val runtime = resolveRuntime(request.model)
+        val runtime = resolveRuntime(request.model, request.modelRef)
         val effectiveRequest = applyConversationChaining(request)
         val runtimeRequest = buildRuntimeRequest(effectiveRequest)
         val runtimeResponse = runtime.run(runtimeRequest)
@@ -31,7 +34,7 @@ class OctomilResponses(
     }
 
     fun stream(request: ResponseRequest): Flow<ResponseStreamEvent> = flow {
-        val runtime = resolveRuntime(request.model)
+        val runtime = resolveRuntime(request.model, request.modelRef)
         val effectiveRequest = applyConversationChaining(request)
         val runtimeRequest = buildRuntimeRequest(effectiveRequest)
         val responseId = generateId()
@@ -109,11 +112,31 @@ class OctomilResponses(
         emit(ResponseStreamEvent.Done(response))
     }
 
-    private fun resolveRuntime(model: String): ModelRuntime {
-        val runtime = runtimeResolver?.invoke(model)
-            ?: ModelRuntimeRegistry.resolve(model)
-            ?: throw OctomilException(OctomilErrorCode.RUNTIME_UNAVAILABLE, "No ModelRuntime registered for model: $model")
-        return runtime
+    private fun resolveRuntime(model: String, ref: ModelRef? = null): ModelRuntime {
+        // 1. ModelRef via catalog (capability-based or ID-based)
+        if (ref != null) {
+            val catalog = catalogProvider?.invoke()
+            if (catalog != null) {
+                val runtime = catalog.runtimeForRef(ref)
+                if (runtime != null) return runtime
+            }
+        }
+
+        // 2. Custom resolver
+        runtimeResolver?.invoke(model)?.let { return it }
+
+        // 3. Capability lookup via catalog when model string is empty (capability-only request)
+        if (model.isEmpty() && ref is ModelRef.Capability) {
+            throw OctomilException(
+                OctomilErrorCode.RUNTIME_UNAVAILABLE,
+                "No runtime for capability ${ref.value}. Configure a model with this capability in AppManifest.",
+            )
+        }
+
+        // 4. Registry lookup by model ID
+        ModelRuntimeRegistry.resolve(model)?.let { return it }
+
+        throw OctomilException(OctomilErrorCode.RUNTIME_UNAVAILABLE, "No ModelRuntime registered for model: $model")
     }
 
     private fun applyConversationChaining(request: ResponseRequest): ResponseRequest {
