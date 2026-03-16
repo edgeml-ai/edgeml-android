@@ -9,6 +9,9 @@ import ai.octomil.runtime.core.ModelRuntimeRegistry
 import ai.octomil.runtime.engines.tflite.EngineRegistry
 import ai.octomil.runtime.engines.tflite.LLMRuntimeAdapter
 import ai.octomil.runtime.engines.tflite.Modality
+import ai.octomil.speech.OctomilAudio
+import ai.octomil.speech.SherpaStreamingRuntime
+import ai.octomil.speech.SpeechRuntimeRegistry
 import ai.octomil.training.TFLiteTrainer
 import ai.octomil.workflows.WorkflowRunner
 import android.content.Context
@@ -52,6 +55,9 @@ object Octomil {
             val llm = LLMRuntimeRegistry.factory?.invoke(file) ?: return@factory null
             LLMRuntimeAdapter(llm)
         }
+
+        // Wire speech runtime — sherpa-onnx streaming recognizer
+        SpeechRuntimeRegistry.factory = { modelDir -> SherpaStreamingRuntime(modelDir) }
     }
 
     /**
@@ -82,6 +88,21 @@ object Octomil {
      * ```
      */
     val workflows: WorkflowRunner by lazy { WorkflowRunner(responses) }
+
+    /**
+     * Audio API for on-device speech transcription.
+     *
+     * ```kotlin
+     * val session = Octomil.audio.streamingSession("sherpa-zipformer-en-20m")
+     * session.feed(samples)           // 16kHz mono float [-1,1]
+     * session.transcript.collect {}   // live StateFlow<String>
+     * val final = session.finalize()  // drain + return final text
+     * session.release()
+     * ```
+     */
+    val audio: OctomilAudio by lazy {
+        OctomilAudio(contextProvider = { appContext })
+    }
 
     /**
      * Load a model by name with automatic resolution.
