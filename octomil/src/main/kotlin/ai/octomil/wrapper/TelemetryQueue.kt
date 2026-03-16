@@ -1,5 +1,7 @@
 package ai.octomil.wrapper
 
+import ai.octomil.generated.SpanAttribute
+import ai.octomil.generated.SpanName
 import ai.octomil.generated.TelemetryEvent as ContractTelemetryEvent
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
@@ -324,6 +326,7 @@ class TelemetryQueue internal constructor(
                 "device.compute_unit" to JsonPrimitive("cpu"),
                 "model.format" to JsonPrimitive("tflite"),
                 "inference.success" to JsonPrimitive(event.success),
+                SpanAttribute.LOCALITY to JsonPrimitive("on_device"),
             )
             if (event.errorMessage != null) {
                 attrs["error.message"] = JsonPrimitive(event.errorMessage)
@@ -673,7 +676,7 @@ class TelemetryQueue internal constructor(
     /**
      * Report that an inference has started.
      */
-    fun reportInferenceStarted(modelId: String) {
+    fun reportInferenceStarted(modelId: String, locality: String = "on_device") {
         enqueueV2Event(
             TelemetryV2Event(
                 name = ContractTelemetryEvent.INFERENCE_STARTED,
@@ -683,6 +686,7 @@ class TelemetryQueue internal constructor(
                     "inference.modality" to "on_device",
                     "device.compute_unit" to "cpu",
                     "model.format" to "tflite",
+                    SpanAttribute.LOCALITY to locality,
                 ),
             ),
         )

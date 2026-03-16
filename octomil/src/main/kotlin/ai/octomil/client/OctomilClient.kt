@@ -22,6 +22,8 @@ import ai.octomil.api.dto.TelemetryV2Event
 import ai.octomil.api.dto.TelemetryV2Resource
 import ai.octomil.config.OctomilConfig
 import ai.octomil.generated.OtlpResourceAttribute
+import ai.octomil.generated.SpanAttribute
+import ai.octomil.generated.SpanName
 import ai.octomil.models.CachedModel
 import ai.octomil.models.DownloadState
 import ai.octomil.models.InferenceInput
@@ -154,6 +156,7 @@ class OctomilClient private constructor(
     // Heartbeat management
     private var heartbeatJob: Job? = null
     private val heartbeatIntervalMs: Long = config.heartbeatIntervalSeconds * 1000L
+    private var heartbeatSequence = 0
 
     // State
     private val _state = MutableStateFlow(ClientState.UNINITIALIZED)
@@ -416,6 +419,18 @@ class OctomilClient private constructor(
      * Send a single heartbeat to the server.
      */
     private suspend fun sendHeartbeat(deviceId: String) {
+        // Emit octomil.control.heartbeat telemetry span (GAP-12)
+        val seq = heartbeatSequence++
+        TelemetryQueue.shared?.enqueueV2Event(
+            TelemetryV2Event(
+                name = SpanName.OCTOMIL_CONTROL_HEARTBEAT,
+                timestamp = TelemetryQueue.shared?.formatTimestamp() ?: "",
+                attributes = TelemetryAttributes.of(
+                    SpanAttribute.HEARTBEAT_SEQUENCE to seq,
+                ),
+            ),
+        )
+
         try {
             val request =
                 HeartbeatRequest(
