@@ -12,6 +12,7 @@ import ai.octomil.runtime.core.RuntimeResponse
 import ai.octomil.runtime.core.RuntimeToolCall
 import ai.octomil.runtime.core.RuntimeToolDef
 import ai.octomil.runtime.core.RuntimeUsage
+import ai.octomil.sdk.DeviceContext
 import ai.octomil.wrapper.TelemetryQueue
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
@@ -20,6 +21,7 @@ import java.util.UUID
 class OctomilResponses(
     private val runtimeResolver: ((String) -> ModelRuntime?)? = null,
     private val catalogProvider: (() -> ModelCatalogService?)? = null,
+    private val deviceContext: DeviceContext? = null,
 ) {
     private val responseCache = LinkedHashMap<String, Response>(100, 0.75f, true)
 
