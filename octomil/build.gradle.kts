@@ -204,9 +204,12 @@ afterEvaluate {
         }
     }
 
-    signing {
-        useGpgCmd()
-        sign(publishing.publications["release"])
+    // Only sign when publishing to remote repos (GPG must be configured)
+    if (System.getenv("OSSRH_USERNAME")?.isNotBlank() == true) {
+        signing {
+            useGpgCmd()
+            sign(publishing.publications["release"])
+        }
     }
 }
 
