@@ -5,6 +5,8 @@ import ai.octomil.errors.OctomilException
 import ai.octomil.generated.ModelCapability
 import ai.octomil.manifest.ModelCatalogService
 import ai.octomil.runtime.core.RuntimeRequest
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flow
 import java.io.File
 
 /**
@@ -28,7 +30,28 @@ data class TranscriptionSegment(
     val startMs: Long,
     val endMs: Long,
     val text: String,
+    /** Confidence score (0.0–1.0), if available. */
+    val confidence: Double? = null,
 )
+
+/**
+ * Format of the transcription output.
+ */
+enum class TranscriptionResponseFormat(val code: String) {
+    TEXT("text"),
+    JSON("json"),
+    VERBOSE_JSON("verbose_json"),
+    SRT("srt"),
+    VTT("vtt");
+}
+
+/**
+ * Granularity level for timestamp generation.
+ */
+enum class TimestampGranularity(val code: String) {
+    WORD("word"),
+    SEGMENT("segment");
+}
 
 /**
  * Options for audio transcription.
@@ -40,6 +63,10 @@ data class TranscriptionOptions(
     val prompt: String? = null,
     /** Temperature for sampling. Lower = more deterministic. */
     val temperature: Float = 0.0f,
+    /** Format of the transcription output. */
+    val responseFormat: TranscriptionResponseFormat = TranscriptionResponseFormat.TEXT,
+    /** Granularities of timestamps to include. Requires [TranscriptionResponseFormat.VERBOSE_JSON]. */
+    val timestampGranularities: List<TimestampGranularity>? = null,
 )
 
 /**
@@ -95,5 +122,56 @@ class AudioTranscriptions internal constructor(
         return TranscriptionResult(
             text = response.text,
         )
+    }
+
+    /**
+     * Stream transcription segments as they are produced.
+     *
+     * Returns a [Flow] of [TranscriptionSegment] objects as the audio is
+     * processed. Useful for real-time transcription UI updates.
+     *
+     * @param audioFile The audio file to transcribe.
+     * @param options Transcription options.
+     * @return A Flow emitting transcription segments.
+     */
+    fun stream(
+        audioFile: File,
+        options: TranscriptionOptions = TranscriptionOptions(),
+    ): Flow<TranscriptionSegment> = flow {
+        require(audioFile.exists()) { "Audio file not found: ${audioFile.absolutePath}" }
+
+        val catalog = catalogProvider()
+            ?: throw OctomilException(
+                OctomilErrorCode.RUNTIME_UNAVAILABLE,
+                "ModelCatalogService not configured. Call Octomil.configure() first.",
+            )
+
+        val runtime = catalog.runtimeForCapability(ModelCapability.TRANSCRIPTION)
+            ?: throw OctomilException(
+                OctomilErrorCode.RUNTIME_UNAVAILABLE,
+                "No runtime registered for TRANSCRIPTION capability. " +
+                    "Add a transcription model to your AppManifest.",
+            )
+
+        val request = RuntimeRequest(
+            prompt = audioFile.absolutePath,
+            temperature = options.temperature,
+            maxTokens = Int.MAX_VALUE,
+        )
+
+        var offsetMs = 0L
+        runtime.stream(request).collect { chunk ->
+            val text = chunk.text
+            if (!text.isNullOrEmpty()) {
+                emit(
+                    TranscriptionSegment(
+                        startMs = offsetMs,
+                        endMs = offsetMs + 500, // estimate — real engine provides timing
+                        text = text,
+                    ),
+                )
+                offsetMs += 500
+            }
+        }
     }
 }

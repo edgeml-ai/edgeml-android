@@ -9,6 +9,9 @@ enum class ModelStatus {
     /** Model is not present in the local cache. */
     NOT_CACHED,
 
+    /** Model download is queued. */
+    QUEUED,
+
     /** Model is currently being downloaded. */
     DOWNLOADING,
 
@@ -16,5 +19,5 @@ enum class ModelStatus {
     READY,
 
     /** An error occurred during download or verification. */
-    ERROR,
+    FAILED,
 }

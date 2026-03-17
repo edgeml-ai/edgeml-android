@@ -43,7 +43,7 @@ class OctomilModels(private val modelManager: ModelManager) {
                 ModelStatus.DOWNLOADING
             }
             is DownloadState.Failed -> {
-                ModelStatus.ERROR
+                ModelStatus.FAILED
             }
             is DownloadState.Completed -> {
                 if (downloadState.model.modelId == modelId) {
