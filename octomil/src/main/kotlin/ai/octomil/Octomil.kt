@@ -6,12 +6,16 @@ import ai.octomil.models.CachedModel
 import ai.octomil.responses.OctomilResponses
 import ai.octomil.runtime.core.Engine
 import ai.octomil.runtime.core.ModelRuntimeRegistry
+import ai.octomil.runtime.engines.llama.LlamaCppPredictionRuntime
+import ai.octomil.runtime.engines.llama.LlamaCppRuntime
 import ai.octomil.runtime.engines.tflite.EngineRegistry
 import ai.octomil.runtime.engines.tflite.LLMRuntimeAdapter
 import ai.octomil.runtime.engines.tflite.Modality
 import ai.octomil.speech.OctomilAudio
 import ai.octomil.speech.SherpaStreamingRuntime
 import ai.octomil.speech.SpeechRuntimeRegistry
+import ai.octomil.text.OctomilText
+import ai.octomil.text.PredictionRuntimeRegistry
 import ai.octomil.training.TFLiteTrainer
 import ai.octomil.workflows.WorkflowRunner
 import android.content.Context
@@ -49,6 +53,18 @@ object Octomil {
      */
     fun init(context: Context) {
         appContext = context.applicationContext
+
+        // Wire LLM runtime — llama.cpp for GGUF models.
+        // Skip if app already registered a factory (backwards compat).
+        if (LLMRuntimeRegistry.factory == null) {
+            LLMRuntimeRegistry.factory = { modelFile ->
+                val mmproj = modelFile.parentFile?.listFiles()?.firstOrNull { f ->
+                    f.name.contains("mmproj", ignoreCase = true) && f.extension == "gguf"
+                }
+                LlamaCppRuntime(modelFile, mmproj, context.applicationContext)
+            }
+        }
+
         ModelRuntimeRegistry.defaultFactory = factory@{ modelId ->
             val ctx = appContext ?: return@factory null
             val file = ModelResolver.default().resolveSync(ctx, modelId) ?: return@factory null
@@ -58,6 +74,9 @@ object Octomil {
 
         // Wire speech runtime — sherpa-onnx streaming recognizer
         SpeechRuntimeRegistry.factory = { modelDir -> SherpaStreamingRuntime(modelDir) }
+
+        // Wire prediction runtime — llama.cpp handle-based multi-model API
+        PredictionRuntimeRegistry.factory = { LlamaCppPredictionRuntime(context.applicationContext) }
     }
 
     /**
@@ -102,6 +121,22 @@ object Octomil {
      */
     val audio: OctomilAudio by lazy {
         OctomilAudio(contextProvider = { appContext })
+    }
+
+    /**
+     * Text prediction helper for next-token / keyboard suggestions.
+     *
+     * Temporary API — will be replaced by canonical
+     * `text.predictions.create(TextPredictionRequest)` once contract schemas
+     * are defined.
+     *
+     * ```kotlin
+     * val suggestions = Octomil.text.predict("smollm2-135m", "The weather today is")
+     * // ["sunny", "expected", "going"]
+     * ```
+     */
+    val text: OctomilText by lazy {
+        OctomilText(contextProvider = { appContext })
     }
 
     /**
