@@ -133,6 +133,12 @@ dependencies {
     //   implementation("com.mediatek.neuropilot:tflite-neuron-delegate:1.+")
     //   // AAR from NeuroPilot SDK: https://neuropilot.mediatek.com/
 
+    // Sherpa-onnx — streaming speech-to-text
+    implementation("com.k2fsa.sherpa:onnx")
+
+    // llama.cpp — GGUF model inference engine (transitive for SDK consumers)
+    implementation("com.arm.aichat:lib")
+
     // Logging
     implementation("com.jakewharton.timber:timber:5.0.1")
 

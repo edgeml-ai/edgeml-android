@@ -20,8 +20,24 @@ include(":octomil")
 // llama.cpp Android library — composite build from reference project.
 // The :lib module compiles llama.cpp from source via CMake (NDK 29 + CMake 3.31.6).
 // First build is slow (~5 min); subsequent builds use the native cache.
-includeBuild("../research/engines/llama.cpp/examples/llama.android") {
-    dependencySubstitution {
-        substitute(module("com.arm.aichat:lib")).using(project(":lib"))
+// When included as a submodule (e.g., from octomil-app-android), the parent
+// project provides this substitution — only include when the path exists.
+val llamaAndroidDir = file("../research/engines/llama.cpp/examples/llama.android")
+if (llamaAndroidDir.exists()) {
+    includeBuild(llamaAndroidDir) {
+        dependencySubstitution {
+            substitute(module("com.arm.aichat:lib")).using(project(":lib"))
+        }
+    }
+}
+
+// sherpa-onnx Android library — streaming speech-to-text.
+// Conditional: only included when the sherpa-onnx repo is present.
+val sherpaDir = file("../research/engines/sherpa-onnx/android/SherpaOnnxAar")
+if (sherpaDir.exists()) {
+    includeBuild(sherpaDir) {
+        dependencySubstitution {
+            substitute(module("com.k2fsa.sherpa:onnx")).using(project(":sherpa_onnx"))
+        }
     }
 }
