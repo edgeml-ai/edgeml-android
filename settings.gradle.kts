@@ -11,33 +11,30 @@ dependencyResolutionManagement {
     repositories {
         google()
         mavenCentral()
+        mavenLocal() // For local engine AAR testing before Maven Central publish
     }
 }
 
 rootProject.name = "octomil-android"
 include(":octomil")
 
-// llama.cpp Android library — composite build from reference project.
-// The :lib module compiles llama.cpp from source via CMake (NDK 29 + CMake 3.31.6).
-// First build is slow (~5 min); subsequent builds use the native cache.
-// When included as a submodule (e.g., from octomil-app-android), the parent
-// project provides this substitution — only include when the path exists.
+// Engine composite builds — substitute published Maven coordinates with local projects
+// when engine repos are present on disk. This enables local development without
+// requiring published AARs on Maven Central.
 val llamaAndroidDir = file("../research/engines/llama.cpp/examples/llama.android")
 if (llamaAndroidDir.exists()) {
     includeBuild(llamaAndroidDir) {
         dependencySubstitution {
-            substitute(module("com.arm.aichat:lib")).using(project(":lib"))
+            substitute(module("ai.octomil:octomil-runtime-llama-android")).using(project(":lib"))
         }
     }
 }
 
-// sherpa-onnx Android library — streaming speech-to-text.
-// Conditional: only included when the sherpa-onnx repo is present.
 val sherpaDir = file("../research/engines/sherpa-onnx/android/SherpaOnnxAar")
 if (sherpaDir.exists()) {
     includeBuild(sherpaDir) {
         dependencySubstitution {
-            substitute(module("com.k2fsa.sherpa:onnx")).using(project(":sherpa_onnx"))
+            substitute(module("ai.octomil:octomil-runtime-sherpa-android")).using(project(":sherpa_onnx"))
         }
     }
 }
