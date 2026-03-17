@@ -6,5 +6,6 @@
 -keep class ai.octomil.models.** { *; }
 -keep class ai.octomil.training.** { *; }
 
-# Sherpa-onnx JNI — keep all native method bindings
+# Engine JNI — keep all native method bindings
 -keep class com.k2fsa.sherpa.onnx.** { *; }
+-keep class com.arm.aichat.** { *; }

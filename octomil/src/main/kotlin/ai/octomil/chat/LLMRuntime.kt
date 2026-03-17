@@ -104,12 +104,6 @@ data class GenerateConfig(
  * }
  * ```
  */
-object LLMRuntimeRegistry {
-    /**
-     * Factory that creates an [LLMRuntime] for a given model file.
-     *
-     * Set this before calling [Octomil.chat]. If null, the SDK falls back
-     * to the built-in [StreamingInferenceEngine] which may be a stub.
-     */
+internal object LLMRuntimeRegistry {
     var factory: ((File) -> LLMRuntime)? = null
 }

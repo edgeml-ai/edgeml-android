@@ -4,6 +4,7 @@ plugins {
     id("org.jetbrains.kotlin.plugin.compose")
     id("jacoco")
     id("maven-publish")
+    id("signing")
 }
 
 android {
@@ -11,7 +12,7 @@ android {
     compileSdk = 36
 
     defaultConfig {
-        minSdk = 24
+        minSdk = 33
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         consumerProguardFiles("consumer-rules.pro")
@@ -133,11 +134,11 @@ dependencies {
     //   implementation("com.mediatek.neuropilot:tflite-neuron-delegate:1.+")
     //   // AAR from NeuroPilot SDK: https://neuropilot.mediatek.com/
 
-    // Sherpa-onnx — streaming speech-to-text
-    implementation("com.k2fsa.sherpa:onnx")
-
-    // llama.cpp — GGUF model inference engine (transitive for SDK consumers)
-    implementation("com.arm.aichat:lib")
+    // Engine runtimes — published as Maven Central artifacts.
+    // Composite build substitution (in settings.gradle.kts) replaces these
+    // with local projects when engine repos are present on disk.
+    implementation("ai.octomil:octomil-runtime-sherpa-android:1.0.0")
+    implementation("ai.octomil:octomil-runtime-llama-android:1.0.0")
 
     // Logging
     implementation("com.jakewharton.timber:timber:5.0.1")
@@ -155,27 +156,57 @@ dependencies {
     androidTestImplementation("androidx.work:work-testing:2.11.1")
 }
 
-// Maven publish to GitHub Packages
+// Maven publish to Maven Central (Sonatype OSSRH)
 afterEvaluate {
     publishing {
         publications {
             create<MavenPublication>("release") {
                 from(components["release"])
                 groupId = "ai.octomil"
-                artifactId = "octomil"
+                artifactId = "octomil-client"
                 version = project.property("OCTOMIL_VERSION").toString()
+
+                pom {
+                    name.set("Octomil Android SDK")
+                    description.set("On-device AI inference SDK for Android — chat, transcription, and text prediction")
+                    url.set("https://github.com/octomil/octomil-android")
+                    licenses {
+                        license {
+                            name.set("MIT License")
+                            url.set("https://opensource.org/licenses/MIT")
+                        }
+                    }
+                    developers {
+                        developer {
+                            id.set("octomil")
+                            name.set("Octomil Team")
+                        }
+                    }
+                    scm {
+                        connection.set("scm:git:git://github.com/octomil/octomil-android.git")
+                        developerConnection.set("scm:git:ssh://github.com/octomil/octomil-android.git")
+                        url.set("https://github.com/octomil/octomil-android")
+                    }
+                }
             }
         }
         repositories {
             maven {
-                name = "GitHubPackages"
-                url = uri("https://maven.pkg.github.com/octomil/octomil-android")
+                name = "SonatypeOSSRH"
+                val releasesUrl = uri("https://s01.oss.sonatype.org/service/local/staging/deploy/maven2/")
+                val snapshotsUrl = uri("https://s01.oss.sonatype.org/content/repositories/snapshots/")
+                url = if (project.property("OCTOMIL_VERSION").toString().endsWith("SNAPSHOT")) snapshotsUrl else releasesUrl
                 credentials {
-                    username = System.getenv("GITHUB_ACTOR") ?: ""
-                    password = System.getenv("GITHUB_TOKEN") ?: ""
+                    username = System.getenv("OSSRH_USERNAME") ?: ""
+                    password = System.getenv("OSSRH_PASSWORD") ?: ""
                 }
             }
         }
+    }
+
+    signing {
+        useGpgCmd()
+        sign(publishing.publications["release"])
     }
 }
 
