@@ -163,14 +163,12 @@ object Octomil {
         appContext = context.applicationContext
 
         // Wire LLM runtime — llama.cpp for GGUF models.
-        // Skip if app already registered a factory (backwards compat).
-        if (LLMRuntimeRegistry.factory == null) {
-            LLMRuntimeRegistry.factory = { modelFile ->
-                val mmproj = modelFile.parentFile?.listFiles()?.firstOrNull { f ->
-                    f.name.contains("mmproj", ignoreCase = true) && f.extension == "gguf"
-                }
-                LlamaCppRuntime(modelFile, mmproj, context.applicationContext)
+        // SDK unconditionally owns runtime wiring.
+        LLMRuntimeRegistry.factory = { modelFile ->
+            val mmproj = modelFile.parentFile?.listFiles()?.firstOrNull { f ->
+                f.name.contains("mmproj", ignoreCase = true) && f.extension == "gguf"
             }
+            LlamaCppRuntime(modelFile, mmproj, context.applicationContext)
         }
 
         ModelRuntimeRegistry.defaultFactory = factory@{ modelId ->
