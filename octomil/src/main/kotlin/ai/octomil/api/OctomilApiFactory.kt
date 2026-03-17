@@ -43,6 +43,42 @@ object OctomilApiFactory {
     }
 
     /**
+     * Create an API instance for pre-registration calls.
+     *
+     * Uses the given bearer token (publishable key or bootstrap token) instead of
+     * a device access token. No [OctomilConfig] required.
+     *
+     * @param serverUrl Base URL for the Octomil API server.
+     * @param bearerToken The publishable key or bootstrap token.
+     * @return Configured OctomilApi instance for registration.
+     */
+    fun createForRegistration(serverUrl: String, bearerToken: String): OctomilApi {
+        val okHttpClient = OkHttpClient.Builder()
+            .connectTimeout(30_000, TimeUnit.MILLISECONDS)
+            .readTimeout(30_000, TimeUnit.MILLISECONDS)
+            .writeTimeout(30_000, TimeUnit.MILLISECONDS)
+            .addInterceptor(Interceptor { chain ->
+                val request = chain.request().newBuilder()
+                    .addHeader("Authorization", "Bearer $bearerToken")
+                    .build()
+                chain.proceed(request)
+            })
+            .addInterceptor(createUserAgentInterceptor())
+            .addInterceptor(createRetryInterceptor(3, 100L))
+            .retryOnConnectionFailure(true)
+            .build()
+
+        val contentType = "application/json".toMediaType()
+        val retrofit = Retrofit.Builder()
+            .baseUrl("$serverUrl/")
+            .client(okHttpClient)
+            .addConverterFactory(json.asConverterFactory(contentType))
+            .build()
+
+        return retrofit.create(OctomilApi::class.java)
+    }
+
+    /**
      * Create OkHttp client with interceptors and timeouts.
      */
     private fun createOkHttpClient(config: OctomilConfig): OkHttpClient =

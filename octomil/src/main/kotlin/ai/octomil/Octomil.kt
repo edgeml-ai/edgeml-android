@@ -14,6 +14,11 @@ import ai.octomil.runtime.engines.llama.LlamaCppRuntime
 import ai.octomil.runtime.engines.tflite.EngineRegistry
 import ai.octomil.runtime.engines.tflite.LLMRuntimeAdapter
 import ai.octomil.runtime.engines.tflite.Modality
+import ai.octomil.api.OctomilApiFactory
+import ai.octomil.api.dto.DeviceCapabilities
+import ai.octomil.api.dto.DeviceRegistrationRequest
+import ai.octomil.api.dto.HeartbeatRequest
+import ai.octomil.control.ControlPlaneClient
 import ai.octomil.sdk.DeviceContext
 import ai.octomil.sdk.MonitoringConfig
 import ai.octomil.speech.SherpaStreamingRuntime
@@ -21,15 +26,24 @@ import ai.octomil.speech.SpeechRuntimeRegistry
 import ai.octomil.storage.SecureStorage
 import ai.octomil.text.OctomilText
 import ai.octomil.training.TFLiteTrainer
+import ai.octomil.utils.BatteryUtils
+import ai.octomil.utils.DeviceUtils
+import ai.octomil.utils.NetworkUtils
 import ai.octomil.workflows.WorkflowRunner
 import android.content.Context
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import timber.log.Timber
 import java.io.File
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+import java.util.TimeZone
 import kotlin.math.min
 import kotlin.random.Random
 
@@ -53,10 +67,15 @@ object Octomil {
     private var _deviceContext: DeviceContext? = null
     private var _manifest: AppManifest? = null
     private var _monitoring: MonitoringConfig = MonitoringConfig()
+    private var heartbeatJob: Job? = null
+    private var _control: ControlPlaneClient? = null
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     /** Device context for registration state and auth headers. Null if not configured. */
     val deviceContext: DeviceContext? get() = _deviceContext
+
+    /** Control plane client for heartbeat, desired-state, and observed-state. Null before registration. */
+    val control: ControlPlaneClient? get() = _control
 
     /** Model catalog bootstrapped from an [AppManifest], or null if not configured. */
     val catalog: ModelCatalogService? get() = _catalog
@@ -502,17 +521,68 @@ object Octomil {
         auth: ai.octomil.sdk.AuthConfig,
     ) {
         val ctx = _deviceContext ?: return
+        val context = appContext ?: return
         val maxBackoffMs = 5 * 60 * 1000L // 5 minutes
         var backoffMs = 1000L
 
+        // Extract bearer token from AuthConfig
+        val bearerToken = when (auth) {
+            is ai.octomil.sdk.AuthConfig.PublishableKey -> auth.key
+            is ai.octomil.sdk.AuthConfig.BootstrapToken -> auth.token
+            is ai.octomil.sdk.AuthConfig.Anonymous -> return // no registration for anonymous
+        }
+
+        val api = OctomilApiFactory.createForRegistration(serverUrl, bearerToken)
+
         for (attempt in 1..10) {
             try {
-                // TODO: Call actual registration API endpoint when available.
-                // For now, this is a placeholder that will be wired to the server API.
                 Timber.d("Background registration attempt $attempt for installation ${ctx.installationId}")
 
-                // If we reach here without exception, registration succeeded
-                // The actual API call will populate serverDeviceId and token via ctx.updateRegistered()
+                val request = DeviceRegistrationRequest(
+                    deviceIdentifier = ctx.installationId,
+                    orgId = ctx.orgId ?: "",
+                    osVersion = DeviceUtils.getOsVersion(),
+                    sdkVersion = BuildConfig.OCTOMIL_VERSION,
+                    manufacturer = DeviceUtils.getManufacturer(),
+                    model = DeviceUtils.getModel(),
+                    locale = DeviceUtils.getLocale(),
+                    region = DeviceUtils.getRegion(),
+                    timezone = java.util.TimeZone.getDefault().id,
+                    capabilities = DeviceUtils.getDeviceCapabilities(context),
+                )
+
+                val response = api.registerDevice(request)
+                if (!response.isSuccessful) {
+                    throw RuntimeException("Registration HTTP ${response.code()}")
+                }
+
+                val body = response.body()
+                    ?: throw RuntimeException("Registration response body is null")
+
+                val serverDeviceId = body.id
+                val accessToken = body.accessToken ?: body.apiToken
+                    ?: throw RuntimeException("No access token in registration response")
+
+                // Parse expires_at or default to 24h from now
+                val expiresAt = body.expiresAt?.let { parseIso8601(it) }
+                    ?: (System.currentTimeMillis() + 24 * 60 * 60 * 1000L)
+
+                // Update device context
+                ctx.updateRegistered(serverDeviceId, accessToken, expiresAt)
+
+                // Persist token to secure storage
+                val storage = SecureStorage.getInstance(context)
+                storage.setServerDeviceId(serverDeviceId)
+                storage.setApiToken(accessToken)
+                storage.putString(DeviceContext.CACHED_TOKEN_KEY, accessToken)
+                storage.putLong(DeviceContext.CACHED_TOKEN_EXPIRES_KEY, expiresAt)
+                storage.setDeviceRegistered(true)
+
+                Timber.i("Device registered: id=$serverDeviceId")
+
+                // Start heartbeat loop
+                startHeartbeatLoop(serverUrl, serverDeviceId, accessToken)
+
                 break
             } catch (e: Exception) {
                 Timber.w(e, "Background registration attempt $attempt failed")
@@ -525,6 +595,66 @@ object Octomil {
                 delay(backoffMs + jitter)
                 backoffMs = min(backoffMs * 2, maxBackoffMs)
             }
+        }
+    }
+
+    /**
+     * Start a periodic heartbeat loop after successful registration.
+     */
+    private fun startHeartbeatLoop(
+        serverUrl: String,
+        deviceId: String,
+        accessToken: String,
+    ) {
+        heartbeatJob?.cancel()
+        heartbeatJob = scope.launch {
+            val api = OctomilApiFactory.createForRegistration(serverUrl, accessToken)
+            val controlClient = ControlPlaneClient(
+                api = api,
+                orgId = _deviceContext?.orgId ?: "",
+                deviceId = deviceId,
+            )
+            _control = controlClient
+
+            val intervalMs = _monitoring.heartbeatIntervalSeconds * 1000L
+            while (isActive) {
+                delay(intervalMs)
+                sendHeartbeat(controlClient, deviceId)
+            }
+        }
+    }
+
+    /**
+     * Send a single heartbeat. Fire-and-forget: swallows all exceptions.
+     */
+    private suspend fun sendHeartbeat(controlClient: ControlPlaneClient, deviceId: String) {
+        try {
+            val context = appContext ?: return
+            val request = HeartbeatRequest(
+                sdkVersion = BuildConfig.OCTOMIL_VERSION,
+                osVersion = DeviceUtils.getOsVersion(),
+                batteryLevel = BatteryUtils.getBatteryLevel(context),
+                isCharging = BatteryUtils.isCharging(context),
+                availableStorageMb = DeviceUtils.getAvailableStorageMb(),
+                availableMemoryMb = DeviceUtils.getAvailableMemoryMb(context),
+                networkType = if (NetworkUtils.isWifiConnected(context)) "wifi" else "cellular",
+            )
+            controlClient.heartbeat(deviceId, request)
+        } catch (e: Exception) {
+            Timber.d(e, "Heartbeat failed (non-blocking)")
+        }
+    }
+
+    private fun parseIso8601(dateStr: String): Long {
+        return try {
+            val sdf = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.US).apply {
+                timeZone = TimeZone.getTimeZone("UTC")
+            }
+            // Strip fractional seconds and trailing Z for parsing
+            val normalized = dateStr.replace(Regex("\\.[0-9]+"), "").replace("Z", "")
+            sdf.parse(normalized)?.time ?: System.currentTimeMillis()
+        } catch (_: Exception) {
+            System.currentTimeMillis()
         }
     }
 

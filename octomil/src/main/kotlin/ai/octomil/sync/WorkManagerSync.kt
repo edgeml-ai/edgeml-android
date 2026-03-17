@@ -3,10 +3,12 @@ package ai.octomil.sync
 import ai.octomil.api.OctomilApi
 import ai.octomil.api.OctomilApiFactory
 import ai.octomil.api.dto.AnyValue
+import ai.octomil.api.dto.ArtifactStatusEntry
 import ai.octomil.api.dto.ExportLogsServiceRequest
 import ai.octomil.api.dto.InstrumentationScope
 import ai.octomil.api.dto.KeyValue
 import ai.octomil.api.dto.LogRecord
+import ai.octomil.api.dto.ObservedStateRequest
 import ai.octomil.api.dto.OtlpResource
 import ai.octomil.api.dto.ResourceLogs
 import ai.octomil.api.dto.ScopeLogs
@@ -15,6 +17,7 @@ import ai.octomil.api.dto.TelemetryV2Event
 import ai.octomil.api.dto.TelemetryV2Resource
 import ai.octomil.BuildConfig
 import ai.octomil.config.OctomilConfig
+import ai.octomil.control.ControlPlaneClient
 import ai.octomil.models.ModelManager
 import ai.octomil.storage.SecureStorage
 import android.content.Context
@@ -68,6 +71,7 @@ class OctomilSyncWorker(
         const val SYNC_TYPE_MODEL = "model"
         const val SYNC_TYPE_EVENTS = "events"
         const val SYNC_TYPE_FULL = "full"
+        const val SYNC_TYPE_DESIRED_STATE = "desired_state"
     }
 
     private val json =
@@ -105,9 +109,14 @@ class OctomilSyncWorker(
                     syncEvents(api, storage, config)
                 }
 
+                SYNC_TYPE_DESIRED_STATE -> {
+                    syncDesiredState(api, storage, config)
+                }
+
                 SYNC_TYPE_FULL -> {
                     syncModels(modelManager)
                     syncEvents(api, storage, config)
+                    syncDesiredState(api, storage, config)
                 }
             }
 
@@ -137,6 +146,118 @@ class OctomilSyncWorker(
         val sdf = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US)
         sdf.timeZone = TimeZone.getTimeZone("UTC")
         return sdf.format(Date(epochMillis))
+    }
+
+    private suspend fun syncDesiredState(
+        api: OctomilApi,
+        storage: SecureStorage,
+        config: OctomilConfig,
+    ) {
+        val deviceId = storage.getServerDeviceId() ?: return
+        Timber.d("Syncing desired state for device $deviceId")
+
+        val controlClient = ControlPlaneClient(api, config.orgId, deviceId)
+        val desiredState = controlClient.fetchDesiredState(deviceId) ?: run {
+            Timber.d("No desired state available")
+            return
+        }
+
+        val artifactStatuses = mutableListOf<ArtifactStatusEntry>()
+        val artifactCacheDir = java.io.File(applicationContext.cacheDir, "octomil_artifacts").apply { mkdirs() }
+
+        // Download missing or outdated artifacts
+        for (artifact in desiredState.artifacts) {
+            val localFile = java.io.File(artifactCacheDir, "${artifact.artifactId}_${artifact.version}")
+            if (localFile.exists() && localFile.length() == artifact.sizeBytes) {
+                artifactStatuses.add(
+                    ArtifactStatusEntry(
+                        artifactId = artifact.artifactId,
+                        status = "current",
+                        bytesDownloaded = artifact.sizeBytes,
+                        totalBytes = artifact.sizeBytes,
+                    ),
+                )
+                continue
+            }
+
+            try {
+                Timber.d("Downloading artifact ${artifact.artifactId} v${artifact.version}")
+                val response = api.downloadModelFile(artifact.downloadUrl)
+                if (response.isSuccessful) {
+                    response.body()?.let { body ->
+                        localFile.outputStream().use { out ->
+                            body.byteStream().use { input ->
+                                input.copyTo(out)
+                            }
+                        }
+                    }
+                    // Verify checksum (SHA-256)
+                    val actualChecksum = checksumFile(localFile)
+                    if (artifact.checksum.isNotEmpty() && actualChecksum != artifact.checksum) {
+                        Timber.w("Checksum mismatch for ${artifact.artifactId}: expected=${artifact.checksum}, actual=$actualChecksum")
+                        localFile.delete()
+                        artifactStatuses.add(
+                            ArtifactStatusEntry(
+                                artifactId = artifact.artifactId,
+                                status = "error",
+                                errorCode = "checksum_mismatch",
+                            ),
+                        )
+                    } else {
+                        artifactStatuses.add(
+                            ArtifactStatusEntry(
+                                artifactId = artifact.artifactId,
+                                status = "current",
+                                bytesDownloaded = localFile.length(),
+                                totalBytes = artifact.sizeBytes,
+                            ),
+                        )
+                    }
+                } else {
+                    artifactStatuses.add(
+                        ArtifactStatusEntry(
+                            artifactId = artifact.artifactId,
+                            status = "error",
+                            errorCode = "download_http_${response.code()}",
+                        ),
+                    )
+                }
+            } catch (e: Exception) {
+                Timber.w(e, "Failed to download artifact ${artifact.artifactId}")
+                artifactStatuses.add(
+                    ArtifactStatusEntry(
+                        artifactId = artifact.artifactId,
+                        status = "error",
+                        errorCode = "download_exception",
+                    ),
+                )
+            }
+        }
+
+        // GC eligible artifacts
+        for (gcId in desiredState.gcEligibleArtifactIds) {
+            val gcFiles = artifactCacheDir.listFiles { _, name -> name.startsWith("${gcId}_") }
+            gcFiles?.forEach { file ->
+                Timber.d("GC artifact: ${file.name}")
+                file.delete()
+            }
+        }
+
+        // Report observed state
+        controlClient.reportObservedState(deviceId, artifactStatuses)
+        Timber.i("Desired state sync complete: ${artifactStatuses.size} artifacts processed")
+    }
+
+    private fun checksumFile(file: java.io.File): String {
+        val digest = java.security.MessageDigest.getInstance("SHA-256")
+        file.inputStream().use { input ->
+            val buffer = ByteArray(8192)
+            var read: Int
+            while (input.read(buffer).also { read = it } != -1) {
+                digest.update(buffer, 0, read)
+            }
+        }
+        return digest.digest().joinToString("") { "%02x".format(it) }
     }
 
     private suspend fun syncModels(modelManager: ModelManager) {
