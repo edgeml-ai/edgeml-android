@@ -114,7 +114,11 @@ dependencies {
     //     implementation("com.google.ai.edge.litert:litert-gpu:latest")
     
     implementation("org.tensorflow:tensorflow-lite:2.17.0")
-    implementation("org.tensorflow:tensorflow-lite-support:0.5.0")
+    implementation("org.tensorflow:tensorflow-lite-support:0.5.0") {
+        // litert-support and litert-support-api share the same Android namespace
+        // (org.tensorflow.lite.support), causing manifest merger failures in AGP 9.0+.
+        exclude(group = "com.google.ai.edge.litert", module = "litert-support-api")
+    }
     implementation("org.tensorflow:tensorflow-lite-gpu:2.17.0")
     implementation("org.tensorflow:tensorflow-lite-gpu-api:2.17.0")
 
