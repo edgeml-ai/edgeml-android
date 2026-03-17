@@ -37,6 +37,19 @@ interface LLMRuntime {
     /** Whether this runtime has audio support loaded. */
     fun supportsAudio(): Boolean = false
 
+    /**
+     * Eagerly load the model. Call before [generate] to avoid cold-start
+     * latency on first prompt. Default: no-op (generate may auto-load).
+     */
+    suspend fun load() {}
+
+    /**
+     * Set a listener for model loading progress (0.0 to 1.0).
+     * Called during [load] if the runtime supports progress reporting.
+     * Pass null to clear the listener.
+     */
+    fun setLoadProgressListener(listener: ((Float) -> Unit)?) {}
+
     /** Release resources held by this runtime. */
     fun close()
 }
