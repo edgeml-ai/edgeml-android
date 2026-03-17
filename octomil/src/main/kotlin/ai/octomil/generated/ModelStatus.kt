@@ -4,9 +4,10 @@ package ai.octomil.generated
 
 enum class ModelStatus(val code: String) {
     NOT_CACHED("not_cached"),
+    QUEUED("queued"),
     DOWNLOADING("downloading"),
     READY("ready"),
-    ERROR("error");
+    FAILED("failed");
 
     companion object {
         fun fromCode(code: String): ModelStatus? =

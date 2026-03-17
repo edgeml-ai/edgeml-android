@@ -112,7 +112,7 @@ class OctomilModelsTest {
 
         val status = models.status("my-model")
 
-        assertEquals(ModelStatus.ERROR, status)
+        assertEquals(ModelStatus.FAILED, status)
     }
 
     @Test
