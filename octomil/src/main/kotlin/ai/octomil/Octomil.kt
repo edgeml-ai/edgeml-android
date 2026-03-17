@@ -72,8 +72,9 @@ object Octomil {
             LLMRuntimeAdapter(llm)
         }
 
-        // Wire speech runtime — sherpa-onnx streaming recognizer
-        SpeechRuntimeRegistry.factory = { modelDir -> SherpaStreamingRuntime(modelDir) }
+        // Wire speech runtime — sherpa-onnx streaming recognizer with punctuation
+        val punctDir = extractPunctAssets(context.applicationContext)
+        SpeechRuntimeRegistry.factory = { modelDir -> SherpaStreamingRuntime(modelDir, punctDir) }
 
         // Wire prediction runtime — llama.cpp handle-based multi-model API
         PredictionRuntimeRegistry.factory = { LlamaCppPredictionRuntime(context.applicationContext) }
@@ -405,5 +406,30 @@ object Octomil {
         }
 
         return outFile
+    }
+
+    /**
+     * Extract punctuation model assets (punct/model.int8.onnx, punct/bpe.vocab)
+     * to cache. Returns the cache directory, or null if assets are missing.
+     */
+    private fun extractPunctAssets(context: Context): File? {
+        val punctCacheDir = File(context.cacheDir, "octomil_punct").apply { mkdirs() }
+        val files = listOf("model.int8.onnx", "bpe.vocab")
+        return try {
+            for (name in files) {
+                val outFile = File(punctCacheDir, name)
+                if (!outFile.exists()) {
+                    context.assets.open("punct/$name").use { input ->
+                        outFile.outputStream().use { output ->
+                            input.copyTo(output)
+                        }
+                    }
+                }
+            }
+            punctCacheDir
+        } catch (_: Exception) {
+            // Punctuation assets not bundled — gracefully degrade
+            null
+        }
     }
 }

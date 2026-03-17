@@ -5,6 +5,9 @@ import com.k2fsa.sherpa.onnx.EndpointConfig
 import com.k2fsa.sherpa.onnx.EndpointRule
 import com.k2fsa.sherpa.onnx.FeatureConfig
 import com.k2fsa.sherpa.onnx.OnlineModelConfig
+import com.k2fsa.sherpa.onnx.OnlinePunctuation
+import com.k2fsa.sherpa.onnx.OnlinePunctuationConfig
+import com.k2fsa.sherpa.onnx.OnlinePunctuationModelConfig
 import com.k2fsa.sherpa.onnx.OnlineRecognizer
 import com.k2fsa.sherpa.onnx.OnlineRecognizerConfig
 import com.k2fsa.sherpa.onnx.OnlineStream
@@ -27,18 +30,51 @@ private const val SAMPLE_RATE = 16000
  * [SherpaSession.transcript] collected from UI thread.
  *
  * @param modelDir Directory containing model files (encoder, decoder, joiner, tokens.txt).
+ * @param punctDir Optional directory with punctuation model (model.int8.onnx, bpe.vocab).
  */
-internal class SherpaStreamingRuntime(private val modelDir: File) : SpeechRuntime {
+internal class SherpaStreamingRuntime(
+    private val modelDir: File,
+    private val punctDir: File? = null,
+) : SpeechRuntime {
 
     private val recognizer: OnlineRecognizer
+    private val punct: OnlinePunctuation?
 
     init {
+        Log.i(TAG, "Building config for ${modelDir.absolutePath}")
         val config = buildConfig(modelDir)
+        Log.i(TAG, "Config built. Creating OnlineRecognizer...")
         recognizer = OnlineRecognizer(config = config)
         Log.i(TAG, "Initialized recognizer from ${modelDir.absolutePath}")
+
+        punct = punctDir?.let { dir ->
+            val modelFile = File(dir, "model.int8.onnx")
+            val vocabFile = File(dir, "bpe.vocab")
+            if (modelFile.exists() && vocabFile.exists()) {
+                Log.i(TAG, "Loading punctuation model from ${dir.absolutePath}")
+                try {
+                    OnlinePunctuation(
+                        config = OnlinePunctuationConfig(
+                            model = OnlinePunctuationModelConfig(
+                                cnnBilstm = modelFile.absolutePath,
+                                bpeVocab = vocabFile.absolutePath,
+                                numThreads = 1,
+                                provider = "cpu",
+                            ),
+                        ),
+                    )
+                } catch (e: Exception) {
+                    Log.e(TAG, "Failed to load punctuation model", e)
+                    null
+                }
+            } else {
+                Log.w(TAG, "Punctuation model files not found in ${dir.absolutePath}")
+                null
+            }
+        }
     }
 
-    override fun startSession(): SpeechSession = SherpaSession(recognizer)
+    override fun startSession(): SpeechSession = SherpaSession(recognizer, punct)
 
     override fun release() {
         recognizer.release()
@@ -75,10 +111,10 @@ internal class SherpaStreamingRuntime(private val modelDir: File) : SpeechRuntim
                         joiner = "$dir/$joiner",
                     ),
                     tokens = "$dir/$tokens",
-                    numThreads = 2,
+                    numThreads = 1,
                     debug = false,
                     provider = "cpu",
-                    modelType = "zipformer2",
+                    modelType = "zipformer",
                 ),
                 endpointConfig = EndpointConfig(
                     rule1 = EndpointRule(false, 2.4f, 0.0f),
@@ -99,6 +135,7 @@ internal class SherpaStreamingRuntime(private val modelDir: File) : SpeechRuntim
  */
 private class SherpaSession(
     private val recognizer: OnlineRecognizer,
+    private val punct: OnlinePunctuation?,
 ) : SpeechSession {
 
     private val stream: OnlineStream = recognizer.createStream()
@@ -125,9 +162,14 @@ private class SherpaSession(
                 recognizer.reset(stream)
             }
 
-            // Update transcript with accumulated + current partial
+            // Update transcript: apply punctuation to accumulated, keep partial raw
             val current = recognizer.getResult(stream).text
-            _transcript.value = (accumulated.toString() + current).trim()
+            val raw = (accumulated.toString() + current).trim()
+            _transcript.value = if (raw.isNotBlank() && punct != null) {
+                punct.addPunctuation(raw)
+            } else {
+                raw
+            }
         }
     }
 
@@ -146,7 +188,12 @@ private class SherpaSession(
                 accumulated.append(result.text)
             }
 
-            val finalText = accumulated.toString().trim()
+            val raw = accumulated.toString().trim()
+            val finalText = if (raw.isNotBlank() && punct != null) {
+                punct.addPunctuation(raw)
+            } else {
+                raw
+            }
             _transcript.value = finalText
             Log.i(TAG, "Finalized: $finalText")
             finalText
