@@ -2,6 +2,7 @@ package ai.octomil.models
 
 import ai.octomil.api.OctomilApi
 import ai.octomil.api.dto.ModelDownloadResponse
+import ai.octomil.api.dto.ModelResolveResponse
 import ai.octomil.api.dto.VersionResolutionResponse
 import ai.octomil.storage.SecureStorage
 import android.content.Context
@@ -64,6 +65,16 @@ class ModelManagerTest {
         storage = mockk<SecureStorage>(relaxed = true)
 
         coEvery { storage.getServerDeviceId() } returns "device-uuid-123"
+
+        // Mock resolveModelFormat — called between version resolution and download
+        coEvery { api.resolveModelFormat(any(), any(), any()) } returns
+            Response.success(
+                ModelResolveResponse(
+                    modelId = "test-model",
+                    version = "1.0.0",
+                    format = "tensorflow_lite",
+                ),
+            )
 
         modelManager = ModelManager(context, config, api, storage, testDispatcher)
     }

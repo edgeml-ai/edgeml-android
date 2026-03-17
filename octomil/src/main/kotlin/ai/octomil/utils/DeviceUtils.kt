@@ -56,12 +56,12 @@ object DeviceUtils {
     /**
      * Get the device manufacturer.
      */
-    fun getManufacturer(): String = Build.MANUFACTURER
+    fun getManufacturer(): String = Build.MANUFACTURER ?: "unknown"
 
     /**
      * Get the device model.
      */
-    fun getModel(): String = Build.MODEL
+    fun getModel(): String = Build.MODEL ?: "unknown"
 
     /**
      * Get the device locale (e.g., "en_US").
@@ -87,12 +87,12 @@ object DeviceUtils {
     /**
      * Get the Android OS version string.
      */
-    fun getOsVersion(): String = "Android ${Build.VERSION.RELEASE} (API ${Build.VERSION.SDK_INT})"
+    fun getOsVersion(): String = "Android ${Build.VERSION.RELEASE ?: "unknown"} (API ${Build.VERSION.SDK_INT})"
 
     /**
      * Get the CPU architecture.
      */
-    fun getCpuArchitecture(): String = Build.SUPPORTED_ABIS.firstOrNull() ?: "unknown"
+    fun getCpuArchitecture(): String = Build.SUPPORTED_ABIS?.firstOrNull() ?: "unknown"
 
     /**
      * Check if GPU is likely available for ML operations.

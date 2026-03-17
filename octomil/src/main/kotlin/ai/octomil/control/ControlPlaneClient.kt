@@ -1,9 +1,17 @@
 package ai.octomil.control
 
 import ai.octomil.api.OctomilApi
+import ai.octomil.api.dto.ArtifactStatusEntry
+import ai.octomil.api.dto.DesiredStateResponse
+import ai.octomil.api.dto.HeartbeatRequest
+import ai.octomil.api.dto.ObservedStateRequest
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import timber.log.Timber
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+import java.util.TimeZone
 
 /**
  * Response DTO from GET /api/v1/control/sync.
@@ -34,6 +42,54 @@ class ControlPlaneClient(
     private var lastConfigVersion: String? = null
     private var lastAssignments: Map<String, String> = emptyMap()
     private var lastRollouts: Map<String, String> = emptyMap()
+
+    /**
+     * Send a heartbeat for the device. Fire-and-forget: swallows all exceptions.
+     */
+    suspend fun heartbeat(deviceId: String = this.deviceId.orEmpty(), request: HeartbeatRequest) {
+        try {
+            api.sendHeartbeat(deviceId, request)
+        } catch (e: Exception) {
+            Timber.d(e, "Heartbeat failed (non-blocking)")
+        }
+    }
+
+    /**
+     * Fetch the desired state for a device. Returns null on error.
+     */
+    suspend fun fetchDesiredState(deviceId: String = this.deviceId.orEmpty()): DesiredStateResponse? {
+        return try {
+            val response = api.getDesiredState(deviceId)
+            if (response.isSuccessful) response.body() else null
+        } catch (e: Exception) {
+            Timber.d(e, "Desired state fetch failed")
+            null
+        }
+    }
+
+    /**
+     * Report the device's observed state. Swallows errors.
+     */
+    suspend fun reportObservedState(
+        deviceId: String = this.deviceId.orEmpty(),
+        artifactStatuses: List<ArtifactStatusEntry>,
+    ) {
+        try {
+            val sdf = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US).apply {
+                timeZone = TimeZone.getTimeZone("UTC")
+            }
+            val request = ObservedStateRequest(
+                deviceId = deviceId,
+                reportedAt = sdf.format(Date()),
+                artifactStatuses = artifactStatuses,
+                sdkVersion = ai.octomil.BuildConfig.OCTOMIL_VERSION,
+                osVersion = "Android ${android.os.Build.VERSION.SDK_INT}",
+            )
+            api.reportObservedState(deviceId, request)
+        } catch (e: Exception) {
+            Timber.d(e, "Observed state report failed (non-blocking)")
+        }
+    }
 
     /**
      * Fetch the latest control-plane configuration from the server and

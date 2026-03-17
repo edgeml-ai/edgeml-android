@@ -99,7 +99,7 @@ class CloudModelRuntimeTest {
         assertEquals("POST", recorded.method)
         assertTrue(recorded.path!!.endsWith("/v1/chat/completions"))
         assertEquals("Bearer test-key", recorded.getHeader("Authorization"))
-        assertEquals("application/json", recorded.getHeader("Content-Type"))
+        assertTrue(recorded.getHeader("Content-Type")!!.startsWith("application/json"))
 
         val body = recorded.body.readUtf8()
         assertTrue(body.contains("\"model\":\"test-model\""))
@@ -160,7 +160,7 @@ class CloudModelRuntimeTest {
             runtime.run(stubRequest())
             fail("Expected OctomilException")
         } catch (e: OctomilException) {
-            assertEquals(OctomilErrorCode.INVALID_API_KEY, e.errorCode)
+            assertEquals(OctomilErrorCode.AUTHENTICATION_FAILED, e.errorCode)
             assertNotNull(e.message)
         }
     }

@@ -1,3 +1,5 @@
+import org.gradle.testing.jacoco.plugins.JacocoTaskExtension
+
 plugins {
     id("com.android.library")
     id("org.jetbrains.kotlin.plugin.serialization")
@@ -30,6 +32,7 @@ android {
         }
         debug {
             isMinifyEnabled = false
+            enableUnitTestCoverage = false
         }
     }
 
@@ -58,6 +61,17 @@ android {
         unitTests {
             isIncludeAndroidResources = true
             isReturnDefaultValues = true
+            all {
+                it.maxHeapSize = "2g"
+                it.forkEvery = 20
+                it.jvmArgs(
+                    "--add-opens=java.base/java.lang=ALL-UNNAMED",
+                    "--add-opens=java.base/java.lang.reflect=ALL-UNNAMED",
+                )
+                it.extensions.configure<JacocoTaskExtension> {
+                    isEnabled = false
+                }
+            }
         }
     }
 

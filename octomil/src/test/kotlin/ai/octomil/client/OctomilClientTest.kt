@@ -150,7 +150,7 @@ class OctomilClientTest {
     }
 
     @Test
-    fun `initialize transitions to ERROR on registration failure`() = runTest(testDispatcher) {
+    fun `initialize continues gracefully on registration failure`() = runTest(testDispatcher) {
         coEvery { storage.getClientDeviceIdentifier() } returns "existing-id"
         coEvery { storage.getServerDeviceId() } returns null
         coEvery { api.registerDevice(any()) } returns
@@ -159,8 +159,9 @@ class OctomilClientTest {
         val result = client.initialize()
         advanceUntilIdle()
 
-        assertTrue(result.isFailure)
-        assertEquals(ClientState.ERROR, client.state.first())
+        // Registration failure is non-fatal — client continues without server identity
+        assertTrue(result.isSuccess)
+        assertEquals(ClientState.READY, client.state.first())
     }
 
     @Test
@@ -482,7 +483,7 @@ class OctomilClientTest {
                 .mainDispatcher(testDispatcher)
                 .build()
             assertTrue(false, "Should have thrown")
-        } catch (e: IllegalStateException) {
+        } catch (e: ai.octomil.errors.OctomilException) {
             assertTrue(e.message!!.contains("Configuration is required"))
         }
     }

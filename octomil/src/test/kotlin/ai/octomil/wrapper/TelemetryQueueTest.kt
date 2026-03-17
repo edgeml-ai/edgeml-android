@@ -159,7 +159,7 @@ class TelemetryQueueTest {
         assertEquals("android", req.resourceAttr("telemetry.sdk.name"))
         assertEquals("org-abc", req.resourceAttr("org.id"))
         assertEquals("dev-xyz", req.resourceAttr("device.id"))
-        assertEquals("dev-xyz", req.resourceAttr("octomil.device_id"))
+        assertEquals("dev-xyz", req.resourceAttr("octomil.device.id"))
         assertNotNull(req.resourceAttr("service.version"))
 
         queue.close()

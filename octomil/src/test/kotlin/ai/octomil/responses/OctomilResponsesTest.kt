@@ -125,7 +125,7 @@ class OctomilResponsesTest {
         assertEquals(15, response.usage?.totalTokens)
     }
 
-    @Test(expected = IllegalStateException::class)
+    @Test(expected = ai.octomil.errors.OctomilException::class)
     fun `create throws when no runtime found`() = runTest {
         val responses = OctomilResponses(runtimeResolver = { null })
         responses.create(ResponseRequest(model = "unknown", input = listOf(InputItem.text("Hi"))))

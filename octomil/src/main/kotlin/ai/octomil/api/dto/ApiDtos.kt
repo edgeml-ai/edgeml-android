@@ -120,6 +120,12 @@ data class DeviceRegistrationResponse(
     val capabilities: Map<String, String>? = null,
     @SerialName("heartbeat_interval_seconds")
     val heartbeatIntervalSeconds: Int? = null,
+    @SerialName("access_token")
+    val accessToken: String? = null,
+    @SerialName("expires_at")
+    val expiresAt: String? = null,
+    @SerialName("refresh_token")
+    val refreshToken: String? = null,
 )
 
 // =========================================================================
@@ -812,4 +818,100 @@ data class SecAggUnmaskRequest(
     val deviceId: String,
     @SerialName("unmask_data")
     val unmaskData: String,
+)
+
+// =========================================================================
+// Desired State / Observed State
+// =========================================================================
+
+/**
+ * Server response for GET /api/v1/devices/{device_id}/desired-state.
+ * Describes the target state the device should converge toward.
+ */
+@Serializable
+data class DesiredStateResponse(
+    @SerialName("schema_version")
+    val schemaVersion: String = "1.4.0",
+    @SerialName("device_id")
+    val deviceId: String,
+    @SerialName("generated_at")
+    val generatedAt: String,
+    @SerialName("active_binding")
+    val activeBinding: String? = null,
+    @SerialName("artifacts")
+    val artifacts: List<DesiredArtifact> = emptyList(),
+    @SerialName("policy_config")
+    val policyConfig: Map<String, String>? = null,
+    @SerialName("federation_offers")
+    val federationOffers: List<FederationOffer> = emptyList(),
+    @SerialName("gc_eligible_artifact_ids")
+    val gcEligibleArtifactIds: List<String> = emptyList(),
+)
+
+/**
+ * An artifact the server wants the device to have locally.
+ */
+@Serializable
+data class DesiredArtifact(
+    @SerialName("artifact_id")
+    val artifactId: String,
+    @SerialName("version")
+    val version: String,
+    @SerialName("download_url")
+    val downloadUrl: String,
+    @SerialName("checksum")
+    val checksum: String,
+    @SerialName("size_bytes")
+    val sizeBytes: Long,
+    @SerialName("format")
+    val format: String? = null,
+)
+
+/**
+ * A federated learning round the server is offering to this device.
+ */
+@Serializable
+data class FederationOffer(
+    @SerialName("round_id")
+    val roundId: String,
+    @SerialName("job_id")
+    val jobId: String? = null,
+    @SerialName("expires_at")
+    val expiresAt: String? = null,
+)
+
+/**
+ * Request body for POST /api/v1/devices/{device_id}/observed-state.
+ */
+@Serializable
+data class ObservedStateRequest(
+    @SerialName("schema_version")
+    val schemaVersion: String = "1.4.0",
+    @SerialName("device_id")
+    val deviceId: String,
+    @SerialName("reported_at")
+    val reportedAt: String,
+    @SerialName("artifact_statuses")
+    val artifactStatuses: List<ArtifactStatusEntry> = emptyList(),
+    @SerialName("sdk_version")
+    val sdkVersion: String? = null,
+    @SerialName("os_version")
+    val osVersion: String? = null,
+)
+
+/**
+ * Status of a single artifact on the device.
+ */
+@Serializable
+data class ArtifactStatusEntry(
+    @SerialName("artifact_id")
+    val artifactId: String,
+    @SerialName("status")
+    val status: String,
+    @SerialName("bytes_downloaded")
+    val bytesDownloaded: Long? = null,
+    @SerialName("total_bytes")
+    val totalBytes: Long? = null,
+    @SerialName("error_code")
+    val errorCode: String? = null,
 )

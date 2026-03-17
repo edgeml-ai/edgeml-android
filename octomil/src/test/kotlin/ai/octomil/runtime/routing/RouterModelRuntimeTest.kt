@@ -43,7 +43,7 @@ class RouterModelRuntimeTest {
         assertEquals("cloud-response", response.text)
     }
 
-    @Test(expected = IllegalStateException::class)
+    @Test(expected = ai.octomil.errors.OctomilException::class)
     fun `local only throws when no local runtime`() = runTest {
         val router = RouterModelRuntime(
             localFactory = null,
@@ -108,7 +108,7 @@ class RouterModelRuntimeTest {
         assertNull(RoutingPolicy.fromMetadata(metadata))
     }
 
-    @Test(expected = IllegalStateException::class)
+    @Test(expected = ai.octomil.errors.OctomilException::class)
     fun `auto policy throws when no local and fallback disabled`() = runTest {
         val router = RouterModelRuntime(
             localFactory = null,

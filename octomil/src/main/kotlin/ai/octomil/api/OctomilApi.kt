@@ -1,5 +1,6 @@
 package ai.octomil.api
 
+import ai.octomil.api.dto.DesiredStateResponse
 import ai.octomil.api.dto.ExportLogsServiceRequest
 import ai.octomil.api.dto.AssignmentRequest
 import ai.octomil.api.dto.DevicePolicyResponse
@@ -18,6 +19,7 @@ import ai.octomil.api.dto.ModelResolveRequest
 import ai.octomil.api.dto.ModelResolveResponse
 import ai.octomil.api.dto.ModelResponse
 import ai.octomil.api.dto.ModelUpdateInfo
+import ai.octomil.api.dto.ObservedStateRequest
 import ai.octomil.api.dto.ModelVersionResponse
 import ai.octomil.api.dto.RoundAssignment
 import ai.octomil.api.dto.SecAggKeyExchangeRequest
@@ -246,6 +248,27 @@ interface OctomilApi {
     @POST("api/v2/telemetry/events")
     suspend fun sendTelemetryV2(
         @Body request: ExportLogsServiceRequest,
+    ): Response<Unit>
+
+    // =========================================================================
+    // Desired State / Observed State
+    // =========================================================================
+
+    /**
+     * Fetch the desired state for a device (artifacts, policy, federation offers).
+     */
+    @GET("api/v1/devices/{device_id}/desired-state")
+    suspend fun getDesiredState(
+        @Path("device_id") deviceId: String,
+    ): Response<DesiredStateResponse>
+
+    /**
+     * Report the device's observed state (artifact download progress, errors).
+     */
+    @POST("api/v1/devices/{device_id}/observed-state")
+    suspend fun reportObservedState(
+        @Path("device_id") deviceId: String,
+        @Body request: ObservedStateRequest,
     ): Response<Unit>
 
     // =========================================================================
