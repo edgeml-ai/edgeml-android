@@ -1,6 +1,6 @@
 package ai.octomil
 
-import ai.octomil.audio.OctomilAudio
+import ai.octomil.speech.OctomilAudio
 import ai.octomil.chat.LLMRuntimeRegistry
 import ai.octomil.chat.OctomilChat
 import ai.octomil.generated.DeliveryMode
@@ -10,11 +10,14 @@ import ai.octomil.models.CachedModel
 import ai.octomil.responses.OctomilResponses
 import ai.octomil.runtime.core.Engine
 import ai.octomil.runtime.core.ModelRuntimeRegistry
+import ai.octomil.runtime.engines.llama.LlamaCppRuntime
 import ai.octomil.runtime.engines.tflite.EngineRegistry
 import ai.octomil.runtime.engines.tflite.LLMRuntimeAdapter
 import ai.octomil.runtime.engines.tflite.Modality
 import ai.octomil.sdk.DeviceContext
 import ai.octomil.sdk.MonitoringConfig
+import ai.octomil.speech.SherpaStreamingRuntime
+import ai.octomil.speech.SpeechRuntimeRegistry
 import ai.octomil.storage.SecureStorage
 import ai.octomil.text.OctomilText
 import ai.octomil.training.TFLiteTrainer
@@ -57,9 +60,6 @@ object Octomil {
 
     /** Model catalog bootstrapped from an [AppManifest], or null if not configured. */
     val catalog: ModelCatalogService? get() = _catalog
-
-    /** Audio API (transcription). Requires [configure] with a TRANSCRIPTION model. */
-    val audio: OctomilAudio = OctomilAudio { _catalog }
 
     /** Text prediction API. Requires [configure] with a KEYBOARD_PREDICTION model. */
     val text: OctomilText = OctomilText(
@@ -161,12 +161,31 @@ object Octomil {
      */
     fun init(context: Context) {
         appContext = context.applicationContext
+
+        // Wire LLM runtime — llama.cpp for GGUF models.
+        // Skip if app already registered a factory (backwards compat).
+        if (LLMRuntimeRegistry.factory == null) {
+            LLMRuntimeRegistry.factory = { modelFile ->
+                val mmproj = modelFile.parentFile?.listFiles()?.firstOrNull { f ->
+                    f.name.contains("mmproj", ignoreCase = true) && f.extension == "gguf"
+                }
+                LlamaCppRuntime(modelFile, mmproj, context.applicationContext)
+            }
+        }
+
         ModelRuntimeRegistry.defaultFactory = factory@{ modelId ->
             val ctx = appContext ?: return@factory null
             val file = ModelResolver.default().resolveSync(ctx, modelId) ?: return@factory null
             val llm = LLMRuntimeRegistry.factory?.invoke(file) ?: return@factory null
             LLMRuntimeAdapter(llm)
         }
+
+        // Wire speech runtime — sherpa-onnx streaming recognizer with punctuation
+        val punctDir = extractPunctAssets(context.applicationContext)
+        SpeechRuntimeRegistry.factory = { modelDir -> SherpaStreamingRuntime(modelDir, punctDir) }
+
+        // Prediction runtime: no longer wired here. OctomilTextPredictions uses
+        // LLMRuntime.supportsPrediction() + handle-based API via LLMRuntimeRegistry.
     }
 
     /**
@@ -199,6 +218,21 @@ object Octomil {
      * ```
      */
     val workflows: WorkflowRunner by lazy { WorkflowRunner(responses) }
+
+    /**
+     * Audio API for on-device speech transcription.
+     *
+     * ```kotlin
+     * val session = Octomil.audio.streamingSession("sherpa-zipformer-en-20m")
+     * session.feed(samples)           // 16kHz mono float [-1,1]
+     * session.transcript.collect {}   // live StateFlow<String>
+     * val final = session.finalize()  // drain + return final text
+     * session.release()
+     * ```
+     */
+    val audio: OctomilAudio by lazy {
+        OctomilAudio(contextProvider = { appContext })
+    }
 
     /**
      * Load a model by name with automatic resolution.
@@ -517,5 +551,30 @@ object Octomil {
         }
 
         return outFile
+    }
+
+    /**
+     * Extract punctuation model assets (punct/model.int8.onnx, punct/bpe.vocab)
+     * to cache. Returns the cache directory, or null if assets are missing.
+     */
+    private fun extractPunctAssets(context: Context): File? {
+        val punctCacheDir = File(context.cacheDir, "octomil_punct").apply { mkdirs() }
+        val files = listOf("model.int8.onnx", "bpe.vocab")
+        return try {
+            for (name in files) {
+                val outFile = File(punctCacheDir, name)
+                if (!outFile.exists()) {
+                    context.assets.open("punct/$name").use { input ->
+                        outFile.outputStream().use { output ->
+                            input.copyTo(output)
+                        }
+                    }
+                }
+            }
+            punctCacheDir
+        } catch (_: Exception) {
+            // Punctuation assets not bundled — gracefully degrade
+            null
+        }
     }
 }

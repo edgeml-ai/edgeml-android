@@ -30,3 +30,14 @@ if (llamaAndroidDir.exists()) {
         }
     }
 }
+
+// sherpa-onnx Android library — streaming speech-to-text.
+// Conditional: only included when the sherpa-onnx repo is present.
+val sherpaDir = file("../research/engines/sherpa-onnx/android/SherpaOnnxAar")
+if (sherpaDir.exists()) {
+    includeBuild(sherpaDir) {
+        dependencySubstitution {
+            substitute(module("com.k2fsa.sherpa:onnx")).using(project(":sherpa_onnx"))
+        }
+    }
+}
