@@ -145,10 +145,24 @@ internal class LlamaCppRuntime(
 
     override fun supportsAudio(): Boolean = mmprojLoaded.get() && engine.supportsAudio()
 
+    // ── Next-token prediction ──
+
+    override fun supportsPrediction(): Boolean = true
+
+    override suspend fun loadPredictionHandle(modelPath: String): Long =
+        engine.loadModelHandle(modelPath)
+
+    override suspend fun predictNext(handle: Long, text: String, k: Int): List<Pair<String, Float>> =
+        engine.predictNext(handle, text, k).map { it.text to it.probability }
+
+    override suspend fun unloadPredictionHandle(handle: Long) =
+        engine.unloadHandle(handle)
+
     override fun close() {
         if (closed.compareAndSet(false, true)) {
             Log.i(TAG, "Closing runtime")
             engine.cleanUp()
+            engine.destroy()
         }
     }
 
