@@ -62,7 +62,10 @@ object Octomil {
     val audio: OctomilAudio = OctomilAudio { _catalog }
 
     /** Text prediction API. Requires [configure] with a KEYBOARD_PREDICTION model. */
-    val text: OctomilText = OctomilText { _catalog }
+    val text: OctomilText = OctomilText(
+        catalogProvider = { _catalog },
+        contextProvider = { appContext },
+    )
 
     /**
      * Configure the SDK with a declarative [AppManifest].

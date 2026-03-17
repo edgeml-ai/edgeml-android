@@ -21,6 +21,12 @@ import java.io.File
  * ```
  */
 interface LLMRuntime {
+    /** Eagerly load model weights into memory. Optional — some runtimes load lazily. */
+    suspend fun load() {}
+
+    /** Set a progress listener for model loading (0.0–1.0). Pass null to clear. */
+    fun setLoadProgressListener(listener: ((Float) -> Unit)?) {}
+
     /** Generate text from a prompt, emitting tokens as they are produced. */
     fun generate(prompt: String, config: GenerateConfig = GenerateConfig()): Flow<String>
 
@@ -36,6 +42,36 @@ interface LLMRuntime {
 
     /** Whether this runtime has audio support loaded. */
     fun supportsAudio(): Boolean = false
+
+    // ── Next-token prediction (optional) ──
+
+    /** Whether this runtime supports handle-based next-token prediction. */
+    fun supportsPrediction(): Boolean = false
+
+    /**
+     * Load a lightweight prediction handle for the given model file.
+     *
+     * The handle is independent of the main chat context and can be used
+     * concurrently with [generate] calls. Call [unloadPredictionHandle]
+     * to release resources.
+     *
+     * @return An opaque handle ID, or -1 on failure.
+     */
+    suspend fun loadPredictionHandle(modelPath: String): Long = -1
+
+    /**
+     * Predict the top-k next tokens for the given context.
+     *
+     * @param handle Handle from [loadPredictionHandle].
+     * @param text Input context text.
+     * @param k Number of raw candidates to retrieve.
+     * @return List of (token, score) pairs, ranked by score descending.
+     */
+    suspend fun predictNext(handle: Long, text: String, k: Int): List<Pair<String, Float>> =
+        emptyList()
+
+    /** Release a prediction handle loaded via [loadPredictionHandle]. */
+    suspend fun unloadPredictionHandle(handle: Long) {}
 
     /** Release resources held by this runtime. */
     fun close()
