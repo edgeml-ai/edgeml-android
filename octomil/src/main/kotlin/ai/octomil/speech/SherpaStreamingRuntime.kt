@@ -166,7 +166,7 @@ private class SherpaSession(
             val current = recognizer.getResult(stream).text
             val raw = (accumulated.toString() + current).trim()
             _transcript.value = if (raw.isNotBlank() && punct != null) {
-                punct.addPunctuation(raw)
+                punct.addPunctuation(raw.lowercase())
             } else {
                 raw
             }
@@ -190,7 +190,7 @@ private class SherpaSession(
 
             val raw = accumulated.toString().trim()
             val finalText = if (raw.isNotBlank() && punct != null) {
-                punct.addPunctuation(raw)
+                punct.addPunctuation(raw.lowercase())
             } else {
                 raw
             }

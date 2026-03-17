@@ -2,8 +2,11 @@ package ai.octomil.speech
 
 import ai.octomil.ModelResolver
 import android.content.Context
+import android.util.Log
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+
+private const val TAG = "OctomilAudio"
 
 /**
  * Public API for on-device speech transcription.
@@ -35,11 +38,13 @@ class OctomilAudio internal constructor(
      * @throws IllegalStateException if the model cannot be found.
      */
     suspend fun streamingSession(modelName: String): SpeechSession = withContext(Dispatchers.IO) {
+        Log.i(TAG, "streamingSession($modelName) on ${Thread.currentThread().name}")
         val context = contextProvider()
             ?: throw IllegalStateException("Octomil not initialized — call Octomil.init(context) first")
         val factory = SpeechRuntimeRegistry.factory
             ?: throw IllegalStateException("No SpeechRuntime factory registered")
 
+        Log.i(TAG, "Resolving model '$modelName'...")
         val modelDir = resolver.resolveSync(context, modelName)
             ?: throw IllegalStateException(
                 "Speech model '$modelName' not found. " +
@@ -51,8 +56,14 @@ class OctomilAudio internal constructor(
         val dir = if (modelDir.isDirectory) modelDir else modelDir.parentFile
             ?: throw IllegalStateException("Cannot determine model directory for $modelName")
 
+        Log.i(TAG, "Model dir: ${dir.absolutePath}")
+        Log.i(TAG, "Files: ${dir.listFiles()?.map { it.name }}")
+        Log.i(TAG, "Creating SpeechRuntime...")
         val runtime = factory(dir)
-        runtime.startSession()
+        Log.i(TAG, "Runtime created. Starting session...")
+        val session = runtime.startSession()
+        Log.i(TAG, "Session started successfully")
+        session
     }
 
     /**
