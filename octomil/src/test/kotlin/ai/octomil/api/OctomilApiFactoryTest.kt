@@ -222,6 +222,68 @@ class OctomilApiFactoryTest {
         assertEquals(1, server.requestCount)
     }
 
+    // =========================================================================
+    // createForRegistration
+    // =========================================================================
+
+    @Test
+    fun `createForRegistration returns non-null API instance`() {
+        val api = OctomilApiFactory.createForRegistration(
+            serverUrl = server.url("/").toString().trimEnd('/'),
+            bearerToken = "oct_pub_test_abc123",
+        )
+        assertNotNull(api)
+    }
+
+    @Test
+    fun `createForRegistration attaches bearer token`() {
+        server.enqueue(MockResponse().setResponseCode(200).setBody("""{"status":"ok"}"""))
+
+        val api = OctomilApiFactory.createForRegistration(
+            serverUrl = server.url("/").toString().trimEnd('/'),
+            bearerToken = "oct_pub_test_my_key",
+        )
+
+        kotlinx.coroutines.runBlocking { api.healthCheck() }
+
+        val recorded = server.takeRequest()
+        assertEquals("Bearer oct_pub_test_my_key", recorded.getHeader("Authorization"))
+    }
+
+    @Test
+    fun `createForRegistration does not add X-Org-Id header`() {
+        server.enqueue(MockResponse().setResponseCode(200).setBody("""{"status":"ok"}"""))
+
+        val api = OctomilApiFactory.createForRegistration(
+            serverUrl = server.url("/").toString().trimEnd('/'),
+            bearerToken = "token",
+        )
+
+        kotlinx.coroutines.runBlocking { api.healthCheck() }
+
+        val recorded = server.takeRequest()
+        assertNotNull(recorded.getHeader("Authorization"))
+        // Should NOT have X-Org-Id since it's a pre-registration call
+        assertEquals(null, recorded.getHeader("X-Org-Id"))
+    }
+
+    @Test
+    fun `createForRegistration includes User-Agent`() {
+        server.enqueue(MockResponse().setResponseCode(200).setBody("""{"status":"ok"}"""))
+
+        val api = OctomilApiFactory.createForRegistration(
+            serverUrl = server.url("/").toString().trimEnd('/'),
+            bearerToken = "token",
+        )
+
+        kotlinx.coroutines.runBlocking { api.healthCheck() }
+
+        val recorded = server.takeRequest()
+        val userAgent = recorded.getHeader("User-Agent")
+        assertNotNull(userAgent)
+        assertTrue(userAgent.contains("Octomil-Android-SDK"))
+    }
+
     @Test
     fun `retry interceptor respects Retry-After header`() {
         server.enqueue(MockResponse().setResponseCode(429).setHeader("Retry-After", "1"))

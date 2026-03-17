@@ -1,6 +1,7 @@
 package ai.octomil.sync
 
 import org.junit.Test
+import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
@@ -38,6 +39,7 @@ class WorkManagerSyncTest {
         assertTrue(OctomilSyncWorker.SYNC_TYPE_FULL.isNotEmpty())
         assertTrue(OctomilSyncWorker.SYNC_TYPE_MODEL.isNotEmpty())
         assertTrue(OctomilSyncWorker.SYNC_TYPE_EVENTS.isNotEmpty())
+        assertTrue(OctomilSyncWorker.SYNC_TYPE_DESIRED_STATE.isNotEmpty())
     }
 
     @Test
@@ -46,7 +48,13 @@ class WorkManagerSyncTest {
             OctomilSyncWorker.SYNC_TYPE_FULL,
             OctomilSyncWorker.SYNC_TYPE_MODEL,
             OctomilSyncWorker.SYNC_TYPE_EVENTS,
+            OctomilSyncWorker.SYNC_TYPE_DESIRED_STATE,
         )
-        assertTrue(types.size == 3, "Sync types should be distinct values")
+        assertTrue(types.size == 4, "Sync types should be distinct values")
+    }
+
+    @Test
+    fun `desired state sync type has expected value`() {
+        assertEquals("desired_state", OctomilSyncWorker.SYNC_TYPE_DESIRED_STATE)
     }
 }
