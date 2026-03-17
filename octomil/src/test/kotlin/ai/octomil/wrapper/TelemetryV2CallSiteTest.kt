@@ -2,6 +2,7 @@ package ai.octomil.wrapper
 
 import ai.octomil.api.OctomilApi
 import ai.octomil.api.dto.ModelDownloadResponse
+import ai.octomil.api.dto.ModelResolveResponse
 import ai.octomil.api.dto.AnyValue
 import ai.octomil.api.dto.ExportLogsServiceRequest
 import ai.octomil.api.dto.TelemetryV2Event
@@ -72,6 +73,16 @@ class TelemetryV2CallSiteTest {
 
         coEvery { storage.getServerDeviceId() } returns "device-uuid-123"
 
+        // Mock resolveModelFormat — called between version resolution and download
+        coEvery { api.resolveModelFormat(any(), any(), any()) } returns
+            Response.success(
+                ModelResolveResponse(
+                    modelId = "test-model",
+                    version = "1.0.0",
+                    format = "tensorflow_lite",
+                ),
+            )
+
         // Set up a TelemetryQueue with a capturing sender as the shared instance
         val sender = TelemetrySender { batch -> capturedBatches.add(batch) }
         telemetryQueue = TelemetryQueue(
@@ -126,7 +137,7 @@ class TelemetryV2CallSiteTest {
             )
 
         val result = modelManager.ensureModelAvailable()
-        assertTrue(result.isSuccess)
+        assertTrue(result.isSuccess, "ensureModelAvailable should succeed")
 
         // Flush the telemetry queue to send captured events
         telemetryQueue.flush()

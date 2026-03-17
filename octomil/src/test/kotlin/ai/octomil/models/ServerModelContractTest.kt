@@ -336,14 +336,14 @@ class ServerModelContractTest {
     }
 
     @Test
-    fun `requireValidInput throws IllegalArgumentException when input is invalid`() {
+    fun `requireValidInput throws OctomilException when input is invalid`() {
         val contract = ServerModelContract(
             inputs = listOf(
                 TensorSpec("input_0", "float32", listOf(1, 10)),
             ),
         )
 
-        val exception = assertFailsWith<IllegalArgumentException> {
+        val exception = assertFailsWith<ai.octomil.errors.OctomilException> {
             contract.requireValidInput(FloatArray(5))
         }
         assertTrue(exception.message!!.contains("expected 10"))

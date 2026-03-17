@@ -11,6 +11,7 @@ import ai.octomil.generated.TelemetryEvent
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
@@ -27,35 +28,52 @@ import org.junit.Test
 class ContractConformanceTest {
 
     // =========================================================================
-    // ErrorCode enum — 19 canonical codes
+    // ErrorCode enum — 36 canonical codes
     // =========================================================================
 
     @Test
-    fun `generated ErrorCode has exactly 19 entries`() {
-        assertEquals(19, ContractErrorCode.entries.size)
+    fun `generated ErrorCode has exactly 36 entries`() {
+        assertEquals(36, ContractErrorCode.entries.size)
     }
 
     @Test
     fun `generated ErrorCode contains all canonical codes`() {
         val expected = listOf(
-            "network_unavailable",
-            "request_timeout",
-            "server_error",
             "invalid_api_key",
             "authentication_failed",
             "forbidden",
+            "device_not_registered",
+            "token_expired",
+            "device_revoked",
+            "network_unavailable",
+            "request_timeout",
+            "server_error",
+            "rate_limited",
+            "invalid_input",
+            "unsupported_modality",
+            "context_too_large",
             "model_not_found",
             "model_disabled",
+            "version_not_found",
             "download_failed",
             "checksum_mismatch",
             "insufficient_storage",
+            "insufficient_memory",
             "runtime_unavailable",
+            "accelerator_unavailable",
             "model_load_failed",
             "inference_failed",
-            "insufficient_memory",
-            "rate_limited",
-            "invalid_input",
+            "stream_interrupted",
+            "policy_denied",
+            "cloud_fallback_disallowed",
+            "max_tool_rounds_exceeded",
+            "training_failed",
+            "training_not_supported",
+            "weight_upload_failed",
+            "control_sync_failed",
+            "assignment_not_found",
             "cancelled",
+            "app_backgrounded",
             "unknown",
         )
         val actual = ContractErrorCode.entries.map { it.code }
@@ -63,24 +81,40 @@ class ContractConformanceTest {
     }
 
     @Test
-    fun `every generated ErrorCode maps to a matching OctomilErrorCode`() {
+    fun `every generated ErrorCode maps to a valid OctomilErrorCode`() {
+        // 34 SDK codes map to 36 contract codes: TOKEN_EXPIRED -> AUTHENTICATION_FAILED,
+        // DEVICE_REVOKED -> FORBIDDEN. Verify every contract code resolves to a non-UNKNOWN
+        // SDK code (or to an expected alias).
+        val aliasMap = mapOf(
+            "TOKEN_EXPIRED" to "AUTHENTICATION_FAILED",
+            "DEVICE_REVOKED" to "FORBIDDEN",
+        )
         for (contractCode in ContractErrorCode.entries) {
             val sdkCode = OctomilErrorCode.fromContractCode(contractCode.code)
+            val expectedName = aliasMap[contractCode.name] ?: contractCode.name
             assertEquals(
-                "Contract code '${contractCode.code}' should map to SDK code ${contractCode.name}",
-                contractCode.name,
+                "Contract code '${contractCode.code}' should map to SDK code $expectedName",
+                expectedName,
                 sdkCode.name,
             )
         }
     }
 
     @Test
-    fun `OctomilErrorCode and generated ErrorCode have same entry count`() {
-        assertEquals(
-            "SDK and generated error code enums must have same size",
-            OctomilErrorCode.entries.size,
-            ContractErrorCode.entries.size,
-        )
+    fun `OctomilErrorCode covers all contract codes`() {
+        // SDK has 34 entries; contract has 36 (TOKEN_EXPIRED and DEVICE_REVOKED
+        // are aliased to AUTHENTICATION_FAILED and FORBIDDEN respectively).
+        assertEquals(34, OctomilErrorCode.entries.size)
+        assertEquals(36, ContractErrorCode.entries.size)
+        // Every contract code must resolve to a non-UNKNOWN SDK code
+        for (contractCode in ContractErrorCode.entries) {
+            if (contractCode == ContractErrorCode.UNKNOWN) continue
+            val sdkCode = OctomilErrorCode.fromContractCode(contractCode.code)
+            assertTrue(
+                "Contract code '${contractCode.code}' should not fall back to UNKNOWN",
+                sdkCode != OctomilErrorCode.UNKNOWN,
+            )
+        }
     }
 
     // =========================================================================

@@ -76,7 +76,7 @@ class DeviceInfo(
      * Get CPU architecture (e.g., "arm64-v8a", "armeabi-v7a")
      */
     val cpuArchitecture: String
-        get() = Build.SUPPORTED_ABIS.firstOrNull() ?: "unknown"
+        get() = Build.SUPPORTED_ABIS?.firstOrNull() ?: "unknown"
 
     /**
      * Check if GPU/NPU is available for ML inference
@@ -201,7 +201,7 @@ class DeviceInfo(
      * Get Android version (e.g., "13", "14")
      */
     val osVersion: String
-        get() = Build.VERSION.RELEASE
+        get() = Build.VERSION.RELEASE ?: "unknown"
 
     /**
      * Get user's locale
