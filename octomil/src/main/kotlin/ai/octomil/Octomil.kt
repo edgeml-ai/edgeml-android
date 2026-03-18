@@ -37,12 +37,19 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
 import timber.log.Timber
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import java.util.TimeZone
+import java.util.concurrent.TimeUnit
 import kotlin.math.min
 import kotlin.random.Random
 
@@ -66,9 +73,23 @@ object Octomil {
     private var _deviceContext: DeviceContext? = null
     private var _manifest: AppManifest? = null
     private var _monitoring: MonitoringConfig = MonitoringConfig()
+    private var _serverUrl: String = "https://api.octomil.com"
     private var heartbeatJob: Job? = null
     private var _control: ControlPlaneClient? = null
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
+    private val benchmarkJson = Json {
+        encodeDefaults = true
+        explicitNulls = false
+    }
+
+    private val benchmarkHttpClient by lazy {
+        OkHttpClient.Builder()
+            .connectTimeout(15, TimeUnit.SECONDS)
+            .readTimeout(15, TimeUnit.SECONDS)
+            .writeTimeout(15, TimeUnit.SECONDS)
+            .build()
+    }
 
     /** Device context for registration state and auth headers. Null if not configured. */
     val deviceContext: DeviceContext? get() = _deviceContext
@@ -123,6 +144,7 @@ object Octomil {
         init(context)
         _manifest = manifest
         _monitoring = monitoring
+        _serverUrl = serverUrl
 
         // Seed the persistent install ID early so TelemetryQueue picks it up
         ai.octomil.utils.InstallId.getOrCreate(context.applicationContext)
@@ -376,9 +398,10 @@ object Octomil {
     /**
      * Deploy a model for inference with automatic engine detection.
      *
-     * When [pairingCode] and [api] are both provided, benchmark results from warmup
-     * are automatically submitted to the server. This replaces the old pattern of
-     * benchmarking during the pairing flow.
+     * When [pairingCode] is provided and [submitBenchmark] is true (the default),
+     * benchmark results from warmup are automatically submitted to the server via
+     * a lightweight HTTP POST. No API client is required — the endpoint is
+     * unauthenticated.
      *
      * @param context Android context.
      * @param modelPath Asset filename (e.g., "mobilenet.tflite") or absolute file path.
@@ -387,7 +410,7 @@ object Octomil {
      * @param options Hardware acceleration options.
      * @param benchmark Whether to run warmup benchmarks. Defaults to true.
      * @param pairingCode Optional pairing code for benchmark submission.
-     * @param api Optional API client for benchmark submission.
+     * @param submitBenchmark Whether to submit benchmark results to the server. Defaults to true.
      * @return A [DeployedModel] ready for inference.
      */
     suspend fun deploy(
@@ -398,7 +421,7 @@ object Octomil {
         options: LocalModelOptions = LocalModelOptions(),
         benchmark: Boolean = true,
         pairingCode: String? = null,
-        api: ai.octomil.api.OctomilApi? = null,
+        submitBenchmark: Boolean = true,
     ): DeployedModel {
         val resolvedName = name ?: modelPath.substringBeforeLast(".").substringAfterLast("/")
         val localModel = loadModel(context, modelPath, options)
@@ -409,7 +432,9 @@ object Octomil {
         )
         if (benchmark) {
             deployed.warmupResult = localModel.warmup()
-            submitBenchmarkIfNeeded(context, resolvedName, deployed.warmupResult, pairingCode, api)
+            if (submitBenchmark) {
+                submitBenchmarkIfNeeded(context, resolvedName, deployed.warmupResult, pairingCode)
+            }
         }
         return deployed
     }
@@ -417,9 +442,10 @@ object Octomil {
     /**
      * Deploy a model for inference with automatic engine detection.
      *
-     * When [pairingCode] and [api] are both provided, benchmark results from warmup
-     * are automatically submitted to the server. This replaces the old pattern of
-     * benchmarking during the pairing flow.
+     * When [pairingCode] is provided and [submitBenchmark] is true (the default),
+     * benchmark results from warmup are automatically submitted to the server via
+     * a lightweight HTTP POST. No API client is required — the endpoint is
+     * unauthenticated.
      *
      * @param context Android context.
      * @param modelFile Path to the model file on disk.
@@ -428,7 +454,7 @@ object Octomil {
      * @param options Hardware acceleration options.
      * @param benchmark Whether to run warmup benchmarks. Defaults to true.
      * @param pairingCode Optional pairing code for benchmark submission.
-     * @param api Optional API client for benchmark submission.
+     * @param submitBenchmark Whether to submit benchmark results to the server. Defaults to true.
      * @return A [DeployedModel] ready for inference.
      */
     suspend fun deploy(
@@ -439,7 +465,7 @@ object Octomil {
         options: LocalModelOptions = LocalModelOptions(),
         benchmark: Boolean = true,
         pairingCode: String? = null,
-        api: ai.octomil.api.OctomilApi? = null,
+        submitBenchmark: Boolean = true,
     ): DeployedModel {
         val resolvedName = name ?: modelFile.nameWithoutExtension
         val localModel = loadModel(context, modelFile, options)
@@ -450,26 +476,28 @@ object Octomil {
         )
         if (benchmark) {
             deployed.warmupResult = localModel.warmup()
-            submitBenchmarkIfNeeded(context, resolvedName, deployed.warmupResult, pairingCode, api)
+            if (submitBenchmark) {
+                submitBenchmarkIfNeeded(context, resolvedName, deployed.warmupResult, pairingCode)
+            }
         }
         return deployed
     }
 
     /**
-     * Submit benchmark results to the server if a pairing code and API client are available.
+     * Submit benchmark results to the server if a pairing code is available.
      *
      * Converts the [WarmupResult] from the engine layer into a [BenchmarkReport] and
-     * submits it via the pairing benchmark endpoint. Submission is non-fatal: errors
-     * are logged but do not propagate.
+     * submits it via a direct HTTP POST to the unauthenticated pairing benchmark
+     * endpoint. No API client is required. Submission is non-fatal: all exceptions
+     * are caught and logged as warnings.
      */
-    private suspend fun submitBenchmarkIfNeeded(
+    private fun submitBenchmarkIfNeeded(
         context: Context,
         modelName: String,
         warmupResult: ai.octomil.training.WarmupResult?,
         pairingCode: String?,
-        api: ai.octomil.api.OctomilApi?,
     ) {
-        if (pairingCode == null || api == null || warmupResult == null) return
+        if (pairingCode == null || warmupResult == null) return
 
         try {
             val deviceInfo = ai.octomil.pairing.DeviceCapabilities.collect(context)
@@ -498,13 +526,24 @@ object Octomil {
                 disabledDelegates = warmupResult.disabledDelegates.ifEmpty { null },
             )
 
+            val url = "${_serverUrl.trimEnd('/')}/api/v1/deploy/pair/$pairingCode/benchmark"
+            val body = benchmarkJson.encodeToString(report)
+                .toRequestBody("application/json".toMediaType())
+            val request = Request.Builder()
+                .url(url)
+                .post(body)
+                .header("Content-Type", "application/json")
+                .header("User-Agent", "Octomil-Android-SDK/${BuildConfig.OCTOMIL_VERSION}")
+                .build()
+
             Timber.d("Submitting benchmark for pairing code: %s", pairingCode)
-            val response = api.submitBenchmark(pairingCode, report)
+            val response = benchmarkHttpClient.newCall(request).execute()
             if (!response.isSuccessful) {
-                Timber.w("Failed to submit benchmark: HTTP %d", response.code())
+                Timber.w("Failed to submit benchmark: HTTP %d", response.code)
             } else {
                 Timber.i("Benchmark submitted successfully for pairing code: %s", pairingCode)
             }
+            response.close()
         } catch (e: Exception) {
             Timber.w(e, "Non-fatal: failed to submit benchmark for pairing code: %s", pairingCode)
         }
