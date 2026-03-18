@@ -672,7 +672,7 @@ class OctomilClient private constructor(
      */
     fun predictStream(
         input: Any,
-        modality: ai.octomil.runtime.engines.tflite.Modality,
+        modality: ai.octomil.generated.Modality,
         engine: ai.octomil.runtime.engines.tflite.StreamingInferenceEngine? = null,
         modelId: String? = null,
         version: String? = null,
@@ -701,13 +701,13 @@ class OctomilClient private constructor(
                 timestampMs = sessionStart,
                 modelId = resolvedModelId,
                 version = resolvedVersion,
-                modality = modality.value,
+                modality = modality.code,
                 sessionId = sessionId,
             )
 
             eventQueue.addTrainingEvent(
                 type = ai.octomil.sync.EventTypes.GENERATION_STARTED,
-                metadata = mapOf("session_id" to sessionId, "modality" to modality.value),
+                metadata = mapOf("session_id" to sessionId, "modality" to modality.code),
             )
 
             try {
@@ -763,7 +763,7 @@ class OctomilClient private constructor(
                 timestampMs = sessionEnd,
                 modelId = resolvedModelId,
                 version = resolvedVersion,
-                modality = modality.value,
+                modality = modality.code,
                 sessionId = sessionId,
                 extraAttrs = TelemetryAttributes.of(
                     "inference.ttfc_ms" to ttfcMs,
@@ -777,7 +777,7 @@ class OctomilClient private constructor(
 
     private fun resolveStreamingEngine(
         engine: ai.octomil.runtime.engines.tflite.StreamingInferenceEngine?,
-        modality: ai.octomil.runtime.engines.tflite.Modality,
+        modality: ai.octomil.generated.Modality,
     ): ai.octomil.runtime.engines.tflite.StreamingInferenceEngine =
         engine ?: ai.octomil.runtime.engines.tflite.EngineRegistry.resolve(modality, context = context)
 

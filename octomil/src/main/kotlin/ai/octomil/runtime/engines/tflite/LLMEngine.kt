@@ -1,5 +1,6 @@
 package ai.octomil.runtime.engines.tflite
 
+import ai.octomil.generated.Modality
 import android.content.Context
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow

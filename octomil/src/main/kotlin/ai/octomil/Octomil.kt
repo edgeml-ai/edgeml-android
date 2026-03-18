@@ -13,7 +13,6 @@ import ai.octomil.runtime.core.ModelRuntimeRegistry
 import ai.octomil.runtime.engines.llama.LlamaCppRuntime
 import ai.octomil.runtime.engines.tflite.EngineRegistry
 import ai.octomil.runtime.engines.tflite.LLMRuntimeAdapter
-import ai.octomil.runtime.engines.tflite.Modality
 import ai.octomil.api.OctomilApiFactory
 import ai.octomil.api.dto.DeviceCapabilities
 import ai.octomil.api.dto.DeviceRegistrationRequest
@@ -99,6 +98,8 @@ object Octomil {
      *             id = "phi-4-mini",
      *             capability = ModelCapability.CHAT,
      *             delivery = DeliveryMode.MANAGED,
+     *             inputModalities = listOf(Modality.TEXT),
+     *             outputModalities = listOf(Modality.TEXT),
      *             routingPolicy = RoutingPolicy.LOCAL_FIRST,
      *         ),
      *     ),

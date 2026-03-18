@@ -1,5 +1,6 @@
 package ai.octomil.runtime.engines.tflite
 
+import ai.octomil.generated.Modality
 import org.junit.Test
 import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals

@@ -4,6 +4,8 @@ import ai.octomil.chat.LLMRuntime
 import ai.octomil.chat.LLMRuntimeRegistry
 import ai.octomil.errors.OctomilErrorCode
 import ai.octomil.errors.OctomilException
+import ai.octomil.generated.ArtifactResourceKind
+import ai.octomil.manifest.ManifestResource
 import ai.octomil.runtime.core.ModelRuntime
 import ai.octomil.runtime.core.RuntimeCapabilities
 import ai.octomil.runtime.core.RuntimeChunk
@@ -15,19 +17,34 @@ import kotlinx.coroutines.flow.Flow
 import java.io.File
 
 /**
- * [ModelRuntime] backed by a local model file.
+ * [ModelRuntime] backed by local model files resolved via resource bindings.
  *
- * Delegates engine selection to [LLMRuntimeRegistry] — this class does not
- * know or care whether the file is GGUF, TFLite, ONNX, or anything else.
- * The registry's factory inspects the file and returns the appropriate
- * [LLMRuntime] implementation.
+ * When constructed with [resourceBindings], file resolution uses the explicit
+ * kind-to-path mapping from the manifest rather than filename heuristics.
+ * This supports multi-resource packages (weights + projector + sidecars).
  *
- * If no factory is registered (or it returns null for this file), all calls
- * throw [OctomilException] with [OctomilErrorCode.RUNTIME_UNAVAILABLE].
+ * When constructed with just a [modelFile] (legacy path), delegates engine
+ * selection to [LLMRuntimeRegistry].
  */
 class LocalFileModelRuntime(
     private val modelFile: File,
+    private val resourceBindings: Map<ArtifactResourceKind, File> = emptyMap(),
+    private val engineConfig: Map<String, String> = emptyMap(),
 ) : ModelRuntime {
+
+    /**
+     * Construct from manifest resources, resolving URIs to local files
+     * within the given [packageDir].
+     */
+    constructor(
+        packageDir: File,
+        resources: List<ManifestResource>,
+        engineConfig: Map<String, String> = emptyMap(),
+    ) : this(
+        modelFile = resolveWeightsFile(packageDir, resources),
+        resourceBindings = resolveBindings(packageDir, resources),
+        engineConfig = engineConfig,
+    )
 
     private val delegate: ModelRuntime by lazy {
         val llm = LLMRuntimeRegistry.factory?.invoke(modelFile)
@@ -49,5 +66,39 @@ class LocalFileModelRuntime(
 
     override fun close() {
         delegate.close()
+    }
+
+    /** Get the resolved file for a specific resource kind, or null. */
+    fun fileForKind(kind: ArtifactResourceKind): File? =
+        resourceBindings[kind]
+
+    /** The engine configuration passed through from the manifest. */
+    fun engineConfig(): Map<String, String> = engineConfig
+
+    companion object {
+        private fun resolveWeightsFile(
+            packageDir: File,
+            resources: List<ManifestResource>,
+        ): File {
+            val weightsResource = resources.firstOrNull { it.kind == ArtifactResourceKind.WEIGHTS }
+                ?: throw OctomilException(
+                    OctomilErrorCode.MODEL_NOT_FOUND,
+                    "No weights resource in package resources",
+                )
+            val path = weightsResource.path ?: weightsResource.uri.substringAfterLast("/")
+            return File(packageDir, path)
+        }
+
+        private fun resolveBindings(
+            packageDir: File,
+            resources: List<ManifestResource>,
+        ): Map<ArtifactResourceKind, File> {
+            return resources
+                .sortedBy { it.loadOrder ?: Int.MAX_VALUE }
+                .associate { resource ->
+                    val path = resource.path ?: resource.uri.substringAfterLast("/")
+                    resource.kind to File(packageDir, path)
+                }
+        }
     }
 }
