@@ -120,6 +120,46 @@ class DesiredStateDtoTest {
         assertNull(artifact.format)
     }
 
+    @Test
+    fun `DesiredArtifact roundtrips with model_id, model_version, activation_policy`() {
+        val artifact = DesiredArtifact(
+            artifactId = "art-1",
+            version = "3.0",
+            downloadUrl = "https://cdn.example.com/art.bin",
+            checksum = "sha256:def456",
+            sizeBytes = 10_000,
+            format = "onnx",
+            modelId = "classifier",
+            modelVersion = "2.1.0",
+            activationPolicy = "next_launch",
+        )
+
+        val serialized = json.encodeToString(artifact)
+        val deserialized = json.decodeFromString<DesiredArtifact>(serialized)
+
+        assertEquals("classifier", deserialized.modelId)
+        assertEquals("2.1.0", deserialized.modelVersion)
+        assertEquals("next_launch", deserialized.activationPolicy)
+    }
+
+    @Test
+    fun `DesiredArtifact handles missing new fields gracefully`() {
+        val jsonStr = """
+            {
+                "artifact_id": "art-1",
+                "version": "1.0",
+                "download_url": "https://cdn.example.com/art.bin",
+                "checksum": "abc",
+                "size_bytes": 1000
+            }
+        """.trimIndent()
+
+        val artifact = json.decodeFromString<DesiredArtifact>(jsonStr)
+        assertNull(artifact.modelId)
+        assertNull(artifact.modelVersion)
+        assertNull(artifact.activationPolicy)
+    }
+
     // =========================================================================
     // FederationOffer
     // =========================================================================
@@ -223,6 +263,38 @@ class DesiredStateDtoTest {
         assertEquals("error", deserialized.status)
         assertEquals("download_http_500", deserialized.errorCode)
         assertNull(deserialized.bytesDownloaded)
+    }
+
+    @Test
+    fun `ArtifactStatusEntry roundtrips with model_version and active_version`() {
+        val entry = ArtifactStatusEntry(
+            artifactId = "art-1",
+            status = "active",
+            bytesDownloaded = 5_000_000,
+            totalBytes = 5_000_000,
+            modelVersion = "2.1.0",
+            activeVersion = "2.1.0",
+        )
+
+        val serialized = json.encodeToString(entry)
+        val deserialized = json.decodeFromString<ArtifactStatusEntry>(serialized)
+
+        assertEquals("2.1.0", deserialized.modelVersion)
+        assertEquals("2.1.0", deserialized.activeVersion)
+    }
+
+    @Test
+    fun `ArtifactStatusEntry handles missing version fields`() {
+        val jsonStr = """
+            {
+                "artifact_id": "art-1",
+                "status": "current"
+            }
+        """.trimIndent()
+
+        val entry = json.decodeFromString<ArtifactStatusEntry>(jsonStr)
+        assertNull(entry.modelVersion)
+        assertNull(entry.activeVersion)
     }
 
     // =========================================================================
