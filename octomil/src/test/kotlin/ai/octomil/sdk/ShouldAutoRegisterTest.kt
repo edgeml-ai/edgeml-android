@@ -1,6 +1,7 @@
 package ai.octomil.sdk
 
 import ai.octomil.generated.DeliveryMode
+import ai.octomil.generated.Modality
 import ai.octomil.generated.ModelCapability
 import ai.octomil.manifest.AppManifest
 import ai.octomil.manifest.AppModelEntry
@@ -39,6 +40,8 @@ class ShouldAutoRegisterTest {
                 id = "local-model",
                 capability = ModelCapability.CHAT,
                 delivery = DeliveryMode.BUNDLED,
+                inputModalities = listOf(Modality.TEXT),
+                outputModalities = listOf(Modality.TEXT),
             ),
         ),
     )
@@ -49,6 +52,8 @@ class ShouldAutoRegisterTest {
                 id = "managed-model",
                 capability = ModelCapability.CHAT,
                 delivery = DeliveryMode.MANAGED,
+                inputModalities = listOf(Modality.TEXT),
+                outputModalities = listOf(Modality.TEXT),
             ),
         ),
     )
@@ -59,6 +64,8 @@ class ShouldAutoRegisterTest {
                 id = "cloud-model",
                 capability = ModelCapability.CHAT,
                 delivery = DeliveryMode.CLOUD,
+                inputModalities = listOf(Modality.TEXT),
+                outputModalities = listOf(Modality.TEXT),
             ),
         ),
     )

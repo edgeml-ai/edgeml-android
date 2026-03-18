@@ -1,6 +1,7 @@
 package ai.octomil.manifest
 
 import ai.octomil.Octomil
+import ai.octomil.generated.ArtifactResourceKind
 import ai.octomil.generated.DeliveryMode
 import ai.octomil.generated.ModelCapability
 import ai.octomil.runtime.core.ModelRuntime
@@ -18,7 +19,9 @@ import java.io.File
  *
  * For each [AppModelEntry] in the manifest:
  * - **BUNDLED**: copies from assets, registers a [LocalFileModelRuntime]
- * - **MANAGED**: queues download via [ModelReadinessManager], pre-wires a [RouterModelRuntime]
+ *   with resource bindings and engine config
+ * - **MANAGED**: queues download via [ModelReadinessManager], pre-wires a
+ *   [RouterModelRuntime] that resolves resource bindings at load time
  * - **CLOUD**: registers a [CloudModelRuntime]
  *
  * After [bootstrap], callers resolve runtimes by capability rather than by model ID:
@@ -83,7 +86,15 @@ class ModelCatalogService(
             ?: error("bundledPath required for BUNDLED delivery: ${entry.id}")
 
         val file = Octomil.copyAssetToCache(context, assetPath)
-        return LocalFileModelRuntime(file)
+
+        // Build resource bindings from manifest resources
+        val bindings = buildResourceBindings(entry, file.parentFile ?: file)
+
+        return LocalFileModelRuntime(
+            modelFile = file,
+            resourceBindings = bindings,
+            engineConfig = entry.engineConfig,
+        )
     }
 
     private suspend fun bootstrapManaged(entry: AppModelEntry): ModelRuntime {
@@ -91,9 +102,14 @@ class ModelCatalogService(
         readiness.enqueue(entry)
 
         // Pre-wire a router: local when ready, cloud fallback based on policy
-        val localFactory = localFactory@ { _: String ->
+        val localFactory = localFactory@{ _: String ->
             val file = readiness.resolvedFile(entry.capability) ?: return@localFactory null
-            LocalFileModelRuntime(file)
+            val bindings = buildResourceBindings(entry, file.parentFile ?: file)
+            LocalFileModelRuntime(
+                modelFile = file,
+                resourceBindings = bindings,
+                engineConfig = entry.engineConfig,
+            )
         }
 
         val cloudFactory = when (entry.effectiveRoutingPolicy) {
@@ -112,6 +128,22 @@ class ModelCatalogService(
 
     private fun bootstrapCloud(entry: AppModelEntry): ModelRuntime {
         return CloudModelRuntime(serverUrl, apiKey, entry.id)
+    }
+
+    /**
+     * Build a resource kind -> file mapping from the entry's manifest resources.
+     * Falls back to scanning the package directory if no resources are declared.
+     */
+    private fun buildResourceBindings(
+        entry: AppModelEntry,
+        packageDir: File,
+    ): Map<ArtifactResourceKind, File> {
+        if (entry.resources.isEmpty()) return emptyMap()
+
+        return entry.resources.associate { resource ->
+            val path = resource.path ?: resource.uri.substringAfterLast("/")
+            resource.kind to File(packageDir, path)
+        }
     }
 
     private fun toInternalRoutingPolicy(

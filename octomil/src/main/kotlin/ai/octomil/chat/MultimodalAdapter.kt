@@ -1,5 +1,6 @@
 package ai.octomil.chat
 
+import ai.octomil.generated.Modality
 import ai.octomil.responses.ContentPart
 
 /**
@@ -16,5 +17,5 @@ interface MultimodalAdapter {
     suspend fun preparePrompt(parts: List<ContentPart>): String
 
     /** Input modalities this adapter can handle. */
-    val supportedModalities: Set<String>
+    val supportedModalities: Set<Modality>
 }
