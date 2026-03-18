@@ -865,6 +865,12 @@ data class DesiredArtifact(
     val sizeBytes: Long,
     @SerialName("format")
     val format: String? = null,
+    @SerialName("model_id")
+    val modelId: String? = null,
+    @SerialName("model_version")
+    val modelVersion: String? = null,
+    @SerialName("activation_policy")
+    val activationPolicy: String? = null,
 )
 
 /**
@@ -914,4 +920,8 @@ data class ArtifactStatusEntry(
     val totalBytes: Long? = null,
     @SerialName("error_code")
     val errorCode: String? = null,
+    @SerialName("model_version")
+    val modelVersion: String? = null,
+    @SerialName("active_version")
+    val activeVersion: String? = null,
 )

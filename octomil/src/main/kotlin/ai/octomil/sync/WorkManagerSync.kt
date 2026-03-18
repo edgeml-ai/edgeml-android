@@ -164,24 +164,35 @@ class OctomilSyncWorker(
 
         val artifactStatuses = mutableListOf<ArtifactStatusEntry>()
         val artifactCacheDir = java.io.File(applicationContext.cacheDir, "octomil_artifacts").apply { mkdirs() }
+        val metadataStore = ArtifactMetadataStore(artifactCacheDir)
+        val activationManager = ActivationManager(metadataStore)
 
-        // Download missing or outdated artifacts
         for (artifact in desiredState.artifacts) {
-            val localFile = java.io.File(artifactCacheDir, "${artifact.artifactId}_${artifact.version}")
-            if (localFile.exists() && localFile.length() == artifact.sizeBytes) {
+            val modelId = artifact.modelId ?: artifact.artifactId
+            val desiredVersion = artifact.modelVersion ?: artifact.version
+            val policy = ActivationPolicy.fromCode(artifact.activationPolicy)
+
+            // Version-based comparison: skip download if installed version matches desired
+            val installedVersion = metadataStore.installedVersion(modelId)
+            if (installedVersion != null && installedVersion == desiredVersion) {
+                val activeEntry = metadataStore.activeEntry(modelId)
                 artifactStatuses.add(
                     ArtifactStatusEntry(
                         artifactId = artifact.artifactId,
                         status = "current",
                         bytesDownloaded = artifact.sizeBytes,
                         totalBytes = artifact.sizeBytes,
+                        modelVersion = desiredVersion,
+                        activeVersion = activeEntry?.modelVersion,
                     ),
                 )
                 continue
             }
 
+            val localFile = java.io.File(artifactCacheDir, "${artifact.artifactId}_${artifact.version}")
+
             try {
-                Timber.d("Downloading artifact ${artifact.artifactId} v${artifact.version}")
+                Timber.d("Downloading artifact ${artifact.artifactId} v${artifact.version} (model $modelId desired=$desiredVersion)")
                 val response = api.downloadModelFile(artifact.downloadUrl)
                 if (response.isSuccessful) {
                     response.body()?.let { body ->
@@ -196,20 +207,73 @@ class OctomilSyncWorker(
                     if (artifact.checksum.isNotEmpty() && actualChecksum != artifact.checksum) {
                         Timber.w("Checksum mismatch for ${artifact.artifactId}: expected=${artifact.checksum}, actual=$actualChecksum")
                         localFile.delete()
+                        metadataStore.markFailed(artifact.artifactId, artifact.version, "checksum_mismatch")
                         artifactStatuses.add(
                             ArtifactStatusEntry(
                                 artifactId = artifact.artifactId,
                                 status = "error",
                                 errorCode = "checksum_mismatch",
+                                modelVersion = desiredVersion,
                             ),
                         )
-                    } else {
+                        continue
+                    }
+
+                    // Record verified artifact in metadata store
+                    metadataStore.upsert(
+                        ArtifactMetadataEntry(
+                            artifactId = artifact.artifactId,
+                            artifactVersion = artifact.version,
+                            modelId = modelId,
+                            modelVersion = desiredVersion,
+                            installedAt = System.currentTimeMillis(),
+                            status = ArtifactSyncStatus.VERIFIED,
+                            filePath = localFile.absolutePath,
+                            checksum = actualChecksum,
+                            sizeBytes = localFile.length(),
+                        ),
+                    )
+
+                    // Activate according to policy
+                    val activationResult = activationManager.activate(
+                        modelId = modelId,
+                        artifactId = artifact.artifactId,
+                        artifactVersion = artifact.version,
+                        policy = policy,
+                    )
+
+                    if (!activationResult.success) {
+                        // Activation failed -- rollback to previous version
+                        val rollbackResult = activationManager.rollback(
+                            modelId = modelId,
+                            failedArtifactId = artifact.artifactId,
+                            failedVersion = artifact.version,
+                            errorCode = activationResult.errorCode ?: "activation_failed",
+                        )
                         artifactStatuses.add(
                             ArtifactStatusEntry(
                                 artifactId = artifact.artifactId,
-                                status = "current",
+                                status = "error",
+                                errorCode = activationResult.errorCode ?: "activation_failed",
+                                modelVersion = desiredVersion,
+                                activeVersion = rollbackResult.previousVersion,
+                            ),
+                        )
+                    } else {
+                        val activeEntry = metadataStore.activeEntry(modelId)
+                        val statusCode = when (policy) {
+                            ActivationPolicy.IMMEDIATE -> "active"
+                            ActivationPolicy.NEXT_LAUNCH -> "staged"
+                            ActivationPolicy.MANUAL -> "staged"
+                        }
+                        artifactStatuses.add(
+                            ArtifactStatusEntry(
+                                artifactId = artifact.artifactId,
+                                status = statusCode,
                                 bytesDownloaded = localFile.length(),
                                 totalBytes = artifact.sizeBytes,
+                                modelVersion = desiredVersion,
+                                activeVersion = activeEntry?.modelVersion,
                             ),
                         )
                     }
@@ -219,6 +283,7 @@ class OctomilSyncWorker(
                             artifactId = artifact.artifactId,
                             status = "error",
                             errorCode = "download_http_${response.code()}",
+                            modelVersion = desiredVersion,
                         ),
                     )
                 }
@@ -229,13 +294,18 @@ class OctomilSyncWorker(
                         artifactId = artifact.artifactId,
                         status = "error",
                         errorCode = "download_exception",
+                        modelVersion = desiredVersion,
                     ),
                 )
             }
         }
 
-        // GC eligible artifacts
+        // GC eligible artifacts: remove from metadata store and delete files
         for (gcId in desiredState.gcEligibleArtifactIds) {
+            val gcEntries = metadataStore.allEntries().filter { it.artifactId == gcId }
+            for (entry in gcEntries) {
+                metadataStore.remove(entry.artifactId, entry.artifactVersion)
+            }
             val gcFiles = artifactCacheDir.listFiles { _, name -> name.startsWith("${gcId}_") }
             gcFiles?.forEach { file ->
                 Timber.d("GC artifact: ${file.name}")
