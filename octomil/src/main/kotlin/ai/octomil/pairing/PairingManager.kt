@@ -16,13 +16,14 @@ import java.util.concurrent.TimeUnit
  * Manages the device pairing flow for QR-code-initiated deployments.
  *
  * The pairing flow connects a physical device to the Octomil dashboard so a model
- * can be deployed and benchmarked on real hardware. The full sequence is:
+ * can be downloaded for on-device inference. The full sequence is:
  *
  * 1. **Connect** — Device scans QR code, sends hardware metadata to the server.
  * 2. **Wait** — Poll for deployment; the server selects the optimal model variant.
- * 3. **Download** — Fetch the model binary from the pre-signed URL.
- * 4. **Benchmark** — Run inference benchmarks on-device.
- * 5. **Report** — Submit benchmark results back to the server.
+ * 3. **Download** — Fetch the model binary from the pre-signed URL and persist it.
+ *
+ * Benchmarking and benchmark submission now happen at model load time via
+ * [ai.octomil.Octomil.deploy], not during pairing.
  *
  * ## Usage
  *
@@ -30,27 +31,31 @@ import java.util.concurrent.TimeUnit
  * val pairingManager = PairingManager(api, context)
  *
  * // Full flow in one call:
- * val report = pairingManager.pair("ABC123")
+ * val result = pairingManager.pair("ABC123")
  *
- * // Or step by step:
- * val session = pairingManager.connect("ABC123")
- * val deployment = pairingManager.waitForDeployment("ABC123")
- * val report = pairingManager.executeDeployment(deployment)
+ * // Then load the model for inference (benchmarks run here):
+ * val deployed = Octomil.deploy(context, File(result.modelFilePath!!), pairingCode = "ABC123", api = api)
  * ```
  */
 /**
- * Result of executing a deployment: benchmark report plus the persisted model file.
+ * Result of executing a deployment: the persisted model file path and deployment metadata.
+ *
+ * Benchmarking is no longer performed during pairing. Instead, benchmarks run when the
+ * model is loaded for inference via [ai.octomil.Octomil.deploy], which submits results
+ * to the server if a pairing code is provided.
  */
 data class DeploymentResult(
-    val report: BenchmarkReport,
     /** Path to the model file persisted on disk for inference. Null if persistence failed. */
     val modelFilePath: String?,
+    /** The model name from the deployment. */
+    val modelName: String,
+    /** The model version from the deployment. */
+    val modelVersion: String,
 )
 
 class PairingManager(
     private val api: OctomilApi,
     private val context: Context,
-    private val benchmarkRunner: BenchmarkRunner = BenchmarkRunner(context),
     private val pollIntervalMs: Long = DEFAULT_POLL_INTERVAL_MS,
 ) {
     private val modelCacheDir = File(context.cacheDir, "octomil_pairing")
@@ -231,11 +236,14 @@ class PairingManager(
     }
 
     /**
-     * Download the model, run benchmarks, and report results.
+     * Download the model and persist it for inference.
+     *
+     * Benchmarking is no longer performed here. Instead, benchmarks run when the
+     * model is loaded for inference via [ai.octomil.Octomil.deploy].
      *
      * @param deployment Deployment information from [waitForDeployment].
-     * @return Benchmark report with device performance metrics.
-     * @throws PairingException on download or benchmark failure.
+     * @return Deployment result with the persisted model file path.
+     * @throws PairingException on download failure.
      */
     suspend fun executeDeployment(deployment: DeploymentInfo): DeploymentResult {
         Timber.i(
@@ -254,19 +262,19 @@ class PairingManager(
         val modelFile = downloadModel(deployment)
 
         try {
-            // Run benchmarks
-            val deviceInfo = DeviceCapabilities.collect(context)
-            val report = benchmarkRunner.run(modelFile, deployment.modelName, deviceInfo)
-
-            Timber.i(
-                "Benchmark complete: p50=%.1fms p95=%.1fms tps=%.1f",
-                report.p50LatencyMs, report.p95LatencyMs, report.tokensPerSecond,
-            )
-
             // Persist model to stable location for inference
             val persistedFile = persistModel(modelFile, deployment)
 
-            return DeploymentResult(report = report, modelFilePath = persistedFile?.absolutePath)
+            Timber.i(
+                "Model downloaded and persisted: %s",
+                persistedFile?.absolutePath ?: "persistence failed",
+            )
+
+            return DeploymentResult(
+                modelFilePath = persistedFile?.absolutePath,
+                modelName = deployment.modelName,
+                modelVersion = deployment.modelVersion,
+            )
         } catch (e: Exception) {
             // Clean up on failure
             if (modelFile.exists()) modelFile.delete()
@@ -275,7 +283,10 @@ class PairingManager(
     }
 
     /**
-     * Download multiple resources, persist them in load_order, and benchmark the primary model file.
+     * Download multiple resources and persist them in load_order.
+     *
+     * Benchmarking is no longer performed here. Instead, benchmarks run when the
+     * model is loaded for inference via [ai.octomil.Octomil.deploy].
      */
     private suspend fun executeMultiResourceDeployment(
         deployment: DeploymentInfo,
@@ -312,19 +323,15 @@ class PairingManager(
             val primaryResource = sorted.firstOrNull { it.kind == "model" } ?: sorted.first()
             val primaryFile = File(modelDir, primaryResource.filename)
 
-            // Run benchmarks on the primary model file
-            val deviceInfo = DeviceCapabilities.collect(context)
-            val report = benchmarkRunner.run(primaryFile, deployment.modelName, deviceInfo)
-
             Timber.i(
-                "Multi-resource benchmark complete: p50=%.1fms p95=%.1fms tps=%.1f (%d files)",
-                report.p50LatencyMs, report.p95LatencyMs, report.tokensPerSecond,
-                downloadedFiles.size,
+                "Multi-resource download complete: %d files, %d bytes total",
+                downloadedFiles.size, totalBytesDownloaded,
             )
 
             return DeploymentResult(
-                report = report,
                 modelFilePath = primaryFile.absolutePath,
+                modelName = deployment.modelName,
+                modelVersion = deployment.modelVersion,
             )
         } catch (e: Exception) {
             // Clean up all downloaded files on failure
@@ -384,13 +391,15 @@ class PairingManager(
     }
 
     /**
-     * Full pairing flow: connect, wait for deployment, download, benchmark, report.
+     * Full pairing flow: connect, wait for deployment, download, and persist.
      *
      * This is the recommended single-call API for the complete pairing sequence.
+     * Benchmarking and benchmark submission now happen when the model is loaded
+     * for inference via [ai.octomil.Octomil.deploy] with a pairing code.
      *
      * @param code Pairing code from QR scan.
      * @param timeoutMs Maximum time to wait for deployment (default: 5 minutes).
-     * @return Benchmark report submitted to the server.
+     * @return Deployment result with persisted model file path.
      * @throws PairingException on any failure in the flow.
      */
     suspend fun pair(
@@ -405,11 +414,8 @@ class PairingManager(
         // Step 2: Wait for deployment
         val deployment = waitForDeployment(code, timeoutMs)
 
-        // Step 3: Download + benchmark + persist
+        // Step 3: Download + persist
         val result = executeDeployment(deployment)
-
-        // Step 4: Report results
-        submitBenchmark(code, result.report)
 
         Timber.i("Pairing flow complete for code: %s", code)
         return result
@@ -418,21 +424,6 @@ class PairingManager(
     // =========================================================================
     // Internal
     // =========================================================================
-
-    /**
-     * Submit benchmark results to the server.
-     */
-    internal suspend fun submitBenchmark(code: String, report: BenchmarkReport) {
-        Timber.d("Submitting benchmark for pairing code: %s", code)
-
-        val response = api.submitBenchmark(code, report)
-        if (!response.isSuccessful) {
-            Timber.w("Failed to submit benchmark: HTTP %d", response.code())
-            // Non-fatal: the benchmark ran successfully even if reporting failed
-        } else {
-            Timber.i("Benchmark submitted successfully")
-        }
-    }
 
     /**
      * Download model from pre-signed URL to a temporary file.
