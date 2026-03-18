@@ -163,21 +163,25 @@ class PairingManager(
 
             when (session.status) {
                 PairingStatus.DEPLOYING, PairingStatus.DONE -> {
-                    // Model is ready
+                    // Multi-resource deployments may omit download_url
+                    val hasResources = !session.resources.isNullOrEmpty()
                     val downloadUrl = session.downloadUrl
-                        ?: throw PairingException(
-                            "Session is ${session.status} but download URL is missing",
+                    if (downloadUrl == null && !hasResources) {
+                        throw PairingException(
+                            "Session is ${session.status} but download URL is missing and no resources provided",
                             PairingException.ErrorCode.SERVER_ERROR,
                         )
+                    }
 
                     return DeploymentInfo(
                         modelName = session.modelName,
                         modelVersion = session.modelVersion ?: "unknown",
-                        downloadUrl = downloadUrl,
+                        downloadUrl = downloadUrl ?: "",
                         format = session.downloadFormat ?: "tensorflow_lite",
                         quantization = session.quantization,
                         executor = session.executor,
                         sizeBytes = session.downloadSizeBytes,
+                        resources = session.resources,
                     )
                 }
 
@@ -235,11 +239,18 @@ class PairingManager(
      */
     suspend fun executeDeployment(deployment: DeploymentInfo): DeploymentResult {
         Timber.i(
-            "Executing deployment: model=%s version=%s format=%s",
+            "Executing deployment: model=%s version=%s format=%s resources=%d",
             deployment.modelName, deployment.modelVersion, deployment.format,
+            deployment.resources?.size ?: 0,
         )
 
-        // Download model
+        val resources = deployment.resources
+        if (!resources.isNullOrEmpty()) {
+            // Multi-resource download
+            return executeMultiResourceDeployment(deployment, resources)
+        }
+
+        // Legacy single-file download
         val modelFile = downloadModel(deployment)
 
         try {
@@ -260,6 +271,115 @@ class PairingManager(
             // Clean up on failure
             if (modelFile.exists()) modelFile.delete()
             throw e
+        }
+    }
+
+    /**
+     * Download multiple resources, persist them in load_order, and benchmark the primary model file.
+     */
+    private suspend fun executeMultiResourceDeployment(
+        deployment: DeploymentInfo,
+        resources: List<DownloadResource>,
+    ): DeploymentResult {
+        val sorted = resources.sortedBy { it.loadOrder }
+        val modelDir = File(modelPersistDir, "${deployment.modelName}/${deployment.modelVersion}")
+        modelDir.mkdirs()
+
+        val downloadedFiles = mutableListOf<File>()
+        var totalBytesDownloaded = 0L
+        val totalExpectedBytes = sorted.mapNotNull { it.sizeBytes }.sum()
+
+        try {
+            for (resource in sorted) {
+                Timber.d(
+                    "Downloading resource: kind=%s filename=%s uri=%s",
+                    resource.kind, resource.filename, resource.uri,
+                )
+
+                val targetFile = File(modelDir, resource.filename)
+                downloadFile(resource.uri, targetFile)
+                downloadedFiles.add(targetFile)
+                totalBytesDownloaded += targetFile.length()
+
+                Timber.i(
+                    "Resource downloaded: %s (%d bytes, %d/%d total)",
+                    resource.filename, targetFile.length(),
+                    totalBytesDownloaded, totalExpectedBytes,
+                )
+            }
+
+            // Find the primary model file (first "model" kind, or first file by load_order)
+            val primaryResource = sorted.firstOrNull { it.kind == "model" } ?: sorted.first()
+            val primaryFile = File(modelDir, primaryResource.filename)
+
+            // Run benchmarks on the primary model file
+            val deviceInfo = DeviceCapabilities.collect(context)
+            val report = benchmarkRunner.run(primaryFile, deployment.modelName, deviceInfo)
+
+            Timber.i(
+                "Multi-resource benchmark complete: p50=%.1fms p95=%.1fms tps=%.1f (%d files)",
+                report.p50LatencyMs, report.p95LatencyMs, report.tokensPerSecond,
+                downloadedFiles.size,
+            )
+
+            return DeploymentResult(
+                report = report,
+                modelFilePath = primaryFile.absolutePath,
+            )
+        } catch (e: Exception) {
+            // Clean up all downloaded files on failure
+            downloadedFiles.forEach { file ->
+                if (file.exists()) file.delete()
+            }
+            if (e is PairingException) throw e
+            throw PairingException(
+                "Multi-resource deployment failed: ${e.message}",
+                PairingException.ErrorCode.DOWNLOAD_FAILED,
+                e,
+            )
+        }
+    }
+
+    /**
+     * Download a single file from a URL to the specified target path.
+     */
+    internal fun downloadFile(url: String, target: File) {
+        val request = Request.Builder()
+            .url(url)
+            .build()
+
+        val response = downloadClient.newCall(request).execute()
+
+        if (!response.isSuccessful) {
+            throw PairingException(
+                "Resource download failed: HTTP ${response.code} for ${target.name}",
+                PairingException.ErrorCode.DOWNLOAD_FAILED,
+            )
+        }
+
+        val body = response.body
+            ?: throw PairingException(
+                "Empty response body downloading ${target.name}",
+                PairingException.ErrorCode.DOWNLOAD_FAILED,
+            )
+
+        try {
+            FileOutputStream(target).use { output ->
+                body.byteStream().use { input ->
+                    val buffer = ByteArray(8192)
+                    var bytesRead: Int
+                    while (input.read(buffer).also { bytesRead = it } != -1) {
+                        output.write(buffer, 0, bytesRead)
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            target.delete()
+            throw PairingException(
+                "Failed to save resource file ${target.name}: ${e.message}",
+                PairingException.ErrorCode.DOWNLOAD_FAILED,
+                e,
+            )
         }
     }
 

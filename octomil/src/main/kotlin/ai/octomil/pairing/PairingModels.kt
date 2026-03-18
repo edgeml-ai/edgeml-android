@@ -4,6 +4,28 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 /**
+ * A single downloadable resource within a multi-file deployment.
+ *
+ * Each resource has a kind (e.g. "model", "tokenizer", "config"), a download URI,
+ * a filename to save as, and a load_order for deterministic loading sequence.
+ */
+@Serializable
+data class DownloadResource(
+    @SerialName("kind")
+    val kind: String,
+    @SerialName("uri")
+    val uri: String,
+    @SerialName("filename")
+    val filename: String,
+    @SerialName("load_order")
+    val loadOrder: Int,
+    @SerialName("size_bytes")
+    val sizeBytes: Long? = null,
+    @SerialName("checksum_sha256")
+    val checksumSha256: String? = null,
+)
+
+/**
  * Pairing session returned from the server.
  *
  * Represents the state of a QR-code-initiated pairing between this device
@@ -36,6 +58,8 @@ data class PairingSession(
     val quantization: String? = null,
     @SerialName("executor")
     val executor: String? = null,
+    @SerialName("resources")
+    val resources: List<DownloadResource>? = null,
 )
 
 /**
@@ -88,6 +112,9 @@ data class DeploymentInfo(
     /** Model modality (e.g., "text", "vision", "audio", "classification"). Null if unspecified. */
     @SerialName("modality")
     val modality: String? = null,
+    /** Multi-resource list for deployments with multiple files (model, tokenizer, config, etc.). */
+    @SerialName("resources")
+    val resources: List<DownloadResource>? = null,
 )
 
 /**
