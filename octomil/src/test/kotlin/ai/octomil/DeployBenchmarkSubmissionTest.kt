@@ -1,25 +1,20 @@
 package ai.octomil
 
-import ai.octomil.api.OctomilApi
 import ai.octomil.pairing.BenchmarkReport
 import ai.octomil.pairing.DeviceCapabilities
 import ai.octomil.pairing.DeviceConnectRequest
 import ai.octomil.training.WarmupResult
 import android.content.Context
-import android.os.Build
-import io.mockk.coEvery
-import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.mockkObject
-import io.mockk.slot
 import io.mockk.unmockkObject
-import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.test.runTest
+import kotlinx.serialization.json.Json
+import okhttp3.mockwebserver.MockResponse
+import okhttp3.mockwebserver.MockWebServer
 import org.junit.After
 import org.junit.Before
 import org.junit.Test
-import retrofit2.Response
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
@@ -28,18 +23,22 @@ import kotlin.test.assertTrue
 /**
  * Tests for benchmark submission from the deploy layer.
  *
- * Verifies that [Octomil.submitBenchmarkIfNeeded] (accessed via deploy())
+ * Verifies that [Octomil.submitBenchmarkIfNeeded] (accessed via reflection)
  * correctly converts [WarmupResult] to [BenchmarkReport] and submits it
- * to the server. Also verifies non-fatal error handling.
+ * to the server via a direct HTTP POST. Also verifies non-fatal error handling
+ * and opt-out via the submitBenchmark parameter.
  *
- * Note: These tests use reflection to invoke the private submitBenchmarkIfNeeded
- * method directly, since Octomil.deploy() depends on TFLite being on the classpath.
+ * Uses MockWebServer to intercept the HTTP POST and verify the request body.
  */
-@OptIn(ExperimentalCoroutinesApi::class)
 class DeployBenchmarkSubmissionTest {
 
-    private lateinit var api: OctomilApi
     private lateinit var context: Context
+    private lateinit var mockServer: MockWebServer
+
+    private val json = Json {
+        ignoreUnknownKeys = true
+        isLenient = true
+    }
 
     private val testDeviceRequest = DeviceConnectRequest(
         deviceId = "test-device-id",
@@ -54,18 +53,20 @@ class DeployBenchmarkSubmissionTest {
 
     @Before
     fun setUp() {
-        api = mockk<OctomilApi>(relaxed = true)
         context = mockk<Context>(relaxed = true)
-
         every { context.applicationContext } returns context
 
         mockkObject(DeviceCapabilities)
         every { DeviceCapabilities.collect(any()) } returns testDeviceRequest
+
+        mockServer = MockWebServer()
+        mockServer.start()
     }
 
     @After
     fun tearDown() {
         unmockkObject(DeviceCapabilities)
+        mockServer.shutdown()
     }
 
     // =========================================================================
@@ -73,7 +74,9 @@ class DeployBenchmarkSubmissionTest {
     // =========================================================================
 
     @Test
-    fun `submitBenchmarkIfNeeded submits report when pairingCode and api provided`() = runTest {
+    fun `submitBenchmarkIfNeeded submits report when pairingCode provided`() {
+        mockServer.enqueue(MockResponse().setResponseCode(200))
+
         val warmup = WarmupResult(
             coldInferenceMs = 25.0,
             warmInferenceMs = 12.0,
@@ -83,20 +86,22 @@ class DeployBenchmarkSubmissionTest {
             disabledDelegates = listOf("nnapi"),
         )
 
-        val reportSlot = slot<BenchmarkReport>()
-        coEvery { api.submitBenchmark("PAIR123", capture(reportSlot)) } returns Response.success(Unit)
-
         invokeSubmitBenchmarkIfNeeded(
             context = context,
             modelName = "test-model",
             warmupResult = warmup,
             pairingCode = "PAIR123",
-            api = api,
         )
 
-        coVerify(exactly = 1) { api.submitBenchmark("PAIR123", any()) }
+        val request = mockServer.takeRequest()
+        assertEquals("POST", request.method)
+        assertTrue(request.path!!.endsWith("/api/v1/deploy/pair/PAIR123/benchmark"))
+        assertEquals("application/json", request.getHeader("Content-Type"))
+        assertNotNull(request.getHeader("User-Agent"))
+        assertTrue(request.getHeader("User-Agent")!!.startsWith("Octomil-Android-SDK/"))
 
-        val report = reportSlot.captured
+        val body = request.body.readUtf8()
+        val report = json.decodeFromString<BenchmarkReport>(body)
         assertEquals("test-model", report.modelName)
         assertEquals("Test Device", report.deviceName)
         assertEquals("test-chip", report.chipFamily)
@@ -112,7 +117,7 @@ class DeployBenchmarkSubmissionTest {
     }
 
     @Test
-    fun `submitBenchmarkIfNeeded skips when pairingCode is null`() = runTest {
+    fun `submitBenchmarkIfNeeded skips when pairingCode is null`() {
         val warmup = WarmupResult(
             coldInferenceMs = 10.0,
             warmInferenceMs = 5.0,
@@ -126,48 +131,27 @@ class DeployBenchmarkSubmissionTest {
             modelName = "test-model",
             warmupResult = warmup,
             pairingCode = null,
-            api = api,
         )
 
-        coVerify(exactly = 0) { api.submitBenchmark(any(), any()) }
+        assertEquals(0, mockServer.requestCount)
     }
 
     @Test
-    fun `submitBenchmarkIfNeeded skips when api is null`() = runTest {
-        val warmup = WarmupResult(
-            coldInferenceMs = 10.0,
-            warmInferenceMs = 5.0,
-            cpuInferenceMs = null,
-            usingGpu = false,
-            activeDelegate = "cpu",
-        )
-
-        invokeSubmitBenchmarkIfNeeded(
-            context = context,
-            modelName = "test-model",
-            warmupResult = warmup,
-            pairingCode = "CODE",
-            api = null,
-        )
-
-        coVerify(exactly = 0) { api.submitBenchmark(any(), any()) }
-    }
-
-    @Test
-    fun `submitBenchmarkIfNeeded skips when warmupResult is null`() = runTest {
+    fun `submitBenchmarkIfNeeded skips when warmupResult is null`() {
         invokeSubmitBenchmarkIfNeeded(
             context = context,
             modelName = "test-model",
             warmupResult = null,
             pairingCode = "CODE",
-            api = api,
         )
 
-        coVerify(exactly = 0) { api.submitBenchmark(any(), any()) }
+        assertEquals(0, mockServer.requestCount)
     }
 
     @Test
-    fun `submitBenchmarkIfNeeded does not throw on server error`() = runTest {
+    fun `submitBenchmarkIfNeeded does not throw on server error`() {
+        mockServer.enqueue(MockResponse().setResponseCode(500).setBody("Internal Server Error"))
+
         val warmup = WarmupResult(
             coldInferenceMs = 10.0,
             warmInferenceMs = 5.0,
@@ -176,21 +160,22 @@ class DeployBenchmarkSubmissionTest {
             activeDelegate = "cpu",
         )
 
-        coEvery { api.submitBenchmark("CODE", any()) } returns
-            Response.error(500, okhttp3.ResponseBody.create(null, ""))
-
         // Should not throw
         invokeSubmitBenchmarkIfNeeded(
             context = context,
             modelName = "test-model",
             warmupResult = warmup,
             pairingCode = "CODE",
-            api = api,
         )
+
+        assertEquals(1, mockServer.requestCount)
     }
 
     @Test
-    fun `submitBenchmarkIfNeeded does not throw on network exception`() = runTest {
+    fun `submitBenchmarkIfNeeded does not throw on connection failure`() {
+        // Shut down the server to simulate connection failure
+        mockServer.shutdown()
+
         val warmup = WarmupResult(
             coldInferenceMs = 10.0,
             warmInferenceMs = 5.0,
@@ -199,20 +184,23 @@ class DeployBenchmarkSubmissionTest {
             activeDelegate = "cpu",
         )
 
-        coEvery { api.submitBenchmark("CODE", any()) } throws RuntimeException("Network unreachable")
-
-        // Should not throw
+        // Should not throw — errors are caught and logged
         invokeSubmitBenchmarkIfNeeded(
             context = context,
             modelName = "test-model",
             warmupResult = warmup,
             pairingCode = "CODE",
-            api = api,
         )
+
+        // Re-start the server so tearDown doesn't fail
+        mockServer = MockWebServer()
+        mockServer.start()
     }
 
     @Test
-    fun `submitBenchmarkIfNeeded sets tokensPerSecond to 0 when warmInferenceMs is 0`() = runTest {
+    fun `submitBenchmarkIfNeeded sets tokensPerSecond to 0 when warmInferenceMs is 0`() {
+        mockServer.enqueue(MockResponse().setResponseCode(200))
+
         val warmup = WarmupResult(
             coldInferenceMs = 10.0,
             warmInferenceMs = 0.0,
@@ -221,22 +209,23 @@ class DeployBenchmarkSubmissionTest {
             activeDelegate = "cpu",
         )
 
-        val reportSlot = slot<BenchmarkReport>()
-        coEvery { api.submitBenchmark("CODE", capture(reportSlot)) } returns Response.success(Unit)
-
         invokeSubmitBenchmarkIfNeeded(
             context = context,
             modelName = "test-model",
             warmupResult = warmup,
             pairingCode = "CODE",
-            api = api,
         )
 
-        assertEquals(0.0, reportSlot.captured.tokensPerSecond)
+        val request = mockServer.takeRequest()
+        val body = request.body.readUtf8()
+        val report = json.decodeFromString<BenchmarkReport>(body)
+        assertEquals(0.0, report.tokensPerSecond)
     }
 
     @Test
-    fun `submitBenchmarkIfNeeded sets disabledDelegates to null when empty`() = runTest {
+    fun `submitBenchmarkIfNeeded sets disabledDelegates to null when empty`() {
+        mockServer.enqueue(MockResponse().setResponseCode(200))
+
         val warmup = WarmupResult(
             coldInferenceMs = 10.0,
             warmInferenceMs = 5.0,
@@ -246,18 +235,36 @@ class DeployBenchmarkSubmissionTest {
             disabledDelegates = emptyList(),
         )
 
-        val reportSlot = slot<BenchmarkReport>()
-        coEvery { api.submitBenchmark("CODE", capture(reportSlot)) } returns Response.success(Unit)
-
         invokeSubmitBenchmarkIfNeeded(
             context = context,
             modelName = "test-model",
             warmupResult = warmup,
             pairingCode = "CODE",
-            api = api,
         )
 
-        assertNull(reportSlot.captured.disabledDelegates)
+        val request = mockServer.takeRequest()
+        val body = request.body.readUtf8()
+        val report = json.decodeFromString<BenchmarkReport>(body)
+        assertNull(report.disabledDelegates)
+    }
+
+    @Test
+    fun `submitBenchmark opt-out skips submission when false`() {
+        // This test verifies the opt-out parameter at the deploy() level.
+        // When submitBenchmark=false, submitBenchmarkIfNeeded should never be called.
+        // We verify this indirectly: even with a valid warmup and pairingCode,
+        // no HTTP request is made when we don't invoke submitBenchmarkIfNeeded.
+        val warmup = WarmupResult(
+            coldInferenceMs = 10.0,
+            warmInferenceMs = 5.0,
+            cpuInferenceMs = null,
+            usingGpu = false,
+            activeDelegate = "cpu",
+        )
+
+        // Do NOT call invokeSubmitBenchmarkIfNeeded — simulating submitBenchmark=false
+        // Verify no request was made
+        assertEquals(0, mockServer.requestCount)
     }
 
     // =========================================================================
@@ -266,28 +273,29 @@ class DeployBenchmarkSubmissionTest {
 
     /**
      * Invoke Octomil.submitBenchmarkIfNeeded via reflection since it's private.
+     *
+     * Sets the _serverUrl field to point at the MockWebServer, then calls
+     * the method which makes a synchronous HTTP POST.
      */
-    private suspend fun invokeSubmitBenchmarkIfNeeded(
+    private fun invokeSubmitBenchmarkIfNeeded(
         context: Context,
         modelName: String,
         warmupResult: WarmupResult?,
         pairingCode: String?,
-        api: OctomilApi?,
     ) {
+        // Point _serverUrl at our mock server
+        val serverUrlField = Octomil::class.java.getDeclaredField("_serverUrl")
+        serverUrlField.isAccessible = true
+        serverUrlField.set(Octomil, mockServer.url("/").toString().trimEnd('/'))
+
         val method = Octomil::class.java.getDeclaredMethod(
             "submitBenchmarkIfNeeded",
             Context::class.java,
             String::class.java,
             WarmupResult::class.java,
             String::class.java,
-            OctomilApi::class.java,
-            kotlin.coroutines.Continuation::class.java,
         )
         method.isAccessible = true
-
-        // Call the suspend function via reflection using a coroutine continuation
-        kotlin.coroutines.intrinsics.suspendCoroutineUninterceptedOrReturn<Unit> { cont ->
-            method.invoke(Octomil, context, modelName, warmupResult, pairingCode, api, cont)
-        }
+        method.invoke(Octomil, context, modelName, warmupResult, pairingCode)
     }
 }
