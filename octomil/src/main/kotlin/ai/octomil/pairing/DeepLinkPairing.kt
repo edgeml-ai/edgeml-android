@@ -1,5 +1,6 @@
 package ai.octomil.pairing
 
+import ai.octomil.Octomil
 import android.content.Context
 import kotlinx.serialization.json.Json
 import okhttp3.MediaType.Companion.toMediaType
@@ -7,6 +8,7 @@ import okhttp3.OkHttpClient
 import retrofit2.Retrofit
 import retrofit2.converter.kotlinx.serialization.asConverterFactory
 import timber.log.Timber
+import java.io.File
 import java.util.concurrent.TimeUnit
 
 /**
@@ -48,18 +50,20 @@ object DeepLinkPairing {
      *
      * Creates a lightweight API client targeting the server specified in the deep
      * link (or the default server), then runs the complete pairing sequence:
-     * connect, wait for deployment, download model, benchmark, and report.
+     * connect, wait for deployment, download model, and persist. After download,
+     * the model is deployed for inference which triggers benchmarking and
+     * benchmark submission to the server.
      *
      * @param context Android context for device info collection and file caching.
      * @param action The [DeepLinkHandler.DeepLinkAction.Pair] parsed from the deep link.
      * @param timeoutMs Maximum time to wait for deployment (default: 5 minutes).
-     * @return [Result] wrapping a [BenchmarkReport] on success, or a [PairingException] on failure.
+     * @return [Result] wrapping a [DeploymentResult] on success, or a [PairingException] on failure.
      */
     suspend fun executePairing(
         context: Context,
         action: DeepLinkHandler.DeepLinkAction.Pair,
         timeoutMs: Long = PairingManager.DEFAULT_TIMEOUT_MS,
-    ): Result<BenchmarkReport> {
+    ): Result<DeploymentResult> {
         Timber.i(
             "Starting deep link pairing: token=%s host=%s",
             action.token, action.host,
@@ -69,7 +73,25 @@ object DeepLinkPairing {
             val api = createPairingApi(action.host)
             val manager = PairingManager(api, context)
             val result = manager.pair(action.token, timeoutMs)
-            Result.success(result.report)
+
+            // Deploy model for inference — benchmarks run and are submitted here
+            val modelPath = result.modelFilePath
+            if (modelPath != null) {
+                try {
+                    Octomil.deploy(
+                        context = context,
+                        modelFile = File(modelPath),
+                        name = result.modelName,
+                        pairingCode = action.token,
+                        api = api,
+                    )
+                } catch (e: Exception) {
+                    // Non-fatal: deploy/benchmark failure should not break the pairing result
+                    Timber.w(e, "Deep link pairing: deploy+benchmark failed (non-fatal)")
+                }
+            }
+
+            Result.success(result)
         } catch (e: PairingException) {
             Timber.e(e, "Deep link pairing failed: %s", e.pairingErrorCode)
             Result.failure(e)

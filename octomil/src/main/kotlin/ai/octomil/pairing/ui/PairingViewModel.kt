@@ -1,5 +1,6 @@
 package ai.octomil.pairing.ui
 
+import ai.octomil.Octomil
 import ai.octomil.api.OctomilApi
 import ai.octomil.pairing.PairingException
 import ai.octomil.pairing.PairingManager
@@ -12,6 +13,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import timber.log.Timber
+import java.io.File
 
 /**
  * State machine for the pairing screen UI.
@@ -56,19 +58,23 @@ sealed class PairingState {
  * Orchestrates the full pairing sequence:
  * 1. Connect to server using the pairing code from the deep link.
  * 2. Wait for the server to assign a model deployment.
- * 3. Download the model binary.
- * 4. Run on-device benchmarks and report results.
+ * 3. Download the model binary and persist it.
+ * 4. Deploy the model for inference (benchmarks run here and are submitted to the server).
  *
  * Emits [PairingState] via [state] for the UI to observe.
  *
  * @param pairingManager The pairing manager handling server communication.
  * @param token Pairing code extracted from the deep link URI.
  * @param host Server host extracted from the deep link URI.
+ * @param api Optional API client for benchmark submission during deploy.
+ * @param appContext Application context for deploying the model.
  */
 class PairingViewModel(
     private val pairingManager: PairingManager,
     private val token: String,
     private val host: String,
+    private val api: OctomilApi? = null,
+    private val appContext: Context? = null,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow<PairingState>(PairingState.Connecting(host))
@@ -102,12 +108,26 @@ class PairingViewModel(
                     totalBytes = deployment.sizeBytes ?: 0L,
                 )
 
-                // Step 4: Download + benchmark + persist
+                // Step 4: Download + persist
                 Timber.d("Pairing UI: executing deployment for %s", deployment.modelName)
                 val result = pairingManager.executeDeployment(deployment)
 
-                // Step 5: Submit benchmark
-                pairingManager.submitBenchmark(token, result.report)
+                // Step 5: Deploy model for inference (benchmarks + submission happen here)
+                val modelPath = result.modelFilePath
+                if (modelPath != null && appContext != null) {
+                    try {
+                        Octomil.deploy(
+                            context = appContext,
+                            modelFile = File(modelPath),
+                            name = result.modelName,
+                            pairingCode = token,
+                            api = api,
+                        )
+                    } catch (e: Exception) {
+                        // Non-fatal: deploy/benchmark failure should not block pairing UI
+                        Timber.w(e, "Pairing UI: deploy+benchmark failed (non-fatal)")
+                    }
+                }
 
                 // Step 6: Success
                 _state.value = PairingState.Success(
@@ -216,7 +236,13 @@ class PairingViewModel(
                 "Unknown ViewModel class: ${modelClass.name}"
             }
             val pairingManager = PairingManager(api, context)
-            return PairingViewModel(pairingManager, token, host) as T
+            return PairingViewModel(
+                pairingManager = pairingManager,
+                token = token,
+                host = host,
+                api = api,
+                appContext = context.applicationContext,
+            ) as T
         }
     }
 
@@ -228,6 +254,8 @@ class PairingViewModel(
         private val pairingManager: PairingManager,
         private val token: String,
         private val host: String,
+        private val api: OctomilApi? = null,
+        private val appContext: Context? = null,
     ) : ViewModelProvider.Factory {
 
         @Suppress("UNCHECKED_CAST")
@@ -235,7 +263,13 @@ class PairingViewModel(
             require(modelClass.isAssignableFrom(PairingViewModel::class.java)) {
                 "Unknown ViewModel class: ${modelClass.name}"
             }
-            return PairingViewModel(pairingManager, token, host) as T
+            return PairingViewModel(
+                pairingManager = pairingManager,
+                token = token,
+                host = host,
+                api = api,
+                appContext = appContext,
+            ) as T
         }
     }
 }
