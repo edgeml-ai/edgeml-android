@@ -4,7 +4,9 @@ import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import org.junit.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertNotNull
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
 /**
  * Tests for pairing data model serialization and deserialization.
@@ -99,6 +101,128 @@ class PairingModelsTest {
         assertEquals(original, decoded)
     }
 
+    @Test
+    fun `PairingSession deserializes with resources array`() {
+        val raw = """
+        {
+            "id": "session-789",
+            "code": "RES123",
+            "model_name": "llama-3",
+            "model_version": "1.0.0",
+            "status": "deploying",
+            "resources": [
+                {
+                    "kind": "model",
+                    "uri": "https://cdn.example.com/model.gguf",
+                    "filename": "model.gguf",
+                    "load_order": 0,
+                    "size_bytes": 4000000000,
+                    "checksum_sha256": "abc123"
+                },
+                {
+                    "kind": "tokenizer",
+                    "uri": "https://cdn.example.com/tokenizer.json",
+                    "filename": "tokenizer.json",
+                    "load_order": 1,
+                    "size_bytes": 2000
+                }
+            ]
+        }
+        """.trimIndent()
+
+        val session = json.decodeFromString<PairingSession>(raw)
+
+        assertEquals("session-789", session.id)
+        assertEquals(PairingStatus.DEPLOYING, session.status)
+        assertNotNull(session.resources)
+        assertEquals(2, session.resources!!.size)
+
+        val model = session.resources!![0]
+        assertEquals("model", model.kind)
+        assertEquals("https://cdn.example.com/model.gguf", model.uri)
+        assertEquals("model.gguf", model.filename)
+        assertEquals(0, model.loadOrder)
+        assertEquals(4000000000L, model.sizeBytes)
+        assertEquals("abc123", model.checksumSha256)
+
+        val tokenizer = session.resources!![1]
+        assertEquals("tokenizer", tokenizer.kind)
+        assertEquals(1, tokenizer.loadOrder)
+        assertNull(tokenizer.checksumSha256)
+    }
+
+    @Test
+    fun `PairingSession without resources has null resources`() {
+        val raw = """
+        {
+            "id": "session-no-res",
+            "code": "NORES",
+            "model_name": "tiny",
+            "status": "pending"
+        }
+        """.trimIndent()
+
+        val session = json.decodeFromString<PairingSession>(raw)
+        assertNull(session.resources)
+    }
+
+    // =========================================================================
+    // DownloadResource
+    // =========================================================================
+
+    @Test
+    fun `DownloadResource round-trips through JSON`() {
+        val resource = DownloadResource(
+            kind = "model",
+            uri = "https://example.com/model.bin",
+            filename = "model.bin",
+            loadOrder = 0,
+            sizeBytes = 1_000_000L,
+            checksumSha256 = "deadbeef",
+        )
+
+        val encoded = json.encodeToString(resource)
+        val decoded = json.decodeFromString<DownloadResource>(encoded)
+
+        assertEquals(resource, decoded)
+    }
+
+    @Test
+    fun `DownloadResource handles null optional fields`() {
+        val raw = """
+        {
+            "kind": "config",
+            "uri": "https://example.com/config.json",
+            "filename": "config.json",
+            "load_order": 2
+        }
+        """.trimIndent()
+
+        val resource = json.decodeFromString<DownloadResource>(raw)
+
+        assertEquals("config", resource.kind)
+        assertEquals(2, resource.loadOrder)
+        assertNull(resource.sizeBytes)
+        assertNull(resource.checksumSha256)
+    }
+
+    @Test
+    fun `DownloadResource uses correct snake_case serial names`() {
+        val resource = DownloadResource(
+            kind = "tokenizer",
+            uri = "https://example.com/tok.json",
+            filename = "tok.json",
+            loadOrder = 1,
+            sizeBytes = 5000L,
+            checksumSha256 = "sha256hash",
+        )
+
+        val encoded = json.encodeToString(resource)
+        assertTrue(encoded.contains("\"load_order\""))
+        assertTrue(encoded.contains("\"size_bytes\""))
+        assertTrue(encoded.contains("\"checksum_sha256\""))
+    }
+
     // =========================================================================
     // PairingStatus
     // =========================================================================
@@ -141,6 +265,41 @@ class PairingModelsTest {
         val decoded = json.decodeFromString<DeploymentInfo>(encoded)
 
         assertEquals(info, decoded)
+    }
+
+    @Test
+    fun `DeploymentInfo serializes with resources`() {
+        val info = DeploymentInfo(
+            modelName = "llama-3",
+            modelVersion = "1.0.0",
+            downloadUrl = "",
+            format = "gguf",
+            resources = listOf(
+                DownloadResource(
+                    kind = "model",
+                    uri = "https://cdn.example.com/model.gguf",
+                    filename = "model.gguf",
+                    loadOrder = 0,
+                    sizeBytes = 4_000_000_000L,
+                ),
+                DownloadResource(
+                    kind = "tokenizer",
+                    uri = "https://cdn.example.com/tokenizer.json",
+                    filename = "tokenizer.json",
+                    loadOrder = 1,
+                    sizeBytes = 2000L,
+                ),
+            ),
+        )
+
+        val encoded = json.encodeToString(info)
+        val decoded = json.decodeFromString<DeploymentInfo>(encoded)
+
+        assertEquals(info, decoded)
+        assertNotNull(decoded.resources)
+        assertEquals(2, decoded.resources!!.size)
+        assertEquals("model", decoded.resources!![0].kind)
+        assertEquals("tokenizer", decoded.resources!![1].kind)
     }
 
     // =========================================================================

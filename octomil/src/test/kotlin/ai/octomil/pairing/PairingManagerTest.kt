@@ -436,6 +436,225 @@ class PairingManagerTest {
     }
 
     // =========================================================================
+    // Multi-resource executeDeployment()
+    // =========================================================================
+
+    @Test
+    fun `executeDeployment downloads all resources when resources list is present`() = runTest {
+        val mockServer = MockWebServer()
+        mockServer.enqueue(MockResponse().setResponseCode(200).setBody("model-binary-content"))
+        mockServer.enqueue(MockResponse().setResponseCode(200).setBody("{\"vocab\":true}"))
+        mockServer.start()
+
+        val deployment = DeploymentInfo(
+            modelName = "multi-model",
+            modelVersion = "1.0.0",
+            downloadUrl = "",
+            format = "gguf",
+            sizeBytes = 100L,
+            resources = listOf(
+                DownloadResource(
+                    kind = "model",
+                    uri = mockServer.url("/model.gguf").toString(),
+                    filename = "model.gguf",
+                    loadOrder = 0,
+                    sizeBytes = 20L,
+                ),
+                DownloadResource(
+                    kind = "tokenizer",
+                    uri = mockServer.url("/tokenizer.json").toString(),
+                    filename = "tokenizer.json",
+                    loadOrder = 1,
+                    sizeBytes = 14L,
+                ),
+            ),
+        )
+
+        every { benchmarkRunner.run(any(), eq("multi-model"), any()) } returns testBenchmarkReport.copy(
+            modelName = "multi-model",
+        )
+
+        val result = pairingManager.executeDeployment(deployment)
+
+        assertEquals("multi-model", result.report.modelName)
+        assertNotNull(result.modelFilePath)
+        assertTrue(result.modelFilePath!!.contains("model.gguf"))
+
+        // Verify both files were downloaded (2 requests to mock server)
+        assertEquals(2, mockServer.requestCount)
+
+        mockServer.shutdown()
+    }
+
+    @Test
+    fun `executeDeployment falls back to single download when resources is empty`() = runTest {
+        val mockServer = MockWebServer()
+        mockServer.enqueue(MockResponse().setResponseCode(200).setBody("single-model"))
+        mockServer.start()
+
+        val deployment = DeploymentInfo(
+            modelName = "single-model",
+            modelVersion = "1.0.0",
+            downloadUrl = mockServer.url("/model.tflite").toString(),
+            format = "tensorflow_lite",
+            sizeBytes = 12L,
+            resources = emptyList(),
+        )
+
+        every { benchmarkRunner.run(any(), eq("single-model"), any()) } returns testBenchmarkReport.copy(
+            modelName = "single-model",
+        )
+
+        val result = pairingManager.executeDeployment(deployment)
+
+        assertEquals("single-model", result.report.modelName)
+        // Single download = 1 request
+        assertEquals(1, mockServer.requestCount)
+
+        mockServer.shutdown()
+    }
+
+    @Test
+    fun `executeDeployment uses first resource by load_order when no model kind`() = runTest {
+        val mockServer = MockWebServer()
+        mockServer.enqueue(MockResponse().setResponseCode(200).setBody("weights-data"))
+        mockServer.enqueue(MockResponse().setResponseCode(200).setBody("config-data"))
+        mockServer.start()
+
+        val deployment = DeploymentInfo(
+            modelName = "custom-model",
+            modelVersion = "2.0.0",
+            downloadUrl = "",
+            format = "custom",
+            resources = listOf(
+                DownloadResource(
+                    kind = "config",
+                    uri = mockServer.url("/config.json").toString(),
+                    filename = "config.json",
+                    loadOrder = 1,
+                ),
+                DownloadResource(
+                    kind = "weights",
+                    uri = mockServer.url("/weights.bin").toString(),
+                    filename = "weights.bin",
+                    loadOrder = 0,
+                ),
+            ),
+        )
+
+        every { benchmarkRunner.run(any(), eq("custom-model"), any()) } returns testBenchmarkReport.copy(
+            modelName = "custom-model",
+        )
+
+        val result = pairingManager.executeDeployment(deployment)
+
+        assertEquals("custom-model", result.report.modelName)
+        // weights.bin has load_order=0, so it's the primary (first sorted)
+        assertTrue(result.modelFilePath!!.contains("weights.bin"))
+
+        mockServer.shutdown()
+    }
+
+    @Test
+    fun `executeDeployment cleans up on multi-resource download failure`() = runTest {
+        val mockServer = MockWebServer()
+        mockServer.enqueue(MockResponse().setResponseCode(200).setBody("model-data"))
+        mockServer.enqueue(MockResponse().setResponseCode(500)) // second resource fails
+        mockServer.start()
+
+        val deployment = DeploymentInfo(
+            modelName = "fail-model",
+            modelVersion = "1.0.0",
+            downloadUrl = "",
+            format = "gguf",
+            resources = listOf(
+                DownloadResource(
+                    kind = "model",
+                    uri = mockServer.url("/model.gguf").toString(),
+                    filename = "model.gguf",
+                    loadOrder = 0,
+                ),
+                DownloadResource(
+                    kind = "tokenizer",
+                    uri = mockServer.url("/tokenizer.json").toString(),
+                    filename = "tokenizer.json",
+                    loadOrder = 1,
+                ),
+            ),
+        )
+
+        val ex = assertFailsWith<PairingException> {
+            pairingManager.executeDeployment(deployment)
+        }
+
+        assertEquals(PairingException.ErrorCode.DOWNLOAD_FAILED, ex.pairingErrorCode)
+
+        mockServer.shutdown()
+    }
+
+    // =========================================================================
+    // waitForDeployment() with resources
+    // =========================================================================
+
+    @Test
+    fun `waitForDeployment returns deployment with resources when present`() = runTest {
+        val session = PairingSession(
+            id = "session-mr",
+            code = "MR123",
+            modelName = "multi-res-model",
+            modelVersion = "1.0.0",
+            status = PairingStatus.DEPLOYING,
+            downloadUrl = null,
+            downloadFormat = "gguf",
+            resources = listOf(
+                DownloadResource(
+                    kind = "model",
+                    uri = "https://cdn.example.com/model.gguf",
+                    filename = "model.gguf",
+                    loadOrder = 0,
+                    sizeBytes = 4_000_000_000L,
+                ),
+            ),
+        )
+
+        coEvery { api.getPairingSession("MR123") } returns Response.success(session)
+
+        val deployment = pairingManager.waitForDeployment("MR123", timeoutMs = 5_000L)
+
+        assertEquals("multi-res-model", deployment.modelName)
+        assertNotNull(deployment.resources)
+        assertEquals(1, deployment.resources!!.size)
+        assertEquals("model", deployment.resources!![0].kind)
+    }
+
+    @Test
+    fun `waitForDeployment allows null downloadUrl when resources present`() = runTest {
+        val session = PairingSession(
+            id = "session-no-url",
+            code = "NOURL",
+            modelName = "res-only-model",
+            modelVersion = "1.0.0",
+            status = PairingStatus.DEPLOYING,
+            downloadUrl = null,
+            resources = listOf(
+                DownloadResource(
+                    kind = "model",
+                    uri = "https://cdn.example.com/model.bin",
+                    filename = "model.bin",
+                    loadOrder = 0,
+                ),
+            ),
+        )
+
+        coEvery { api.getPairingSession("NOURL") } returns Response.success(session)
+
+        val deployment = pairingManager.waitForDeployment("NOURL", timeoutMs = 5_000L)
+
+        assertEquals("", deployment.downloadUrl) // empty fallback, not used
+        assertNotNull(deployment.resources)
+    }
+
+    // =========================================================================
     // downloadModel()
     // =========================================================================
 
