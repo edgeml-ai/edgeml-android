@@ -205,17 +205,17 @@ class ContractConformanceTest {
     }
 
     // =========================================================================
-    // ModelStatus — 4 canonical statuses
+    // ModelStatus — 5 canonical statuses
     // =========================================================================
 
     @Test
-    fun `generated ModelStatus has exactly 4 entries`() {
-        assertEquals(4, ContractModelStatus.entries.size)
+    fun `generated ModelStatus has exactly 5 entries`() {
+        assertEquals(5, ContractModelStatus.entries.size)
     }
 
     @Test
     fun `generated ModelStatus contains all canonical codes`() {
-        val expected = listOf("not_cached", "downloading", "ready", "error")
+        val expected = listOf("not_cached", "queued", "downloading", "ready", "failed")
         val actual = ContractModelStatus.entries.map { it.code }
         assertEquals(expected, actual)
     }

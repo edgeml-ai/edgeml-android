@@ -106,7 +106,7 @@ class OctomilModelsTest {
     }
 
     @Test
-    fun `status returns ERROR when download failed`() {
+    fun `status returns FAILED when download failed`() {
         val error = ModelDownloadException("failed", downloadErrorCode = ModelDownloadException.ErrorCode.NETWORK_ERROR)
         every { modelManager.currentDownloadState } returns DownloadState.Failed(error)
 
