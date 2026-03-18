@@ -1,5 +1,6 @@
 package ai.octomil.runtime.engines.tflite
 
+import ai.octomil.generated.Modality
 import android.content.Context
 import io.mockk.mockk
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -229,11 +230,11 @@ class InferenceEngineTest {
     // =========================================================================
 
     @Test
-    fun `Modality value is lowercase name`() {
-        assertEquals("text", Modality.TEXT.value)
-        assertEquals("image", Modality.IMAGE.value)
-        assertEquals("audio", Modality.AUDIO.value)
-        assertEquals("video", Modality.VIDEO.value)
+    fun `Modality code is lowercase name`() {
+        assertEquals("text", Modality.TEXT.code)
+        assertEquals("image", Modality.IMAGE.code)
+        assertEquals("audio", Modality.AUDIO.code)
+        assertEquals("video", Modality.VIDEO.code)
     }
 
     @Test

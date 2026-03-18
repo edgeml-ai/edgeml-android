@@ -1,5 +1,6 @@
 package ai.octomil.runtime.engines.tflite
 
+import ai.octomil.generated.Modality
 import ai.octomil.runtime.core.Engine
 import android.content.Context
 import io.mockk.mockk
