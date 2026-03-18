@@ -1,20 +1,7 @@
 package ai.octomil.runtime.engines.tflite
 
+import ai.octomil.generated.Modality
 import kotlinx.coroutines.flow.Flow
-
-/**
- * Output modality for generative inference.
- */
-enum class Modality {
-    TEXT,
-    IMAGE,
-    AUDIO,
-    VIDEO,
-    ;
-
-    /** Wire-format value for the server API. */
-    val value: String get() = name.lowercase()
-}
 
 /**
  * A single chunk emitted during streaming inference.

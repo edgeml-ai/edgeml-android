@@ -1,5 +1,6 @@
 package ai.octomil.chat
 
+import ai.octomil.generated.Modality
 import ai.octomil.responses.ContentPart
 
 /**
@@ -22,7 +23,7 @@ class ClassifierFallbackAdapter(
     private val classifyImage: suspend (data: String) -> List<Pair<String, Float>>,
 ) : MultimodalAdapter {
 
-    override val supportedModalities: Set<String> = setOf("text", "image")
+    override val supportedModalities: Set<Modality> = setOf(Modality.TEXT, Modality.IMAGE)
 
     override suspend fun preparePrompt(parts: List<ContentPart>): String {
         val segments = mutableListOf<String>()
