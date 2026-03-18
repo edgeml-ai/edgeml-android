@@ -13,7 +13,7 @@ import java.nio.ByteBuffer
  * Loads a TFLite model with the preferred delegate (NNAPI, GPU, or XNNPACK)
  * and automatically falls through the chain if a delegate fails to load.
  * Uses reflection so there is no hard compile-time dependency on TFLite
- * delegate libraries (same pattern as [ai.octomil.pairing.BenchmarkRunner]).
+ * delegate libraries (same pattern as [ai.octomil.runtime.engines.tflite.BenchmarkRunner]).
  *
  * ## Fallback chain
  * 1. Try preferred delegate (e.g. NNAPI)

@@ -105,7 +105,7 @@ class TelemetryQueue internal constructor(
 
         /**
          * Shared instance used for funnel event reporting from classes that don't hold
-         * a direct TelemetryQueue reference (PairingManager, ModelManager, BenchmarkRunner).
+         * a direct TelemetryQueue reference (PairingManager, ModelManager).
          * Set automatically when the first TelemetryQueue is started with a sender.
          */
         @Volatile

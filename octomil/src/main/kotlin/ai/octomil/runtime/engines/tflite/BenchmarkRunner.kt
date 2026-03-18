@@ -1,5 +1,7 @@
-package ai.octomil.pairing
+package ai.octomil.runtime.engines.tflite
 
+import ai.octomil.pairing.BenchmarkReport
+import ai.octomil.pairing.DeviceConnectRequest
 import ai.octomil.wrapper.TelemetryQueue
 import android.content.Context
 import android.os.BatteryManager
@@ -21,8 +23,8 @@ import java.nio.ByteOrder
  * 5. Build [BenchmarkReport]
  *
  * Uses TFLite Interpreter directly via reflection to avoid a hard compile-time
- * dependency on TFLite from the pairing module. The interpreter classes are
- * already on the classpath via the main SDK dependency.
+ * dependency on TFLite. The interpreter classes are already on the classpath
+ * via the main SDK dependency.
  */
 class BenchmarkRunner(
     private val context: Context,
@@ -458,10 +460,10 @@ class BenchmarkRunner(
 }
 
 /**
- * Convert a [BenchmarkReport] to the cross-SDK [ai.octomil.runtime.engines.tflite.BenchmarkResult] type.
+ * Convert a [BenchmarkReport] to the cross-SDK [BenchmarkResult] type.
  */
-fun BenchmarkReport.toBenchmarkResult(): ai.octomil.runtime.engines.tflite.BenchmarkResult {
-    return ai.octomil.runtime.engines.tflite.BenchmarkResult(
+fun BenchmarkReport.toBenchmarkResult(): BenchmarkResult {
+    return BenchmarkResult(
         engineName = activeDelegate ?: "tflite",
         tokensPerSecond = tokensPerSecond,
         ttftMs = ttftMs,
