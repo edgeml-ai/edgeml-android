@@ -1,6 +1,5 @@
 package ai.octomil.pairing.ui
 
-import ai.octomil.pairing.BenchmarkReport
 import ai.octomil.pairing.DeploymentInfo
 import ai.octomil.pairing.DeploymentResult
 import ai.octomil.pairing.PairingException
@@ -33,6 +32,9 @@ import kotlin.test.assertTrue
  * Connecting -> Error (failure paths)
  *
  * Also tests retry behavior and error message mapping.
+ *
+ * Note: Benchmark submission is now handled by [ai.octomil.Octomil.deploy],
+ * not during the pairing flow. These tests verify the pairing UI flow only.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class PairingViewModelTest {
@@ -58,25 +60,6 @@ class PairingViewModelTest {
         downloadUrl = "https://example.com/model.tflite",
         downloadFormat = "tensorflow_lite",
         downloadSizeBytes = 2_700_000_000L,
-    )
-
-    private val testReport = BenchmarkReport(
-        modelName = "phi-4-mini",
-        deviceName = "Test Model",
-        chipFamily = "test-chip",
-        ramGb = 8.0,
-        osVersion = "14",
-        ttftMs = 30.0,
-        tpotMs = 15.0,
-        tokensPerSecond = 66.7,
-        p50LatencyMs = 14.0,
-        p95LatencyMs = 20.0,
-        p99LatencyMs = 25.0,
-        memoryPeakBytes = 100_000_000L,
-        inferenceCount = 51,
-        modelLoadTimeMs = 200.0,
-        coldInferenceMs = 30.0,
-        warmInferenceMs = 15.0,
     )
 
     @Before
@@ -114,8 +97,11 @@ class PairingViewModelTest {
             format = "tensorflow_lite",
             sizeBytes = 2_700_000_000L,
         )
-        coEvery { pairingManager.executeDeployment(any()) } returns DeploymentResult(report = testReport, modelFilePath = null)
-        coEvery { pairingManager.submitBenchmark("TOKEN123", any()) } returns Unit
+        coEvery { pairingManager.executeDeployment(any()) } returns DeploymentResult(
+            modelFilePath = null,
+            modelName = "phi-4-mini",
+            modelVersion = "1.2",
+        )
 
         val viewModel = createViewModel()
         advanceUntilIdle()
@@ -138,8 +124,11 @@ class PairingViewModelTest {
             format = "onnx",
             sizeBytes = 1_000_000L,
         )
-        coEvery { pairingManager.executeDeployment(any()) } returns DeploymentResult(report = testReport, modelFilePath = null)
-        coEvery { pairingManager.submitBenchmark("TOKEN123", any()) } returns Unit
+        coEvery { pairingManager.executeDeployment(any()) } returns DeploymentResult(
+            modelFilePath = null,
+            modelName = "phi-4-mini",
+            modelVersion = "1.2",
+        )
 
         val viewModel = createViewModel()
         advanceUntilIdle()
@@ -310,8 +299,11 @@ class PairingViewModelTest {
             format = "tensorflow_lite",
             sizeBytes = 100L,
         )
-        coEvery { pairingManager.executeDeployment(any()) } returns DeploymentResult(report = testReport, modelFilePath = null)
-        coEvery { pairingManager.submitBenchmark("TOKEN123", any()) } returns Unit
+        coEvery { pairingManager.executeDeployment(any()) } returns DeploymentResult(
+            modelFilePath = null,
+            modelName = "phi-4-mini",
+            modelVersion = "1.2",
+        )
 
         viewModel.retry()
         advanceUntilIdle()
@@ -357,9 +349,12 @@ class PairingViewModelTest {
         coEvery { pairingManager.executeDeployment(any()) } coAnswers {
             // Capture the Downloading state that should have been set before this call
             states.add(PairingState.Downloading(0f, "phi-4-mini", 0L, 2_700_000_000L))
-            DeploymentResult(report = testReport, modelFilePath = null)
+            DeploymentResult(
+                modelFilePath = null,
+                modelName = "phi-4-mini",
+                modelVersion = "1.2",
+            )
         }
-        coEvery { pairingManager.submitBenchmark("TOKEN123", any()) } returns Unit
 
         val viewModel = createViewModel()
         advanceUntilIdle()

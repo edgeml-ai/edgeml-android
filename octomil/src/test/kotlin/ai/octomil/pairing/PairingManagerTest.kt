@@ -30,15 +30,14 @@ import kotlin.test.assertTrue
  * - waitForDeployment() polls and returns when ready
  * - waitForDeployment() throws on timeout
  * - waitForDeployment() throws on expired/cancelled sessions
- * - submitBenchmark() sends report to server
- * - pair() orchestrates the full flow
+ * - executeDeployment() downloads and persists model (no benchmark)
+ * - pair() orchestrates the full flow (no benchmark submission)
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class PairingManagerTest {
 
     private lateinit var api: OctomilApi
     private lateinit var context: Context
-    private lateinit var benchmarkRunner: BenchmarkRunner
     private lateinit var cacheDir: File
     private lateinit var pairingManager: PairingManager
 
@@ -53,32 +52,10 @@ class PairingManagerTest {
         gpuAvailable = true,
     )
 
-    private val testBenchmarkReport = BenchmarkReport(
-        modelName = "test-model",
-        deviceName = "Test Manufacturer Test Model",
-        chipFamily = "test-hardware",
-        ramGb = 4.0,
-        osVersion = "14",
-        ttftMs = 25.0,
-        tpotMs = 12.0,
-        tokensPerSecond = 83.3,
-        p50LatencyMs = 11.0,
-        p95LatencyMs = 18.0,
-        p99LatencyMs = 22.0,
-        memoryPeakBytes = 50_000_000L,
-        inferenceCount = 11,
-        modelLoadTimeMs = 150.0,
-        coldInferenceMs = 25.0,
-        warmInferenceMs = 12.0,
-        batteryLevel = null,
-        thermalState = null,
-    )
-
     @Before
     fun setUp() {
         api = mockk<OctomilApi>(relaxed = true)
         context = mockk<Context>(relaxed = true)
-        benchmarkRunner = mockk<BenchmarkRunner>(relaxed = true)
 
         cacheDir = File(System.getProperty("java.io.tmpdir"), "octomil_pairing_test_${System.nanoTime()}")
         cacheDir.mkdirs()
@@ -94,7 +71,6 @@ class PairingManagerTest {
         pairingManager = PairingManager(
             api = api,
             context = context,
-            benchmarkRunner = benchmarkRunner,
             pollIntervalMs = 10L, // Fast polling for tests
         )
     }
@@ -315,12 +291,11 @@ class PairingManagerTest {
     }
 
     // =========================================================================
-    // executeDeployment()
+    // executeDeployment() — download + persist only (no benchmark)
     // =========================================================================
 
     @Test
-    fun `executeDeployment downloads model and runs benchmark`() = runTest {
-        // Set up a MockWebServer to serve a fake model file
+    fun `executeDeployment downloads and persists model`() = runTest {
         val mockServer = MockWebServer()
         mockServer.enqueue(
             MockResponse()
@@ -339,46 +314,21 @@ class PairingManagerTest {
             sizeBytes = 26L,
         )
 
-        every { benchmarkRunner.run(any(), eq("test-model"), any()) } returns testBenchmarkReport
-
         val result = pairingManager.executeDeployment(deployment)
 
-        assertEquals("test-model", result.report.modelName)
-        assertEquals(11, result.report.inferenceCount)
+        assertEquals("test-model", result.modelName)
+        assertEquals("1.0.0", result.modelVersion)
         assertNotNull(result.modelFilePath)
 
         mockServer.shutdown()
     }
 
     // =========================================================================
-    // submitBenchmark()
+    // pair() (full flow — connect, wait, download, persist; no benchmark)
     // =========================================================================
 
     @Test
-    fun `submitBenchmark sends report to API`() = runTest {
-        coEvery { api.submitBenchmark("ABC123", any()) } returns Response.success(Unit)
-
-        pairingManager.submitBenchmark("ABC123", testBenchmarkReport)
-
-        coVerify { api.submitBenchmark("ABC123", testBenchmarkReport) }
-    }
-
-    @Test
-    fun `submitBenchmark does not throw on server error`() = runTest {
-        // Submit failure is non-fatal
-        coEvery { api.submitBenchmark("ABC123", any()) } returns
-            Response.error(500, okhttp3.ResponseBody.create(null, ""))
-
-        // Should not throw
-        pairingManager.submitBenchmark("ABC123", testBenchmarkReport)
-    }
-
-    // =========================================================================
-    // pair() (full flow)
-    // =========================================================================
-
-    @Test
-    fun `pair orchestrates full flow - connect, wait, download, benchmark, report`() = runTest {
+    fun `pair orchestrates full flow - connect, wait, download, persist`() = runTest {
         val connectedSession = PairingSession(
             id = "session-1",
             code = "ABC123",
@@ -400,15 +350,7 @@ class PairingManagerTest {
 
         coEvery { api.connectToPairing("ABC123", any()) } returns Response.success(connectedSession)
         coEvery { api.getPairingSession("ABC123") } returns Response.success(deployingSession)
-        coEvery { api.submitBenchmark("ABC123", any()) } returns Response.success(Unit)
 
-        // Mock the internal downloadModel call via benchmarkRunner
-        every { benchmarkRunner.run(any(), eq("mobilenet-v2"), any()) } returns testBenchmarkReport.copy(
-            modelName = "mobilenet-v2",
-        )
-
-        // We need to also mock the download. Since pair() calls executeDeployment()
-        // which calls downloadModel() internally, we use a MockWebServer.
         val mockServer = MockWebServer()
         mockServer.enqueue(
             MockResponse()
@@ -425,12 +367,14 @@ class PairingManagerTest {
 
         val result = pairingManager.pair("ABC123", timeoutMs = 5_000L)
 
-        assertEquals("mobilenet-v2", result.report.modelName)
+        assertEquals("mobilenet-v2", result.modelName)
+        assertEquals("1.0.0", result.modelVersion)
+        assertNotNull(result.modelFilePath)
 
-        // Verify all API calls were made
+        // Verify pairing API calls were made (but NOT submitBenchmark)
         coVerify { api.connectToPairing("ABC123", any()) }
         coVerify { api.getPairingSession("ABC123") }
-        coVerify { api.submitBenchmark("ABC123", any()) }
+        coVerify(exactly = 0) { api.submitBenchmark(any(), any()) }
 
         mockServer.shutdown()
     }
@@ -470,13 +414,9 @@ class PairingManagerTest {
             ),
         )
 
-        every { benchmarkRunner.run(any(), eq("multi-model"), any()) } returns testBenchmarkReport.copy(
-            modelName = "multi-model",
-        )
-
         val result = pairingManager.executeDeployment(deployment)
 
-        assertEquals("multi-model", result.report.modelName)
+        assertEquals("multi-model", result.modelName)
         assertNotNull(result.modelFilePath)
         assertTrue(result.modelFilePath!!.contains("model.gguf"))
 
@@ -501,13 +441,9 @@ class PairingManagerTest {
             resources = emptyList(),
         )
 
-        every { benchmarkRunner.run(any(), eq("single-model"), any()) } returns testBenchmarkReport.copy(
-            modelName = "single-model",
-        )
-
         val result = pairingManager.executeDeployment(deployment)
 
-        assertEquals("single-model", result.report.modelName)
+        assertEquals("single-model", result.modelName)
         // Single download = 1 request
         assertEquals(1, mockServer.requestCount)
 
@@ -542,13 +478,9 @@ class PairingManagerTest {
             ),
         )
 
-        every { benchmarkRunner.run(any(), eq("custom-model"), any()) } returns testBenchmarkReport.copy(
-            modelName = "custom-model",
-        )
-
         val result = pairingManager.executeDeployment(deployment)
 
-        assertEquals("custom-model", result.report.modelName)
+        assertEquals("custom-model", result.modelName)
         // weights.bin has load_order=0, so it's the primary (first sorted)
         assertTrue(result.modelFilePath!!.contains("weights.bin"))
 
