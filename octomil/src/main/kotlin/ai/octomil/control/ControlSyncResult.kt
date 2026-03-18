@@ -15,6 +15,12 @@ data class ControlSyncResult(
     val assignmentsChanged: Boolean,
     /** Whether rollout percentages or rules changed in this sync. */
     val rolloutsChanged: Boolean,
+    /**
+     * Server-side engine overrides (kill switch).
+     * Key: model ID or `"*"`. Value: engine wire value (e.g. `"llama_cpp"`, `"tflite"`).
+     * Null when the server did not include overrides.
+     */
+    val engineOverrides: Map<String, String>? = null,
     /** Epoch millis when this sync completed. */
     val fetchedAt: Long,
 )
