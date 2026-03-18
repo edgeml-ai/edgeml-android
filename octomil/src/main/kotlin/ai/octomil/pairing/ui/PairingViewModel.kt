@@ -66,14 +66,12 @@ sealed class PairingState {
  * @param pairingManager The pairing manager handling server communication.
  * @param token Pairing code extracted from the deep link URI.
  * @param host Server host extracted from the deep link URI.
- * @param api Optional API client for benchmark submission during deploy.
  * @param appContext Application context for deploying the model.
  */
 class PairingViewModel(
     private val pairingManager: PairingManager,
     private val token: String,
     private val host: String,
-    private val api: OctomilApi? = null,
     private val appContext: Context? = null,
 ) : ViewModel() {
 
@@ -121,7 +119,6 @@ class PairingViewModel(
                             modelFile = File(modelPath),
                             name = result.modelName,
                             pairingCode = token,
-                            api = api,
                         )
                     } catch (e: Exception) {
                         // Non-fatal: deploy/benchmark failure should not block pairing UI
@@ -240,7 +237,6 @@ class PairingViewModel(
                 pairingManager = pairingManager,
                 token = token,
                 host = host,
-                api = api,
                 appContext = context.applicationContext,
             ) as T
         }
@@ -254,7 +250,6 @@ class PairingViewModel(
         private val pairingManager: PairingManager,
         private val token: String,
         private val host: String,
-        private val api: OctomilApi? = null,
         private val appContext: Context? = null,
     ) : ViewModelProvider.Factory {
 
@@ -267,7 +262,6 @@ class PairingViewModel(
                 pairingManager = pairingManager,
                 token = token,
                 host = host,
-                api = api,
                 appContext = appContext,
             ) as T
         }

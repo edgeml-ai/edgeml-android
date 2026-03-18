@@ -34,7 +34,7 @@ import java.util.concurrent.TimeUnit
  * val result = pairingManager.pair("ABC123")
  *
  * // Then load the model for inference (benchmarks run here):
- * val deployed = Octomil.deploy(context, File(result.modelFilePath!!), pairingCode = "ABC123", api = api)
+ * val deployed = Octomil.deploy(context, File(result.modelFilePath!!), pairingCode = "ABC123")
  * ```
  */
 /**

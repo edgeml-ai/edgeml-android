@@ -83,7 +83,6 @@ object DeepLinkPairing {
                         modelFile = File(modelPath),
                         name = result.modelName,
                         pairingCode = action.token,
-                        api = api,
                     )
                 } catch (e: Exception) {
                     // Non-fatal: deploy/benchmark failure should not break the pairing result
