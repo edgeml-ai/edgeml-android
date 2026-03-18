@@ -1,6 +1,7 @@
 package ai.octomil.speech
 
 import ai.octomil.ModelResolver
+import ai.octomil.audio.AudioTranscriptions
 import android.content.Context
 import android.util.Log
 import kotlinx.coroutines.Dispatchers
@@ -15,17 +16,27 @@ private const val TAG = "OctomilAudio"
  * creates runtimes via [SpeechRuntimeRegistry].
  *
  * ```kotlin
+ * // Streaming
  * val session = Octomil.audio.streamingSession("sherpa-zipformer-en-20m")
  * session.feed(samples)
  * session.transcript.collect { text -> /* live UI */ }
  * val final = session.finalize()
  * session.release()
+ *
+ * // Batch (contract-compliant)
+ * val result = Octomil.audio.transcriptions.create(audioFile, "whisper-small")
+ * println(result.text)
  * ```
  */
 class OctomilAudio internal constructor(
     private val contextProvider: () -> Context?,
     private val resolver: ModelResolver = ModelResolver.default(),
 ) {
+    /** Audio transcription (speech-to-text) — `audio.transcriptions.create()`. */
+    val transcriptions: AudioTranscriptions by lazy {
+        AudioTranscriptions(contextProvider, resolver)
+    }
+
     /**
      * Create a streaming transcription session for the given model.
      *

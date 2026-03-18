@@ -1,11 +1,30 @@
 package ai.octomil.audio
 
+import ai.octomil.ModelResolver
 import ai.octomil.errors.OctomilErrorCode
 import ai.octomil.errors.OctomilException
-import ai.octomil.generated.ModelCapability
-import ai.octomil.manifest.ModelCatalogService
-import ai.octomil.runtime.core.RuntimeRequest
+import ai.octomil.speech.SpeechRuntimeRegistry
+import android.content.Context
 import java.io.File
+
+/**
+ * Response format for audio transcription, matching contract v1.5.0.
+ */
+enum class TranscriptionResponseFormat(val wire: String) {
+    TEXT("text"),
+    JSON("json"),
+    VERBOSE_JSON("verbose_json"),
+    SRT("srt"),
+    VTT("vtt"),
+}
+
+/**
+ * Timestamp granularity for transcription segments, matching contract v1.5.0.
+ */
+enum class TimestampGranularity(val wire: String) {
+    WORD("word"),
+    SEGMENT("segment"),
+}
 
 /**
  * Result of an audio transcription request.
@@ -28,72 +47,110 @@ data class TranscriptionSegment(
     val startMs: Long,
     val endMs: Long,
     val text: String,
+    val confidence: Float? = null,
 )
 
 /**
- * Options for audio transcription.
+ * Options for audio transcription — contract fields only.
  */
 data class TranscriptionOptions(
-    /** Hint for the expected language (ISO 639-1 code). */
+    /** Hint for the expected language (BCP-47 code). */
     val language: String? = null,
-    /** An optional text prompt to guide the transcription. */
-    val prompt: String? = null,
-    /** Temperature for sampling. Lower = more deterministic. */
-    val temperature: Float = 0.0f,
+    /** Response format. Default is TEXT. */
+    val responseFormat: TranscriptionResponseFormat = TranscriptionResponseFormat.TEXT,
+    /** Timestamp granularities to include in the response. */
+    val timestampGranularities: List<TimestampGranularity> = emptyList(),
 )
 
 /**
- * Sub-resource of [OctomilAudio] — mirrors the `audio.transcriptions` path.
+ * Sub-resource of [ai.octomil.speech.OctomilAudio] — mirrors the `audio.transcriptions` path.
  *
  * ```kotlin
- * val result = octomil.audio.transcriptions.create(audioFile)
+ * val result = Octomil.audio.transcriptions.create(audioFile, "whisper-small")
  * println(result.text)
  * ```
  */
 class AudioTranscriptions internal constructor(
-    private val catalogProvider: () -> ModelCatalogService?,
+    private val contextProvider: () -> Context?,
+    private val resolver: ModelResolver,
 ) {
     /**
-     * Transcribe an audio file.
+     * Transcribe an audio file using the specified model.
      *
-     * Resolves the runtime via [ModelCatalogService] for the
-     * [ModelCapability.TRANSCRIPTION] capability.
+     * Routes through [SpeechRuntimeRegistry] to the speech-specific runtime
+     * (e.g. sherpa-onnx), not the text-generation RuntimeRequest path.
      *
      * @param audioFile The audio file to transcribe (WAV, MP3, M4A, etc.).
+     * @param model Logical model name (required per contract).
      * @param options Transcription options.
      * @return Transcription result.
      */
     suspend fun create(
         audioFile: File,
+        model: String,
         options: TranscriptionOptions = TranscriptionOptions(),
     ): TranscriptionResult {
         require(audioFile.exists()) { "Audio file not found: ${audioFile.absolutePath}" }
 
-        val catalog = catalogProvider()
+        // Reject options the current runtime cannot honor
+        validateOptions(options)
+
+        val context = contextProvider()
             ?: throw OctomilException(
                 OctomilErrorCode.RUNTIME_UNAVAILABLE,
-                "ModelCatalogService not configured. Call Octomil.configure() first.",
+                "Not initialized. Call Octomil.configure() first.",
             )
-
-        val runtime = catalog.runtimeForCapability(ModelCapability.TRANSCRIPTION)
+        val factory = SpeechRuntimeRegistry.factory
             ?: throw OctomilException(
                 OctomilErrorCode.RUNTIME_UNAVAILABLE,
-                "No runtime registered for TRANSCRIPTION capability. " +
-                    "Add a transcription model to your AppManifest.",
+                "No speech runtime factory registered.",
             )
 
-        // Build a runtime request with the audio file path as the prompt.
-        // The underlying transcription runtime (e.g. Whisper) interprets this
-        // as the input audio path rather than text.
-        val request = RuntimeRequest(
-            prompt = audioFile.absolutePath,
-            temperature = options.temperature,
-            maxTokens = Int.MAX_VALUE,
-        )
+        // Resolve model by name (required per contract)
+        val modelFile = resolver.resolve(context, model)
+            ?: throw OctomilException(
+                OctomilErrorCode.MODEL_NOT_FOUND,
+                "Model '$model' not found.",
+            )
+        val modelDir = if (modelFile.isDirectory) modelFile else modelFile.parentFile!!
 
-        val response = runtime.run(request)
-        return TranscriptionResult(
-            text = response.text,
-        )
+        // Decode audio file to 16kHz mono float samples
+        val samples = AudioFileDecoder.decode(audioFile)
+
+        // Create runtime, transcribe, return
+        val runtime = factory(modelDir)
+        val session = runtime.startSession()
+        try {
+            session.feed(samples)
+            val text = session.finalize()
+            return TranscriptionResult(text = text)
+        } finally {
+            session.release()
+            runtime.release()
+        }
+    }
+
+    /**
+     * Reject options the current SpeechRuntime cannot honor.
+     *
+     * Uses UNSUPPORTED_MODALITY (not INVALID_INPUT) because these are
+     * contract-valid values that the local engine doesn't support.
+     */
+    internal fun validateOptions(options: TranscriptionOptions) {
+        if (options.responseFormat != TranscriptionResponseFormat.TEXT &&
+            options.responseFormat != TranscriptionResponseFormat.JSON
+        ) {
+            throw OctomilException(
+                OctomilErrorCode.UNSUPPORTED_MODALITY,
+                "response_format '${options.responseFormat.wire}' is not supported " +
+                    "by the current runtime. Supported: text, json.",
+            )
+        }
+        if (options.timestampGranularities.isNotEmpty()) {
+            throw OctomilException(
+                OctomilErrorCode.UNSUPPORTED_MODALITY,
+                "timestamp_granularities is not supported by the current runtime.",
+            )
+        }
     }
 }
