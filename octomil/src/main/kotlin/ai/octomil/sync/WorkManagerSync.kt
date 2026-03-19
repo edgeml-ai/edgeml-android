@@ -3,11 +3,11 @@ package ai.octomil.sync
 import ai.octomil.api.OctomilApi
 import ai.octomil.api.OctomilApiFactory
 import ai.octomil.api.dto.AnyValue
-import ai.octomil.api.dto.ArtifactStatusEntry
 import ai.octomil.api.dto.ExportLogsServiceRequest
 import ai.octomil.api.dto.InstrumentationScope
 import ai.octomil.api.dto.KeyValue
 import ai.octomil.api.dto.LogRecord
+import ai.octomil.api.dto.ObservedModelStatus
 import ai.octomil.api.dto.ObservedStateRequest
 import ai.octomil.api.dto.OtlpResource
 import ai.octomil.api.dto.ResourceLogs
@@ -162,27 +162,69 @@ class OctomilSyncWorker(
             return
         }
 
-        val artifactStatuses = mutableListOf<ArtifactStatusEntry>()
+        val observedModels = mutableListOf<ObservedModelStatus>()
         val artifactCacheDir = java.io.File(applicationContext.cacheDir, "octomil_artifacts").apply { mkdirs() }
+        val metadataStore = ArtifactMetadataStore(artifactCacheDir)
+        val activationManager = ActivationManager(metadataStore)
 
-        // Download missing or outdated artifacts
-        for (artifact in desiredState.artifacts) {
-            val localFile = java.io.File(artifactCacheDir, "${artifact.artifactId}_${artifact.version}")
-            if (localFile.exists() && localFile.length() == artifact.sizeBytes) {
-                artifactStatuses.add(
-                    ArtifactStatusEntry(
-                        artifactId = artifact.artifactId,
-                        status = "current",
-                        bytesDownloaded = artifact.sizeBytes,
-                        totalBytes = artifact.sizeBytes,
+        for (model in desiredState.models) {
+            val modelId = model.modelId
+            val desiredVersion = model.desiredVersion
+            val policy = ActivationPolicy.fromCode(model.activationPolicy)
+            val manifest = model.artifactManifest
+
+            // Version-based comparison: skip download if installed version matches desired
+            val installedVersion = metadataStore.installedVersion(modelId)
+            if (installedVersion != null && installedVersion == desiredVersion) {
+                val activeEntry = metadataStore.activeEntry(modelId)
+                observedModels.add(
+                    ObservedModelStatus(
+                        modelId = modelId,
+                        status = "active",
+                        installedVersion = desiredVersion,
+                        activeVersion = activeEntry?.modelVersion,
+                        health = "healthy",
                     ),
                 )
                 continue
             }
 
+            // Need artifact manifest to download
+            if (manifest == null) {
+                Timber.w("No artifact manifest for $modelId desired=$desiredVersion, skipping")
+                observedModels.add(
+                    ObservedModelStatus(
+                        modelId = modelId,
+                        status = "failed_retryable",
+                        lastError = "no_artifact_manifest",
+                    ),
+                )
+                continue
+            }
+
+            val artifactId = manifest.artifactId
+            val artifactVersion = manifest.version
+            val downloadUrl = manifest.cdnBaseUrl
+            val checksum = manifest.sha256 ?: ""
+            val totalBytes = manifest.totalBytes
+            val localFile = java.io.File(artifactCacheDir, "${artifactId}_${artifactVersion}")
+
             try {
-                Timber.d("Downloading artifact ${artifact.artifactId} v${artifact.version}")
-                val response = api.downloadModelFile(artifact.downloadUrl)
+                Timber.d("Downloading artifact $artifactId v$artifactVersion (model $modelId desired=$desiredVersion)")
+
+                if (downloadUrl.isNullOrEmpty()) {
+                    Timber.w("No download URL for $artifactId, skipping")
+                    observedModels.add(
+                        ObservedModelStatus(
+                            modelId = modelId,
+                            status = "failed_retryable",
+                            lastError = "no_download_url",
+                        ),
+                    )
+                    continue
+                }
+
+                val response = api.downloadModelFile(downloadUrl)
                 if (response.isSuccessful) {
                     response.body()?.let { body ->
                         localFile.outputStream().use { out ->
@@ -193,49 +235,106 @@ class OctomilSyncWorker(
                     }
                     // Verify checksum (SHA-256)
                     val actualChecksum = checksumFile(localFile)
-                    if (artifact.checksum.isNotEmpty() && actualChecksum != artifact.checksum) {
-                        Timber.w("Checksum mismatch for ${artifact.artifactId}: expected=${artifact.checksum}, actual=$actualChecksum")
+                    if (checksum.isNotEmpty() && actualChecksum != checksum) {
+                        Timber.w("Checksum mismatch for $artifactId: expected=$checksum, actual=$actualChecksum")
                         localFile.delete()
-                        artifactStatuses.add(
-                            ArtifactStatusEntry(
-                                artifactId = artifact.artifactId,
-                                status = "error",
-                                errorCode = "checksum_mismatch",
+                        metadataStore.markFailed(artifactId, artifactVersion, "checksum_mismatch")
+                        observedModels.add(
+                            ObservedModelStatus(
+                                modelId = modelId,
+                                status = "failed_corrupt",
+                                installedVersion = desiredVersion,
+                                lastError = "checksum_mismatch",
+                            ),
+                        )
+                        continue
+                    }
+
+                    // Record verified artifact in metadata store
+                    metadataStore.upsert(
+                        ArtifactMetadataEntry(
+                            artifactId = artifactId,
+                            artifactVersion = artifactVersion,
+                            modelId = modelId,
+                            modelVersion = desiredVersion,
+                            installedAt = System.currentTimeMillis(),
+                            status = ArtifactSyncStatus.VERIFIED,
+                            filePath = localFile.absolutePath,
+                            checksum = actualChecksum,
+                            sizeBytes = localFile.length(),
+                        ),
+                    )
+
+                    // Activate according to policy
+                    val activationResult = activationManager.activate(
+                        modelId = modelId,
+                        artifactId = artifactId,
+                        artifactVersion = artifactVersion,
+                        policy = policy,
+                    )
+
+                    if (!activationResult.success) {
+                        // Activation failed — rollback to previous version
+                        val rollbackResult = activationManager.rollback(
+                            modelId = modelId,
+                            failedArtifactId = artifactId,
+                            failedVersion = artifactVersion,
+                            errorCode = activationResult.errorCode ?: "activation_failed",
+                        )
+                        observedModels.add(
+                            ObservedModelStatus(
+                                modelId = modelId,
+                                status = "failed_healthcheck",
+                                installedVersion = desiredVersion,
+                                activeVersion = rollbackResult.previousVersion,
+                                lastError = activationResult.errorCode ?: "activation_failed",
                             ),
                         )
                     } else {
-                        artifactStatuses.add(
-                            ArtifactStatusEntry(
-                                artifactId = artifact.artifactId,
-                                status = "current",
-                                bytesDownloaded = localFile.length(),
-                                totalBytes = artifact.sizeBytes,
+                        val activeEntry = metadataStore.activeEntry(modelId)
+                        val statusCode = when (policy) {
+                            ActivationPolicy.IMMEDIATE -> "active"
+                            ActivationPolicy.NEXT_LAUNCH,
+                            ActivationPolicy.WHEN_IDLE,
+                            ActivationPolicy.MANUAL -> "staged"
+                        }
+                        observedModels.add(
+                            ObservedModelStatus(
+                                modelId = modelId,
+                                status = statusCode,
+                                installedVersion = desiredVersion,
+                                activeVersion = activeEntry?.modelVersion,
+                                health = if (statusCode == "active") "healthy" else null,
                             ),
                         )
                     }
                 } else {
-                    artifactStatuses.add(
-                        ArtifactStatusEntry(
-                            artifactId = artifact.artifactId,
-                            status = "error",
-                            errorCode = "download_http_${response.code()}",
+                    observedModels.add(
+                        ObservedModelStatus(
+                            modelId = modelId,
+                            status = "failed_retryable",
+                            lastError = "download_http_${response.code()}",
                         ),
                     )
                 }
             } catch (e: Exception) {
-                Timber.w(e, "Failed to download artifact ${artifact.artifactId}")
-                artifactStatuses.add(
-                    ArtifactStatusEntry(
-                        artifactId = artifact.artifactId,
-                        status = "error",
-                        errorCode = "download_exception",
+                Timber.w(e, "Failed to download artifact $artifactId")
+                observedModels.add(
+                    ObservedModelStatus(
+                        modelId = modelId,
+                        status = "failed_retryable",
+                        lastError = "download_exception",
                     ),
                 )
             }
         }
 
-        // GC eligible artifacts
+        // GC eligible artifacts: remove from metadata store and delete files
         for (gcId in desiredState.gcEligibleArtifactIds) {
+            val gcEntries = metadataStore.allEntries().filter { it.artifactId == gcId }
+            for (entry in gcEntries) {
+                metadataStore.remove(entry.artifactId, entry.artifactVersion)
+            }
             val gcFiles = artifactCacheDir.listFiles { _, name -> name.startsWith("${gcId}_") }
             gcFiles?.forEach { file ->
                 Timber.d("GC artifact: ${file.name}")
@@ -244,8 +343,8 @@ class OctomilSyncWorker(
         }
 
         // Report observed state
-        controlClient.reportObservedState(deviceId, artifactStatuses)
-        Timber.i("Desired state sync complete: ${artifactStatuses.size} artifacts processed")
+        controlClient.reportObservedState(deviceId, observedModels)
+        Timber.i("Desired state sync complete: ${observedModels.size} models processed")
     }
 
     private fun checksumFile(file: java.io.File): String {
