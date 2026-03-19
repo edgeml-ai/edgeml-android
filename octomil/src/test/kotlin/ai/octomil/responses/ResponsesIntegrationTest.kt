@@ -1,5 +1,6 @@
 package ai.octomil.responses
 
+import ai.octomil.runtime.core.ChatMLRenderer
 import ai.octomil.runtime.core.ModelRuntime
 import ai.octomil.runtime.core.ModelRuntimeRegistry
 import ai.octomil.runtime.core.RuntimeCapabilities
@@ -77,11 +78,11 @@ class ResponsesIntegrationTest {
 
     @Test
     fun `create with instructions prepends system message`() = runTest {
-        var capturedPrompt = ""
+        var capturedRendered = ""
         val runtime = object : ModelRuntime {
             override val capabilities = RuntimeCapabilities()
             override suspend fun run(request: RuntimeRequest): RuntimeResponse {
-                capturedPrompt = request.prompt
+                capturedRendered = ChatMLRenderer.render(request)
                 return RuntimeResponse(text = "OK", finishReason = "stop")
             }
             override fun stream(request: RuntimeRequest): Flow<RuntimeChunk> = flow {}
@@ -99,23 +100,23 @@ class ResponsesIntegrationTest {
 
         assertTrue(
             "Prompt should contain system instruction",
-            capturedPrompt.contains("You are a comedian")
+            capturedRendered.contains("You are a comedian")
         )
         assertTrue(
             "System instruction should appear before user message",
-            capturedPrompt.indexOf("You are a comedian") < capturedPrompt.indexOf("Tell me a joke")
+            capturedRendered.indexOf("You are a comedian") < capturedRendered.indexOf("Tell me a joke")
         )
     }
 
     @Test
     fun `create with previousResponseId chains conversation`() = runTest {
         var callCount = 0
-        var capturedPrompt = ""
+        var capturedRendered = ""
         val runtime = object : ModelRuntime {
             override val capabilities = RuntimeCapabilities()
             override suspend fun run(request: RuntimeRequest): RuntimeResponse {
                 callCount++
-                capturedPrompt = request.prompt
+                capturedRendered = ChatMLRenderer.render(request)
                 return when (callCount) {
                     1 -> RuntimeResponse(text = "I am a helpful assistant", finishReason = "stop")
                     else -> RuntimeResponse(text = "Chained response", finishReason = "stop")
@@ -141,7 +142,7 @@ class ResponsesIntegrationTest {
         assertEquals("Chained response", (second.output.first() as OutputItem.Text).text)
         assertTrue(
             "Second prompt should contain the first assistant response",
-            capturedPrompt.contains("I am a helpful assistant")
+            capturedRendered.contains("I am a helpful assistant")
         )
     }
 

@@ -2,6 +2,10 @@ package ai.octomil.runtime.engines.tflite
 
 import ai.octomil.chat.GenerateConfig
 import ai.octomil.chat.LLMRuntime
+import ai.octomil.generated.MessageRole
+import ai.octomil.runtime.core.GenerationConfig
+import ai.octomil.runtime.core.RuntimeContentPart
+import ai.octomil.runtime.core.RuntimeMessage
 import ai.octomil.runtime.core.RuntimeRequest
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
@@ -24,7 +28,7 @@ class LLMRuntimeAdapterTest {
         }
 
         val adapter = LLMRuntimeAdapter(llm)
-        val response = adapter.run(RuntimeRequest(prompt = "test"))
+        val response = adapter.run(stubRequest("test"))
 
         assertEquals("Hello world", response.text)
         assertEquals("stop", response.finishReason)
@@ -44,7 +48,7 @@ class LLMRuntimeAdapterTest {
         }
 
         val adapter = LLMRuntimeAdapter(llm)
-        val chunks = adapter.stream(RuntimeRequest(prompt = "test")).toList()
+        val chunks = adapter.stream(stubRequest("test")).toList()
 
         assertEquals(3, chunks.size)
         assertEquals("token1", chunks[0].text)
@@ -65,11 +69,13 @@ class LLMRuntimeAdapterTest {
 
         val adapter = LLMRuntimeAdapter(llm)
         adapter.run(RuntimeRequest(
-            prompt = "test",
-            maxTokens = 100,
-            temperature = 0.5f,
-            topP = 0.9f,
-            stop = listOf("END"),
+            messages = listOf(RuntimeMessage(role = MessageRole.USER, parts = listOf(RuntimeContentPart.Text("test")))),
+            generationConfig = GenerationConfig(
+                maxTokens = 100,
+                temperature = 0.5f,
+                topP = 0.9f,
+                stop = listOf("END"),
+            ),
         ))
 
         assertNotNull(capturedConfig)
@@ -91,4 +97,8 @@ class LLMRuntimeAdapterTest {
         adapter.close()
         assert(closed)
     }
+
+    private fun stubRequest(text: String) = RuntimeRequest(
+        messages = listOf(RuntimeMessage(role = MessageRole.USER, parts = listOf(RuntimeContentPart.Text(text)))),
+    )
 }

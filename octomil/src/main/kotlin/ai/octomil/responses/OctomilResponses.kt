@@ -2,11 +2,15 @@ package ai.octomil.responses
 
 import ai.octomil.errors.OctomilErrorCode
 import ai.octomil.errors.OctomilException
+import ai.octomil.generated.MessageRole
 import ai.octomil.manifest.ModelCatalogService
 import ai.octomil.manifest.ModelRef
+import ai.octomil.runtime.core.GenerationConfig
 import ai.octomil.runtime.core.ModelRuntime
 import ai.octomil.runtime.core.ModelRuntimeRegistry
 import ai.octomil.runtime.core.RuntimeChunk
+import ai.octomil.runtime.core.RuntimeContentPart
+import ai.octomil.runtime.core.RuntimeMessage
 import ai.octomil.runtime.core.RuntimeRequest
 import ai.octomil.runtime.core.RuntimeResponse
 import ai.octomil.runtime.core.RuntimeToolCall
@@ -161,12 +165,66 @@ class OctomilResponses(
     }
 
     private fun buildRuntimeRequest(request: ResponseRequest): RuntimeRequest {
-        val effectiveInput = if (request.instructions != null) {
-            listOf(InputItem.system(request.instructions)) + request.input
-        } else {
-            request.input
+        val messages = mutableListOf<RuntimeMessage>()
+
+        // Prepend instructions as system message
+        request.instructions?.let {
+            messages.add(RuntimeMessage(role = MessageRole.SYSTEM, parts = listOf(RuntimeContentPart.Text(it))))
         }
-        val prompt = PromptFormatter.format(effectiveInput, request.tools, request.toolChoice)
+
+        for (item in request.input) {
+            when (item) {
+                is InputItem.System -> messages.add(RuntimeMessage(
+                    role = MessageRole.SYSTEM,
+                    parts = listOf(RuntimeContentPart.Text(item.content))
+                ))
+                is InputItem.User -> {
+                    val parts = item.content.map { part ->
+                        when (part) {
+                            is ContentPart.Text -> RuntimeContentPart.Text(part.text)
+                            is ContentPart.Image -> RuntimeContentPart.Image(
+                                data = (part.data ?: "").toByteArray(),
+                                mediaType = part.mediaType ?: "image/png",
+                            )
+                            is ContentPart.Audio -> RuntimeContentPart.Audio(
+                                data = (part.data ?: "").toByteArray(),
+                                mediaType = part.mediaType ?: "audio/wav",
+                            )
+                            is ContentPart.Video -> RuntimeContentPart.Video(
+                                data = (part.data ?: "").toByteArray(),
+                                mediaType = part.mediaType ?: "video/mp4",
+                            )
+                            is ContentPart.File -> {
+                                val mt = part.mediaType.lowercase()
+                                when {
+                                    mt.startsWith("image/") -> RuntimeContentPart.Image(data = part.data.toByteArray(), mediaType = part.mediaType)
+                                    mt.startsWith("audio/") -> RuntimeContentPart.Audio(data = part.data.toByteArray(), mediaType = part.mediaType)
+                                    mt.startsWith("video/") -> RuntimeContentPart.Video(data = part.data.toByteArray(), mediaType = part.mediaType)
+                                    else -> RuntimeContentPart.Text("[file: unsupported type ${part.mediaType}]")
+                                }
+                            }
+                        }
+                    }
+                    messages.add(RuntimeMessage(role = MessageRole.USER, parts = parts))
+                }
+                is InputItem.Assistant -> {
+                    val parts = mutableListOf<RuntimeContentPart>()
+                    item.content?.forEach { p ->
+                        if (p is ContentPart.Text) parts.add(RuntimeContentPart.Text(p.text))
+                    }
+                    item.toolCalls?.forEach { call ->
+                        parts.add(RuntimeContentPart.Text("{\"tool_call\": {\"name\": \"${call.name}\", \"arguments\": ${call.arguments}}}"))
+                    }
+                    if (parts.isEmpty()) parts.add(RuntimeContentPart.Text(""))
+                    messages.add(RuntimeMessage(role = MessageRole.ASSISTANT, parts = parts))
+                }
+                is InputItem.ToolResult -> messages.add(RuntimeMessage(
+                    role = MessageRole.TOOL,
+                    parts = listOf(RuntimeContentPart.Text(item.content))
+                ))
+            }
+        }
+
         val toolDefs = if (request.tools.isNotEmpty()) {
             request.tools.map { tool ->
                 RuntimeToolDef(
@@ -186,11 +244,13 @@ class OctomilResponses(
         }
 
         return RuntimeRequest(
-            prompt = prompt,
-            maxTokens = request.maxOutputTokens ?: 512,
-            temperature = request.temperature ?: 0.7f,
-            topP = request.topP ?: 1.0f,
-            stop = request.stop,
+            messages = messages,
+            generationConfig = GenerationConfig(
+                maxTokens = request.maxOutputTokens ?: 512,
+                temperature = request.temperature ?: 0.7f,
+                topP = request.topP ?: 1.0f,
+                stop = request.stop,
+            ),
             toolDefinitions = toolDefs,
             jsonSchema = jsonSchema,
         )

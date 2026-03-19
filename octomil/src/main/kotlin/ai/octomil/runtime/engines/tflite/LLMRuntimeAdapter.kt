@@ -2,6 +2,7 @@ package ai.octomil.runtime.engines.tflite
 
 import ai.octomil.chat.GenerateConfig
 import ai.octomil.chat.LLMRuntime
+import ai.octomil.runtime.core.ChatMLRenderer
 import ai.octomil.runtime.core.ModelRuntime
 import ai.octomil.runtime.core.RuntimeCapabilities
 import ai.octomil.runtime.core.RuntimeChunk
@@ -23,10 +24,11 @@ internal class LLMRuntimeAdapter(
 
     override suspend fun run(request: RuntimeRequest): RuntimeResponse {
         val config = request.toGenerateConfig()
+        val prompt = ChatMLRenderer.render(request)
         val tokens = mutableListOf<String>()
         var tokenCount = 0
 
-        llmRuntime.generate(request.prompt, config).collect { token ->
+        llmRuntime.generate(prompt, config).collect { token ->
             tokens.add(token)
             tokenCount++
         }
@@ -36,16 +38,17 @@ internal class LLMRuntimeAdapter(
             text = text,
             finishReason = "stop",
             usage = RuntimeUsage(
-                promptTokens = estimateTokens(request.prompt),
+                promptTokens = estimateTokens(prompt),
                 completionTokens = tokenCount,
-                totalTokens = estimateTokens(request.prompt) + tokenCount,
+                totalTokens = estimateTokens(prompt) + tokenCount,
             ),
         )
     }
 
     override fun stream(request: RuntimeRequest): Flow<RuntimeChunk> {
         val config = request.toGenerateConfig()
-        return llmRuntime.generate(request.prompt, config).map { token ->
+        val prompt = ChatMLRenderer.render(request)
+        return llmRuntime.generate(prompt, config).map { token ->
             RuntimeChunk(text = token)
         }
     }
@@ -55,10 +58,10 @@ internal class LLMRuntimeAdapter(
     }
 
     private fun RuntimeRequest.toGenerateConfig() = GenerateConfig(
-        maxTokens = maxTokens,
-        temperature = temperature,
-        topP = topP,
-        stop = stop,
+        maxTokens = generationConfig.maxTokens,
+        temperature = generationConfig.temperature,
+        topP = generationConfig.topP,
+        stop = generationConfig.stop,
     )
 
     private fun estimateTokens(text: String): Int =

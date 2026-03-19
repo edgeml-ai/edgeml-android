@@ -2,6 +2,7 @@ package ai.octomil.runtime.routing
 
 import ai.octomil.errors.OctomilErrorCode
 import ai.octomil.errors.OctomilException
+import ai.octomil.runtime.core.ChatMLRenderer
 import ai.octomil.runtime.core.ModelRuntime
 import ai.octomil.runtime.core.RuntimeCapabilities
 import ai.octomil.runtime.core.RuntimeChunk
@@ -145,20 +146,23 @@ internal class CloudModelRuntime(
     // =========================================================================
 
     internal fun buildRequestBody(request: RuntimeRequest, stream: Boolean): String {
+        val prompt = ChatMLRenderer.render(request)
+        val gen = request.generationConfig
+
         val root = buildJsonObject {
             put("model", model)
             put("messages", buildJsonArray {
                 add(buildJsonObject {
                     put("role", "user")
-                    put("content", request.prompt)
+                    put("content", prompt)
                 })
             })
-            put("max_tokens", request.maxTokens)
-            put("temperature", request.temperature)
-            put("top_p", request.topP)
+            put("max_tokens", gen.maxTokens)
+            put("temperature", gen.temperature)
+            put("top_p", gen.topP)
             put("stream", stream)
 
-            request.stop?.let { stopList ->
+            gen.stop?.let { stopList ->
                 put("stop", buildJsonArray {
                     stopList.forEach { add(JsonPrimitive(it)) }
                 })

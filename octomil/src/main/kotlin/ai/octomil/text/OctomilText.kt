@@ -2,8 +2,12 @@ package ai.octomil.text
 
 import ai.octomil.errors.OctomilErrorCode
 import ai.octomil.errors.OctomilException
+import ai.octomil.generated.MessageRole
 import ai.octomil.generated.ModelCapability
 import ai.octomil.manifest.ModelCatalogService
+import ai.octomil.runtime.core.GenerationConfig
+import ai.octomil.runtime.core.RuntimeContentPart
+import ai.octomil.runtime.core.RuntimeMessage
 import ai.octomil.runtime.core.RuntimeRequest
 import android.content.Context
 
@@ -65,9 +69,8 @@ class OctomilText internal constructor(
             )
 
         val request = RuntimeRequest(
-            prompt = context,
-            maxTokens = 15,
-            temperature = 0.0f,
+            messages = listOf(RuntimeMessage(role = MessageRole.USER, parts = listOf(RuntimeContentPart.Text(context)))),
+            generationConfig = GenerationConfig(maxTokens = 15, temperature = 0.0f),
         )
         val response = runtime.run(request)
         return PredictionResult(text = response.text)
