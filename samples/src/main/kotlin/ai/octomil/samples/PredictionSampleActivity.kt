@@ -33,6 +33,7 @@ class PredictionSampleActivity : ComponentActivity() {
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PredictionSampleScreen() {
     var input by remember { mutableStateOf("The weather today is") }

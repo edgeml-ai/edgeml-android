@@ -179,7 +179,7 @@ The Android SDK reads `octomil.yaml` via `AppManifest` and `ModelCatalogService`
 
 ## Samples
 
-Minimal, copyable examples for the main SDK capabilities:
+Minimal examples for the three main Android SDK capabilities:
 
 | Sample | Capability | Key API |
 |--------|-----------|---------|
@@ -187,15 +187,15 @@ Minimal, copyable examples for the main SDK capabilities:
 | `TranscriptionSampleActivity` | Speech-to-text | `Octomil.audio.transcribe()` |
 | `PredictionSampleActivity` | Next-word prediction | `Octomil.text.predict()` |
 
-Each sample is a single Activity (~100 lines) in the [`samples/`](samples/) module. Build and install:
+Each sample is a single Activity in the [`samples/`](samples/) module and shows the shortest useful local integration path for one capability. Build and install on a physical Android device:
 
 ```bash
 ./gradlew :samples:installDebug
 ```
 
-**Prerequisites:** At least one deployed model per capability. See [samples/README.md](samples/README.md) for details.
+**Prerequisites:** One deployed model per capability on the device. These samples use `Octomil.init(...)` and local model resolution only; they do not cover auth, pairing, or control-plane setup. See [samples/README.md](samples/README.md) for setup.
 
-> **Looking for the companion app?** The [Octomil Android App](https://github.com/octomil/octomil-app-android) is a broader evaluation and dogfood app covering all capabilities, device pairing, discovery, and golden tests. These SDK samples are intentionally minimal — use them as a starting point for your own integration.
+> **Need the full device app?** The [Octomil Android App](https://github.com/octomil/octomil-app-android) is the broader evaluation app for model testing, pairing, recovery, and golden-path automation. These samples are intentionally narrower: one feature, local assumptions, copyable code.
 
 ## Contributing
 

@@ -44,6 +44,7 @@ class ChatSampleActivity : ComponentActivity() {
 
 data class ChatMessage(val role: String, val text: String)
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ChatSampleScreen(modelName: String) {
     var messages by remember { mutableStateOf(listOf<ChatMessage>()) }
@@ -131,7 +132,7 @@ fun ChatSampleScreen(modelName: String) {
                                     Octomil.responses.stream(request).collect { event ->
                                         when (event) {
                                             is ResponseStreamEvent.TextDelta -> {
-                                                accumulated += event.text
+                                                accumulated += event.delta
                                                 messages = messages.toMutableList().also {
                                                     it[idx] = ChatMessage("assistant", accumulated)
                                                 }

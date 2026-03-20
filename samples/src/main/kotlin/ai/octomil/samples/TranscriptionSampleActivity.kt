@@ -13,6 +13,7 @@ import ai.octomil.Octomil
 import kotlinx.coroutines.launch
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
+import kotlin.math.min
 
 // Minimal transcription sample — batch audio-to-text.
 //
@@ -37,20 +38,82 @@ class TranscriptionSampleActivity : ComponentActivity() {
         }
     }
 
-    // Load bundled WAV and convert 16-bit PCM to FloatArray
+    // Load bundled WAV and convert 16-bit mono PCM to FloatArray.
     private fun loadTestAudio(): FloatArray? {
         val resId = resources.getIdentifier("test_audio", "raw", packageName)
         if (resId == 0) return null
 
         val bytes = resources.openRawResource(resId).use { it.readBytes() }
-        // Skip 44-byte WAV header
-        if (bytes.size <= 44) return null
-        val pcm = bytes.copyOfRange(44, bytes.size)
-        val shorts = ByteBuffer.wrap(pcm).order(ByteOrder.LITTLE_ENDIAN).asShortBuffer()
-        return FloatArray(shorts.remaining()) { shorts.get(it) / 32768f }
+        return parsePcmWav(bytes)
+    }
+
+    private fun parsePcmWav(bytes: ByteArray): FloatArray? {
+        if (bytes.size < 12) return null
+        if (readAscii(bytes, 0, 4) != "RIFF" || readAscii(bytes, 8, 4) != "WAVE") return null
+
+        var offset = 12
+        var audioFormat: Int? = null
+        var channelCount: Int? = null
+        var sampleRate: Int? = null
+        var bitsPerSample: Int? = null
+        var dataOffset: Int? = null
+        var dataSize: Int? = null
+
+        while (offset + 8 <= bytes.size) {
+            val chunkId = readAscii(bytes, offset, 4)
+            val chunkSize = readIntLE(bytes, offset + 4)
+            if (chunkSize < 0) return null
+
+            val chunkDataOffset = offset + 8
+            val chunkEnd = chunkDataOffset + chunkSize
+            if (chunkEnd > bytes.size) return null
+
+            when (chunkId) {
+                "fmt " -> {
+                    if (chunkSize < 16) return null
+                    audioFormat = readShortLE(bytes, chunkDataOffset)
+                    channelCount = readShortLE(bytes, chunkDataOffset + 2)
+                    sampleRate = readIntLE(bytes, chunkDataOffset + 4)
+                    bitsPerSample = readShortLE(bytes, chunkDataOffset + 14)
+                }
+                "data" -> {
+                    dataOffset = chunkDataOffset
+                    dataSize = chunkSize
+                }
+            }
+
+            offset = chunkEnd + (chunkSize and 1)
+        }
+
+        if (audioFormat != 1 || channelCount != 1 || sampleRate != 16_000 || bitsPerSample != 16) {
+            return null
+        }
+
+        val start = dataOffset ?: return null
+        val size = dataSize ?: return null
+        if (size < 2) return null
+
+        val shortBuffer = ByteBuffer.wrap(bytes, start, size)
+            .order(ByteOrder.LITTLE_ENDIAN)
+            .asShortBuffer()
+        val sampleCount = min(shortBuffer.remaining(), size / 2)
+        return FloatArray(sampleCount) { shortBuffer.get(it) / 32768f }
+    }
+
+    private fun readAscii(bytes: ByteArray, offset: Int, length: Int): String {
+        return bytes.copyOfRange(offset, offset + length).decodeToString()
+    }
+
+    private fun readIntLE(bytes: ByteArray, offset: Int): Int {
+        return ByteBuffer.wrap(bytes, offset, 4).order(ByteOrder.LITTLE_ENDIAN).int
+    }
+
+    private fun readShortLE(bytes: ByteArray, offset: Int): Int {
+        return ByteBuffer.wrap(bytes, offset, 2).order(ByteOrder.LITTLE_ENDIAN).short.toInt() and 0xffff
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TranscriptionSampleScreen(modelName: String, loadAudio: () -> FloatArray?) {
     var transcription by remember { mutableStateOf("") }
