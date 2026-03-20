@@ -177,6 +177,26 @@ octomil manifest init
 
 The Android SDK reads `octomil.yaml` via `AppManifest` and `ModelCatalogService` to handle model downloads and runtime resolution automatically.
 
+## Samples
+
+Minimal, copyable examples for the main SDK capabilities:
+
+| Sample | Capability | Key API |
+|--------|-----------|---------|
+| `ChatSampleActivity` | Text generation | `Octomil.responses.stream()` |
+| `TranscriptionSampleActivity` | Speech-to-text | `Octomil.audio.transcribe()` |
+| `PredictionSampleActivity` | Next-word prediction | `Octomil.text.predict()` |
+
+Each sample is a single Activity (~100 lines) in the [`samples/`](samples/) module. Build and install:
+
+```bash
+./gradlew :samples:installDebug
+```
+
+**Prerequisites:** At least one deployed model per capability. See [samples/README.md](samples/README.md) for details.
+
+> **Looking for the companion app?** The [Octomil Android App](https://github.com/octomil/octomil-app-android) is a broader evaluation and dogfood app covering all capabilities, device pairing, discovery, and golden tests. These SDK samples are intentionally minimal — use them as a starting point for your own integration.
+
 ## Contributing
 
 See [CONTRIBUTING.md](CONTRIBUTING.md).
