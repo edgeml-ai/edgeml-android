@@ -82,8 +82,9 @@ class EngineRegistryTest {
 
     @Test
     fun `modality default used when exact engine match absent`() {
-        // No TFLITE-specific registration for IMAGE exists by default
-        val engine = EngineRegistry.resolve(Modality.IMAGE, Engine.TFLITE, context)
+        // No LLAMA_CPP-specific registration for IMAGE exists by default,
+        // so it falls back to the modality default.
+        val engine = EngineRegistry.resolve(Modality.IMAGE, Engine.LLAMA_CPP, context)
         assertIs<ImageEngine>(engine)
     }
 
@@ -133,6 +134,16 @@ class EngineRegistryTest {
     }
 
     @Test
+    fun `engineFromFilename returns LLAMA_CPP for gguf extension`() {
+        assertEquals(Engine.LLAMA_CPP, EngineRegistry.engineFromFilename("model.gguf"))
+    }
+
+    @Test
+    fun `engineFromFilename returns LLAMA_CPP case insensitive`() {
+        assertEquals(Engine.LLAMA_CPP, EngineRegistry.engineFromFilename("model.GGUF"))
+    }
+
+    @Test
     fun `engineFromFilename returns null for task extension`() {
         assertNull(EngineRegistry.engineFromFilename("gemma.task"))
     }
@@ -145,6 +156,34 @@ class EngineRegistryTest {
     @Test
     fun `engineFromFilename returns null for no extension`() {
         assertNull(EngineRegistry.engineFromFilename("model"))
+    }
+
+    // =========================================================================
+    // Explicit TFLITE key registrations
+    // =========================================================================
+
+    @Test
+    fun `explicit TFLITE key resolves for TEXT modality`() {
+        val resolved = EngineRegistry.resolve(Modality.TEXT, Engine.TFLITE, context)
+        assertIs<LLMEngine>(resolved)
+    }
+
+    @Test
+    fun `explicit TFLITE key resolves for IMAGE modality`() {
+        val resolved = EngineRegistry.resolve(Modality.IMAGE, Engine.TFLITE, context)
+        assertIs<ImageEngine>(resolved)
+    }
+
+    @Test
+    fun `explicit TFLITE key resolves for AUDIO modality`() {
+        val resolved = EngineRegistry.resolve(Modality.AUDIO, Engine.TFLITE, context)
+        assertIs<AudioEngine>(resolved)
+    }
+
+    @Test
+    fun `explicit TFLITE key resolves for VIDEO modality`() {
+        val resolved = EngineRegistry.resolve(Modality.VIDEO, Engine.TFLITE, context)
+        assertIs<VideoEngine>(resolved)
     }
 
     // =========================================================================

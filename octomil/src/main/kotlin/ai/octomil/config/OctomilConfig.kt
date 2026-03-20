@@ -210,6 +210,16 @@ data class OctomilConfig(
      * [ai.octomil.training.TrainingOutcome.degraded] flag will be `true`.
      */
     val allowDegradedTraining: Boolean = false,
+    /**
+     * Pin specific engines per model ID. Overrides benchmark results.
+     *
+     * Key: model ID (e.g. `"whisper-tiny"`) or `"*"` for all models.
+     * Value: engine wire value (e.g. `"llama_cpp"`, `"tflite"`).
+     *
+     * These overrides take precedence over persisted benchmark winners
+     * but are overridden by server-side overrides from ControlSync.
+     */
+    val engineOverrides: Map<String, String> = emptyMap(),
 ) {
     /** Base URL of the Octomil server, derived from [auth]. */
     val serverUrl: String get() = auth.serverUrl
@@ -283,6 +293,7 @@ data class OctomilConfig(
         private var certificatePins: List<String> = emptyList()
         private var pinnedHostname: String = ""
         private var allowDegradedTraining: Boolean = false
+        private var engineOverrides: Map<String, String> = emptyMap()
 
         /**
          * Set the authentication configuration.
@@ -385,6 +396,14 @@ data class OctomilConfig(
          */
         fun allowDegradedTraining(allowed: Boolean) = apply { this.allowDegradedTraining = allowed }
 
+        /**
+         * Pin specific engines per model ID. Overrides benchmark results.
+         *
+         * Key: model ID (e.g. `"whisper-tiny"`) or `"*"` for all models.
+         * Value: engine wire value (e.g. `"llama_cpp"`, `"tflite"`).
+         */
+        fun engineOverrides(overrides: Map<String, String>) = apply { this.engineOverrides = overrides }
+
         fun build(): OctomilConfig {
             val resolvedAuth = auth
                 ?: if (_token != null || _serverUrl != null || _orgId != null) {
@@ -432,6 +451,7 @@ data class OctomilConfig(
                 certificatePins = certificatePins,
                 pinnedHostname = pinnedHostname,
                 allowDegradedTraining = allowDegradedTraining,
+                engineOverrides = engineOverrides,
             )
         }
     }

@@ -80,11 +80,14 @@ object EngineRegistry {
     /**
      * Detect the engine type from a model filename extension.
      *
-     * @return [Engine.TFLITE] for `.tflite`, null for unrecognised extensions.
+     * - `.tflite` -> [Engine.TFLITE]
+     * - `.gguf`   -> [Engine.LLAMA_CPP]
+     * - anything else -> `null`
      */
     fun engineFromFilename(filename: String): Engine? =
         when {
             filename.endsWith(".tflite", ignoreCase = true) -> Engine.TFLITE
+            filename.endsWith(".gguf", ignoreCase = true) -> Engine.LLAMA_CPP
             else -> null
         }
 
@@ -183,9 +186,15 @@ object EngineRegistry {
     }
 
     private fun registerDefaults() {
+        // TFLite engines registered both as modality default AND with explicit .TFLITE key
+        // so RuntimeSelector can target TFLite by name for overrides/benchmarks.
         register(Modality.TEXT) { ctx, _ -> LLMEngine(ctx) }
+        register(Modality.TEXT, Engine.TFLITE) { ctx, _ -> LLMEngine(ctx) }
         register(Modality.IMAGE) { ctx, _ -> ImageEngine(ctx) }
+        register(Modality.IMAGE, Engine.TFLITE) { ctx, _ -> ImageEngine(ctx) }
         register(Modality.AUDIO) { ctx, _ -> AudioEngine(ctx) }
+        register(Modality.AUDIO, Engine.TFLITE) { ctx, _ -> AudioEngine(ctx) }
         register(Modality.VIDEO) { ctx, _ -> VideoEngine(ctx) }
+        register(Modality.VIDEO, Engine.TFLITE) { ctx, _ -> VideoEngine(ctx) }
     }
 }
