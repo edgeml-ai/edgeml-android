@@ -4,7 +4,7 @@ import ai.octomil.errors.OctomilErrorCode
 import ai.octomil.errors.OctomilException
 import ai.octomil.generated.ModelCapability
 import ai.octomil.manifest.ModelCatalogService
-import ai.octomil.runtime.core.RuntimeRequest
+import ai.octomil.manifest.ModelRef
 import android.content.Context
 
 /**
@@ -21,10 +21,10 @@ import android.content.Context
  * result.predictions.forEach { println("${it.text} (${it.score})") }
  * ```
  *
- * ## Text completion (catalog-based)
+ * ## Convenience shorthand
  * ```kotlin
- * val result = Octomil.text.predict("Hello, how ar")
- * println(result.text) // "are you"
+ * val suggestions = Octomil.text.predict(prefix = "Hello, how ar")
+ * // ["are you", "are", "is"]
  * ```
  */
 class OctomilText internal constructor(
@@ -45,32 +45,25 @@ class OctomilText internal constructor(
     }
 
     /**
-     * One-shot text completion for the given context.
+     * Convenience wrapper around [predictions].create that returns suggestion
+     * strings directly.
      *
-     * Resolves the [ModelCapability.KEYBOARD_PREDICTION] runtime from the catalog
-     * and generates a text completion. For ranked next-token candidates, use
-     * [predictions] instead.
+     * Mirrors the iOS SDK's `text.predict(prefix:model:maxSuggestions:)`.
+     *
+     * @param prefix The text typed so far.
+     * @param model Model reference — by ID or capability.
+     * @param maxSuggestions Maximum suggestions to return.
+     * @return List of completion suggestion strings.
      */
-    suspend fun predict(context: String): PredictionResult {
-        val catalog = catalogProvider()
-            ?: throw OctomilException(
-                OctomilErrorCode.RUNTIME_UNAVAILABLE,
-                "ModelCatalogService not configured. Call Octomil.configure() first.",
-            )
-
-        val runtime = catalog.runtimeForCapability(ModelCapability.KEYBOARD_PREDICTION)
-            ?: throw OctomilException(
-                OctomilErrorCode.RUNTIME_UNAVAILABLE,
-                "No runtime registered for KEYBOARD_PREDICTION capability.",
-            )
-
-        val request = RuntimeRequest(
-            prompt = context,
-            maxTokens = 15,
-            temperature = 0.0f,
+    suspend fun predict(
+        prefix: String,
+        model: ModelRef = ModelRef.Capability(ModelCapability.KEYBOARD_PREDICTION),
+        maxSuggestions: Int = 3,
+    ): List<String> {
+        val result = predictions.create(
+            TextPredictionRequest(model = model, input = prefix, n = maxSuggestions),
         )
-        val response = runtime.run(request)
-        return PredictionResult(text = response.text)
+        return result.predictions.map { it.text }
     }
 
     /**
