@@ -1,5 +1,6 @@
-package ai.octomil.pairing
+package ai.octomil.runtime.engines.tflite
 
+import ai.octomil.pairing.BenchmarkReport
 import org.junit.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -34,7 +35,7 @@ class BenchmarkRunnerTest {
 
     @Test
     fun `p50 returns median of sorted list`() {
-        // For [1, 2, 3, 4, 5], p50 index = 0.5 * 4 = 2.0 → values[2] = 3.0
+        // For [1, 2, 3, 4, 5], p50 index = 0.5 * 4 = 2.0 -> values[2] = 3.0
         val values = listOf(1.0, 2.0, 3.0, 4.0, 5.0)
         assertEquals(3.0, BenchmarkRunner.percentile(values, 50))
     }
@@ -60,11 +61,11 @@ class BenchmarkRunnerTest {
     @Test
     fun `percentile handles two-element list`() {
         val values = listOf(10.0, 20.0)
-        // p50: index = 0.5 * 1 = 0.5 → 10 + 0.5*(20-10) = 15
+        // p50: index = 0.5 * 1 = 0.5 -> 10 + 0.5*(20-10) = 15
         assertEquals(15.0, BenchmarkRunner.percentile(values, 50))
-        // p0: index = 0.0 * 1 = 0.0 → values[0] = 10
+        // p0: index = 0.0 * 1 = 0.0 -> values[0] = 10
         assertEquals(10.0, BenchmarkRunner.percentile(values, 0))
-        // p100: index = 1.0 * 1 = 1.0 → values[1] = 20
+        // p100: index = 1.0 * 1 = 1.0 -> values[1] = 20
         assertEquals(20.0, BenchmarkRunner.percentile(values, 100))
     }
 
