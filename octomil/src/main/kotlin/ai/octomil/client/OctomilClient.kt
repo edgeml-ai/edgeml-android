@@ -33,6 +33,7 @@ import ai.octomil.secagg.SecAggManager
 import ai.octomil.storage.SecureStorage
 import ai.octomil.sync.EventQueue
 import ai.octomil.sync.EventTypes
+import ai.octomil.sync.OctomilSyncWorker
 import ai.octomil.sync.WorkManagerSync
 import ai.octomil.runtime.adaptation.DeviceStateMonitor
 import ai.octomil.training.EligibilityResult
@@ -232,6 +233,15 @@ class OctomilClient private constructor(
                 ensureModelLoaded()
                 warmupModel()
                 setupBackgroundServices(serverId)
+
+                // Trigger an immediate desired-state sync to recover any model
+                // files that were purged from disk (OS cache eviction, app update).
+                if (serverId != null && config.enableBackgroundSync) {
+                    syncManager.triggerImmediateSync(
+                        syncType = OctomilSyncWorker.SYNC_TYPE_DESIRED_STATE,
+                        expedited = false,
+                    )
+                }
 
                 _state.value = ClientState.READY
                 Timber.i("Octomil SDK initialized successfully")
