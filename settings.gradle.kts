@@ -17,6 +17,7 @@ dependencyResolutionManagement {
 
 rootProject.name = "octomil-android"
 include(":octomil")
+include(":samples")
 
 // Engine composite builds — substitute published Maven coordinates with local projects
 // when engine repos are present on disk. This enables local development without
