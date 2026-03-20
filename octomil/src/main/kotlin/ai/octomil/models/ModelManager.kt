@@ -43,7 +43,8 @@ class ModelManager(
     private val storage: SecureStorage,
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
 ) {
-    private val cacheDir = File(context.cacheDir, "octomil_models")
+    // Store models in filesDir (non-purgeable) instead of cacheDir
+    private val cacheDir = File(context.filesDir, "octomil_models")
     private val metadataFile = File(cacheDir, "cache_metadata.json")
     private val mutex = Mutex()
     private val downloadClient: OkHttpClient
@@ -83,6 +84,9 @@ class ModelManager(
         // Ensure cache directory exists
         cacheDir.mkdirs()
 
+        // Migrate models from old cacheDir location (purgeable) to filesDir
+        migrateFromOldCacheDir()
+
         // Create download client with longer timeouts for large models
         downloadClient =
             OkHttpClient
@@ -94,6 +98,47 @@ class ModelManager(
 
         // Load cache metadata
         loadCacheMetadata()
+    }
+
+    /**
+     * Migrate models from the old `cacheDir/octomil_models/` location to
+     * `filesDir/octomil_models/`. The old location is purgeable by the OS
+     * under storage pressure; the new location persists until app uninstall.
+     */
+    private fun migrateFromOldCacheDir() {
+        val oldDir = File(context.cacheDir, "octomil_models")
+        if (!oldDir.exists() || oldDir.absolutePath == cacheDir.absolutePath) return
+        try {
+            val files = oldDir.listFiles() ?: return
+            if (files.isEmpty()) {
+                oldDir.delete()
+                return
+            }
+            for (file in files) {
+                val target = File(cacheDir, file.name)
+                if (target.exists()) {
+                    file.deleteRecursively()
+                    continue
+                }
+                // renameTo is fastest but fails across mount points
+                if (!file.renameTo(target)) {
+                    file.copyRecursively(target, overwrite = true)
+                    file.deleteRecursively()
+                }
+            }
+            // Rewrite absolute paths in migrated metadata
+            val migratedMeta = File(cacheDir, "cache_metadata.json")
+            if (migratedMeta.exists()) {
+                val text = migratedMeta.readText()
+                if (text.contains(oldDir.absolutePath)) {
+                    migratedMeta.writeText(text.replace(oldDir.absolutePath, cacheDir.absolutePath))
+                }
+            }
+            oldDir.deleteRecursively()
+            Timber.i("Migrated models from cacheDir to filesDir")
+        } catch (e: Exception) {
+            Timber.w(e, "Model migration failed — models will be re-downloaded")
+        }
     }
 
     // =========================================================================
