@@ -174,19 +174,25 @@ class OctomilSyncWorker(
             val manifest = model.artifactManifest
 
             // Version-based comparison: skip download if installed version matches desired
+            // AND the artifact file still exists on disk (OS may have purged it).
             val installedVersion = metadataStore.installedVersion(modelId)
             if (installedVersion != null && installedVersion == desiredVersion) {
                 val activeEntry = metadataStore.activeEntry(modelId)
-                observedModels.add(
-                    ObservedModelStatus(
-                        modelId = modelId,
-                        status = "active",
-                        installedVersion = desiredVersion,
-                        activeVersion = activeEntry?.modelVersion,
-                        health = "healthy",
-                    ),
-                )
-                continue
+                val fileStillExists = activeEntry?.filePath?.let { java.io.File(it).exists() } ?: false
+                if (fileStillExists) {
+                    observedModels.add(
+                        ObservedModelStatus(
+                            modelId = modelId,
+                            status = "active",
+                            installedVersion = desiredVersion,
+                            activeVersion = activeEntry?.modelVersion,
+                            health = "healthy",
+                        ),
+                    )
+                    continue
+                }
+                // File purged from disk — fall through to re-download
+                Timber.w("Artifact file missing for $modelId (version $desiredVersion), re-downloading")
             }
 
             // Need artifact manifest to download
