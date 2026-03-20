@@ -1,11 +1,11 @@
 package ai.octomil.control
 
 import ai.octomil.api.OctomilApi
-import ai.octomil.api.dto.ArtifactStatusEntry
-import ai.octomil.api.dto.DesiredArtifact
+import ai.octomil.api.dto.DesiredModelEntry
 import ai.octomil.api.dto.DesiredStateResponse
 import ai.octomil.api.dto.HeartbeatRequest
 import ai.octomil.api.dto.HeartbeatResponse
+import ai.octomil.api.dto.ObservedModelStatus
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.mockk
@@ -76,13 +76,11 @@ class ControlPlaneClientTest {
         val expected = DesiredStateResponse(
             deviceId = "device-1",
             generatedAt = "2026-01-01T00:00:00Z",
-            artifacts = listOf(
-                DesiredArtifact(
-                    artifactId = "model-1",
-                    version = "2.0",
-                    downloadUrl = "https://cdn.example.com/model.tflite",
-                    checksum = "abc",
-                    sizeBytes = 1000,
+            models = listOf(
+                DesiredModelEntry(
+                    modelId = "phi-4-mini-q4",
+                    desiredVersion = "2.0",
+                    activationPolicy = "immediate",
                 ),
             ),
         )
@@ -92,8 +90,9 @@ class ControlPlaneClientTest {
         val result = client.fetchDesiredState("device-1")
         assertNotNull(result)
         assertEquals("device-1", result.deviceId)
-        assertEquals(1, result.artifacts.size)
-        assertEquals("model-1", result.artifacts[0].artifactId)
+        assertEquals(1, result.models.size)
+        assertEquals("phi-4-mini-q4", result.models[0].modelId)
+        assertEquals("2.0", result.models[0].desiredVersion)
     }
 
     @Test
@@ -122,16 +121,22 @@ class ControlPlaneClientTest {
     // =========================================================================
 
     @Test
-    fun `reportObservedState sends request and swallows success`() = runTest {
+    fun `reportObservedState sends models and swallows success`() = runTest {
         val client = ControlPlaneClient(api, "org-1", "device-1")
         coEvery {
             api.reportObservedState("device-1", any())
         } returns Response.success(Unit)
 
-        val statuses = listOf(
-            ArtifactStatusEntry(artifactId = "model-1", status = "current"),
+        val models = listOf(
+            ObservedModelStatus(
+                modelId = "phi-4-mini-q4",
+                status = "active",
+                installedVersion = "2.0",
+                activeVersion = "2.0",
+                health = "healthy",
+            ),
         )
-        client.reportObservedState("device-1", statuses)
+        client.reportObservedState("device-1", models)
 
         coVerify(exactly = 1) { api.reportObservedState("device-1", any()) }
     }

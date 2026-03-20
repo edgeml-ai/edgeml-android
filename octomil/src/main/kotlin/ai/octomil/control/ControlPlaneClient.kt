@@ -1,9 +1,9 @@
 package ai.octomil.control
 
 import ai.octomil.api.OctomilApi
-import ai.octomil.api.dto.ArtifactStatusEntry
 import ai.octomil.api.dto.DesiredStateResponse
 import ai.octomil.api.dto.HeartbeatRequest
+import ai.octomil.api.dto.ObservedModelStatus
 import ai.octomil.api.dto.ObservedStateRequest
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
@@ -72,7 +72,7 @@ class ControlPlaneClient(
      */
     suspend fun reportObservedState(
         deviceId: String = this.deviceId.orEmpty(),
-        artifactStatuses: List<ArtifactStatusEntry>,
+        models: List<ObservedModelStatus>,
     ) {
         try {
             val sdf = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US).apply {
@@ -81,7 +81,7 @@ class ControlPlaneClient(
             val request = ObservedStateRequest(
                 deviceId = deviceId,
                 reportedAt = sdf.format(Date()),
-                artifactStatuses = artifactStatuses,
+                models = models,
                 sdkVersion = ai.octomil.BuildConfig.OCTOMIL_VERSION,
                 osVersion = "Android ${android.os.Build.VERSION.SDK_INT}",
             )

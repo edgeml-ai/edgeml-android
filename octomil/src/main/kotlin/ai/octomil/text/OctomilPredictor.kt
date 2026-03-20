@@ -2,9 +2,13 @@ package ai.octomil.text
 
 import ai.octomil.errors.OctomilErrorCode
 import ai.octomil.errors.OctomilException
+import ai.octomil.generated.MessageRole
 import ai.octomil.generated.ModelCapability
 import ai.octomil.manifest.ModelCatalogService
+import ai.octomil.runtime.core.GenerationConfig
 import ai.octomil.runtime.core.ModelRuntime
+import ai.octomil.runtime.core.RuntimeContentPart
+import ai.octomil.runtime.core.RuntimeMessage
 import ai.octomil.runtime.core.RuntimeRequest
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
@@ -56,9 +60,8 @@ class OctomilPredictor internal constructor(
         maxCandidates: Int = 3,
     ): PredictionResult {
         val request = RuntimeRequest(
-            prompt = context,
-            maxTokens = maxCandidates * 5, // rough budget for short predictions
-            temperature = 0.0f,
+            messages = listOf(RuntimeMessage(role = MessageRole.USER, parts = listOf(RuntimeContentPart.Text(context)))),
+            generationConfig = GenerationConfig(maxTokens = maxCandidates * 5, temperature = 0.0f),
         )
         val response = runtime.run(request)
         return PredictionResult(text = response.text)
@@ -69,9 +72,8 @@ class OctomilPredictor internal constructor(
      */
     fun predictStream(context: String): Flow<String> {
         val request = RuntimeRequest(
-            prompt = context,
-            maxTokens = 10,
-            temperature = 0.0f,
+            messages = listOf(RuntimeMessage(role = MessageRole.USER, parts = listOf(RuntimeContentPart.Text(context)))),
+            generationConfig = GenerationConfig(maxTokens = 10, temperature = 0.0f),
         )
         return runtime.stream(request).map { chunk -> chunk.text ?: "" }
     }

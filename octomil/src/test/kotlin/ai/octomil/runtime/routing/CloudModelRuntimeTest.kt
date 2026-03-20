@@ -2,6 +2,10 @@ package ai.octomil.runtime.routing
 
 import ai.octomil.errors.OctomilErrorCode
 import ai.octomil.errors.OctomilException
+import ai.octomil.generated.MessageRole
+import ai.octomil.runtime.core.GenerationConfig
+import ai.octomil.runtime.core.RuntimeContentPart
+import ai.octomil.runtime.core.RuntimeMessage
 import ai.octomil.runtime.core.RuntimeRequest
 import ai.octomil.runtime.core.RuntimeToolDef
 import kotlinx.coroutines.flow.toList
@@ -79,9 +83,8 @@ class CloudModelRuntimeTest {
         )
 
         val request = RuntimeRequest(
-            prompt = "Say hello",
-            maxTokens = 100,
-            temperature = 0.5f,
+            messages = listOf(RuntimeMessage(role = MessageRole.USER, parts = listOf(RuntimeContentPart.Text("Say hello")))),
+            generationConfig = GenerationConfig(maxTokens = 100, temperature = 0.5f),
         )
 
         val response = runtime.run(request)
@@ -323,7 +326,7 @@ class CloudModelRuntimeTest {
     @Test
     fun `buildRequestBody includes tools when present`() {
         val request = RuntimeRequest(
-            prompt = "test",
+            messages = listOf(RuntimeMessage(role = MessageRole.USER, parts = listOf(RuntimeContentPart.Text("test")))),
             toolDefinitions = listOf(
                 RuntimeToolDef(
                     name = "get_weather",
@@ -342,7 +345,7 @@ class CloudModelRuntimeTest {
     @Test
     fun `buildRequestBody includes response_format for jsonSchema`() {
         val request = RuntimeRequest(
-            prompt = "test",
+            messages = listOf(RuntimeMessage(role = MessageRole.USER, parts = listOf(RuntimeContentPart.Text("test")))),
             jsonSchema = """{"type":"object","properties":{"name":{"type":"string"}}}""",
         )
 
@@ -354,8 +357,8 @@ class CloudModelRuntimeTest {
     @Test
     fun `buildRequestBody includes stop sequences`() {
         val request = RuntimeRequest(
-            prompt = "test",
-            stop = listOf("END", "STOP"),
+            messages = listOf(RuntimeMessage(role = MessageRole.USER, parts = listOf(RuntimeContentPart.Text("test")))),
+            generationConfig = GenerationConfig(stop = listOf("END", "STOP")),
         )
 
         val body = runtime.buildRequestBody(request, stream = false)
@@ -491,8 +494,7 @@ class CloudModelRuntimeTest {
     // =========================================================================
 
     private fun stubRequest() = RuntimeRequest(
-        prompt = "test prompt",
-        maxTokens = 100,
-        temperature = 0.7f,
+        messages = listOf(RuntimeMessage(role = MessageRole.USER, parts = listOf(RuntimeContentPart.Text("test prompt")))),
+        generationConfig = GenerationConfig(maxTokens = 100, temperature = 0.7f),
     )
 }

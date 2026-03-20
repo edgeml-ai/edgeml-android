@@ -1,8 +1,12 @@
 package ai.octomil.runtime.routing
 
+import ai.octomil.generated.MessageRole
+import ai.octomil.runtime.core.GenerationConfig
 import ai.octomil.runtime.core.ModelRuntime
 import ai.octomil.runtime.core.RuntimeCapabilities
 import ai.octomil.runtime.core.RuntimeChunk
+import ai.octomil.runtime.core.RuntimeContentPart
+import ai.octomil.runtime.core.RuntimeMessage
 import ai.octomil.runtime.core.RuntimeRequest
 import ai.octomil.runtime.core.RuntimeResponse
 import kotlinx.coroutines.flow.Flow
@@ -127,8 +131,7 @@ class RouterModelRuntimeTest {
     }
 
     private fun stubRequest() = RuntimeRequest(
-        prompt = "test prompt",
-        maxTokens = 100,
-        temperature = 0.7f,
+        messages = listOf(RuntimeMessage(role = MessageRole.USER, parts = listOf(RuntimeContentPart.Text("test prompt")))),
+        generationConfig = GenerationConfig(maxTokens = 100, temperature = 0.7f),
     )
 }

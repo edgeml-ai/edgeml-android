@@ -2,9 +2,14 @@ package ai.octomil.text
 
 import ai.octomil.errors.OctomilErrorCode
 import ai.octomil.errors.OctomilException
+import ai.octomil.generated.MessageRole
 import ai.octomil.generated.ModelCapability
 import ai.octomil.manifest.ModelCatalogService
 import ai.octomil.manifest.ModelRef
+import ai.octomil.runtime.core.GenerationConfig
+import ai.octomil.runtime.core.RuntimeContentPart
+import ai.octomil.runtime.core.RuntimeMessage
+import ai.octomil.runtime.core.RuntimeRequest
 import android.content.Context
 
 /**
