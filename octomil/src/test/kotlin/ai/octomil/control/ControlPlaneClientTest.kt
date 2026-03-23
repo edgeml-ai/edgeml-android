@@ -3,8 +3,10 @@ package ai.octomil.control
 import ai.octomil.api.OctomilApi
 import ai.octomil.api.dto.DesiredModelEntry
 import ai.octomil.api.dto.DesiredStateResponse
+import ai.octomil.api.dto.DeviceSyncResponse
 import ai.octomil.api.dto.HeartbeatRequest
 import ai.octomil.api.dto.HeartbeatResponse
+import ai.octomil.api.dto.ModelInventoryEntry
 import ai.octomil.api.dto.ObservedModelStatus
 import io.mockk.coEvery
 import io.mockk.coVerify
@@ -150,5 +152,52 @@ class ControlPlaneClientTest {
 
         // Should not throw
         client.reportObservedState("device-1", emptyList())
+    }
+
+    @Test
+    fun `sync returns body on success`() = runTest {
+        val client = ControlPlaneClient(api, "org-1", "device-1")
+        val expected = DeviceSyncResponse(
+            deviceId = "device-1",
+            generatedAt = "2026-03-23T00:00:00Z",
+            stateChanged = true,
+            models = listOf(
+                DesiredModelEntry(
+                    modelId = "phi-4-mini-q4",
+                    desiredVersion = "2.0",
+                    activationPolicy = "immediate",
+                ),
+            ),
+            nextPollIntervalSeconds = 30,
+        )
+
+        coEvery { api.syncDevice("device-1", any()) } returns Response.success(expected)
+
+        val result = client.sync(
+            "device-1",
+            modelInventory = listOf(
+                ModelInventoryEntry(
+                    modelId = "phi-4-mini-q4",
+                    version = "1.9",
+                    artifactId = "artifact-1",
+                    status = "READY",
+                ),
+            ),
+        )
+
+        assertNotNull(result)
+        assertEquals("device-1", result.deviceId)
+        assertEquals(true, result.stateChanged)
+        assertEquals(30, result.nextPollIntervalSeconds)
+        coVerify(exactly = 1) { api.syncDevice("device-1", any()) }
+    }
+
+    @Test
+    fun `sync returns null on exception`() = runTest {
+        val client = ControlPlaneClient(api, "org-1", "device-1")
+        coEvery { api.syncDevice(any(), any()) } throws RuntimeException("Timeout")
+
+        val result = client.sync("device-1")
+        assertNull(result)
     }
 }

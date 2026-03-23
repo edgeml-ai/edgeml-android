@@ -985,3 +985,69 @@ data class ObservedModelStatus(
     @SerialName("last_error")
     val lastError: String? = null,
 )
+
+@Serializable
+data class ModelInventoryEntry(
+    @SerialName("modelId")
+    val modelId: String,
+    @SerialName("version")
+    val version: String,
+    @SerialName("artifactId")
+    val artifactId: String? = null,
+    @SerialName("status")
+    val status: String,
+)
+
+@Serializable
+data class ActiveVersionEntry(
+    @SerialName("modelId")
+    val modelId: String,
+    @SerialName("version")
+    val version: String,
+)
+
+@Serializable
+data class DeviceSyncRequest(
+    @SerialName("schemaVersion")
+    val schemaVersion: String = "1.12.0",
+    @SerialName("deviceId")
+    val deviceId: String,
+    @SerialName("requestedAt")
+    val requestedAt: String,
+    @SerialName("knownStateVersion")
+    val knownStateVersion: String? = null,
+    @SerialName("sdkVersion")
+    val sdkVersion: String? = null,
+    @SerialName("platform")
+    val platform: String? = null,
+    @SerialName("appId")
+    val appId: String? = null,
+    @SerialName("appVersion")
+    val appVersion: String? = null,
+    @SerialName("modelInventory")
+    val modelInventory: List<ModelInventoryEntry> = emptyList(),
+    @SerialName("activeVersions")
+    val activeVersions: List<ActiveVersionEntry> = emptyList(),
+    @SerialName("availableStorageBytes")
+    val availableStorageBytes: Long? = null,
+)
+
+@Serializable
+data class DeviceSyncResponse(
+    @SerialName("schemaVersion")
+    val schemaVersion: String = "1.12.0",
+    @SerialName("deviceId")
+    val deviceId: String,
+    @SerialName("generatedAt")
+    val generatedAt: String? = null,
+    @SerialName("stateChanged")
+    val stateChanged: Boolean = true,
+    @SerialName("models")
+    val models: List<DesiredModelEntry> = emptyList(),
+    @SerialName("gcEligibleArtifactIds")
+    val gcEligibleArtifactIds: List<String> = emptyList(),
+    @SerialName("nextPollIntervalSeconds")
+    val nextPollIntervalSeconds: Int = 60,
+    @SerialName("serverTimestamp")
+    val serverTimestamp: String? = null,
+)
