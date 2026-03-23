@@ -1,6 +1,8 @@
 package ai.octomil.api
 
 import ai.octomil.api.dto.DesiredStateResponse
+import ai.octomil.api.dto.DeviceSyncRequest
+import ai.octomil.api.dto.DeviceSyncResponse
 import ai.octomil.api.dto.ExportLogsServiceRequest
 import ai.octomil.api.dto.AssignmentRequest
 import ai.octomil.api.dto.DevicePolicyResponse
@@ -270,6 +272,15 @@ interface OctomilApi {
         @Path("device_id") deviceId: String,
         @Body request: ObservedStateRequest,
     ): Response<Unit>
+
+    /**
+     * Unified device sync endpoint combining observed-state reporting and desired-state fetch.
+     */
+    @POST("api/v1/devices/{device_id}/sync")
+    suspend fun syncDevice(
+        @Path("device_id") deviceId: String,
+        @Body request: DeviceSyncRequest,
+    ): Response<DeviceSyncResponse>
 
     // =========================================================================
     // Control Plane Sync

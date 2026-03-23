@@ -1,8 +1,12 @@
 package ai.octomil.control
 
 import ai.octomil.api.OctomilApi
+import ai.octomil.api.dto.ActiveVersionEntry
 import ai.octomil.api.dto.DesiredStateResponse
+import ai.octomil.api.dto.DeviceSyncRequest
+import ai.octomil.api.dto.DeviceSyncResponse
 import ai.octomil.api.dto.HeartbeatRequest
+import ai.octomil.api.dto.ModelInventoryEntry
 import ai.octomil.api.dto.ObservedModelStatus
 import ai.octomil.api.dto.ObservedStateRequest
 import kotlinx.serialization.SerialName
@@ -88,6 +92,42 @@ class ControlPlaneClient(
             api.reportObservedState(deviceId, request)
         } catch (e: Exception) {
             Timber.d(e, "Observed state report failed (non-blocking)")
+        }
+    }
+
+    /**
+     * Perform a unified device sync round-trip.
+     */
+    suspend fun sync(
+        deviceId: String = this.deviceId.orEmpty(),
+        modelInventory: List<ModelInventoryEntry> = emptyList(),
+        activeVersions: List<ActiveVersionEntry> = emptyList(),
+        knownStateVersion: String? = null,
+        appId: String? = null,
+        appVersion: String? = null,
+        availableStorageBytes: Long? = null,
+    ): DeviceSyncResponse? {
+        return try {
+            val sdf = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US).apply {
+                timeZone = TimeZone.getTimeZone("UTC")
+            }
+            val request = DeviceSyncRequest(
+                deviceId = deviceId,
+                requestedAt = sdf.format(Date()),
+                knownStateVersion = knownStateVersion,
+                sdkVersion = ai.octomil.BuildConfig.OCTOMIL_VERSION,
+                platform = "android",
+                appId = appId,
+                appVersion = appVersion,
+                modelInventory = modelInventory,
+                activeVersions = activeVersions,
+                availableStorageBytes = availableStorageBytes,
+            )
+            val response = api.syncDevice(deviceId, request)
+            if (response.isSuccessful) response.body() else null
+        } catch (e: Exception) {
+            Timber.d(e, "Unified device sync failed")
+            null
         }
     }
 
