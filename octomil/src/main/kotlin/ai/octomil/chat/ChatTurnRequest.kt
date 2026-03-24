@@ -9,6 +9,7 @@ data class ChatTurnRequest(
     val threadId: String,
     val input: String,
     val config: ChatTurnConfig? = null,
+    val storageMode: String? = null,
 )
 
 /**

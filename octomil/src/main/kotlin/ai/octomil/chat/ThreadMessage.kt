@@ -14,8 +14,12 @@ data class ThreadMessage(
     val role: String,
     val content: String? = null,
     val contentParts: List<ContentPart>? = null,
-    val toolCalls: List<ToolCall>? = null,
+    val toolCalls: List<LegacyToolCall>? = null,
     val toolCallId: String? = null,
     val metrics: GenerationMetrics? = null,
     val createdAt: String,
+    val parentMessageId: String? = null,
+    val status: String? = null,
+    val modelRef: String? = null,
+    val storageMode: String? = null,
 )

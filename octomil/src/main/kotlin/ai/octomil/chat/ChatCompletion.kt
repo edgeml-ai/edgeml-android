@@ -87,6 +87,6 @@ data class ChatCompletionChunk(
         val content: String? = null,
         /** Incremental tool calls. */
         @SerialName("tool_calls")
-        val toolCalls: List<ToolCall>? = null,
+        val toolCalls: List<LegacyToolCall>? = null,
     )
 }

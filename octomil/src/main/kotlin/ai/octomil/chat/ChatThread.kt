@@ -12,4 +12,8 @@ data class ChatThread(
     val createdAt: String,
     val updatedAt: String,
     val metadata: Map<String, String> = emptyMap(),
+    val bindingKey: String? = null,
+    val storageMode: String? = null,
+    val retentionPolicy: String? = null,
+    val ttlSeconds: Int? = null,
 )

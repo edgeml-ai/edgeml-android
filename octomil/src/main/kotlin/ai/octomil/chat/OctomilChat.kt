@@ -60,7 +60,7 @@ class OctomilChat internal constructor(
         val toolCalls = response.output
             .filterIsInstance<OutputItem.ToolCallItem>()
             .map { item ->
-                ToolCall(
+                LegacyToolCall(
                     id = item.toolCall.id,
                     function = FunctionCall(
                         name = item.toolCall.name,
@@ -150,7 +150,7 @@ class OctomilChat internal constructor(
                                     delta = ChatCompletionChunk.Delta(
                                         role = if (isFirst) ChatMessage.Role.ASSISTANT else null,
                                         toolCalls = listOf(
-                                            ToolCall(
+                                            LegacyToolCall(
                                                 id = event.id ?: "",
                                                 function = FunctionCall(
                                                     name = event.name ?: "",
