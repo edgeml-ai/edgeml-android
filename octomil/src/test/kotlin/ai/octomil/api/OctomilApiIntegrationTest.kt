@@ -175,14 +175,14 @@ class OctomilApiIntegrationTest {
             val body = json.encodeToString(HeartbeatResponse(acknowledged = true))
             server.enqueue(MockResponse().setBody(body).setResponseCode(200))
 
-            val request = HeartbeatRequest(sdkVersion = "1.0.0", batteryLevel = 85)
+            val request = HeartbeatRequest(sdkVersion = "1.0.0", batteryPct = 85)
             val response = api.sendHeartbeat("device-uuid", request)
 
             assertTrue(response.isSuccessful)
             assertTrue(response.body()?.acknowledged == true)
 
             val sentRequest = server.takeRequest()
-            assertEquals("POST", sentRequest.method)
+            assertEquals("PUT", sentRequest.method)
             assertEquals("/api/v1/devices/device-uuid/heartbeat", sentRequest.path)
         }
 
