@@ -38,6 +38,18 @@ data class DeviceRegistrationRequest(
     val metadata: Map<String, String>? = null,
     @SerialName("device_info")
     val deviceInfo: DeviceInfoRequest? = null,
+    @SerialName("cpu_architecture")
+    val cpuArchitecture: String? = null,
+    @SerialName("gpu_available")
+    val gpuAvailable: Boolean? = null,
+    @SerialName("total_memory_mb")
+    val totalMemoryMb: Long? = null,
+    @SerialName("available_storage_mb")
+    val availableStorageMb: Long? = null,
+    @SerialName("battery_pct")
+    val batteryPct: Int? = null,
+    @SerialName("charging")
+    val charging: Boolean? = null,
 )
 
 /**
@@ -45,16 +57,8 @@ data class DeviceRegistrationRequest(
  */
 @Serializable
 data class DeviceCapabilities(
-    @SerialName("cpu_architecture")
-    val cpuArchitecture: String? = null,
-    @SerialName("gpu_available")
-    val gpuAvailable: Boolean = false,
     @SerialName("nnapi_available")
     val nnapiAvailable: Boolean = false,
-    @SerialName("total_memory_mb")
-    val totalMemoryMb: Long? = null,
-    @SerialName("available_storage_mb")
-    val availableStorageMb: Long? = null,
 )
 
 /**
@@ -143,10 +147,10 @@ data class HeartbeatRequest(
     val osVersion: String? = null,
     @SerialName("app_version")
     val appVersion: String? = null,
-    @SerialName("battery_level")
-    val batteryLevel: Int? = null,
-    @SerialName("is_charging")
-    val isCharging: Boolean? = null,
+    @SerialName("battery_pct")
+    val batteryPct: Int? = null,
+    @SerialName("charging")
+    val charging: Boolean? = null,
     @SerialName("available_storage_mb")
     val availableStorageMb: Long? = null,
     @SerialName("available_memory_mb")

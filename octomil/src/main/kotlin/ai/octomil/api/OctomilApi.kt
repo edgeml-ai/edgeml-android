@@ -39,6 +39,7 @@ import retrofit2.Response
 import retrofit2.http.Body
 import retrofit2.http.GET
 import retrofit2.http.POST
+import retrofit2.http.PUT
 import retrofit2.http.Path
 import retrofit2.http.Query
 import retrofit2.http.Streaming
@@ -75,7 +76,7 @@ interface OctomilApi {
     /**
      * Send a heartbeat for a device.
      */
-    @POST("api/v1/devices/{device_id}/heartbeat")
+    @PUT("api/v1/devices/{device_id}/heartbeat")
     suspend fun sendHeartbeat(
         @Path("device_id") deviceId: String,
         @Body request: HeartbeatRequest,

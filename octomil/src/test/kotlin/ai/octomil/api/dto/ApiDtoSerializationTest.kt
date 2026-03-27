@@ -61,12 +61,12 @@ class ApiDtoSerializationTest {
                 appVersion = "2.0.0",
                 capabilities =
                     DeviceCapabilities(
-                        cpuArchitecture = "arm64-v8a",
-                        gpuAvailable = true,
                         nnapiAvailable = true,
-                        totalMemoryMb = 8192,
-                        availableStorageMb = 50000,
                     ),
+                cpuArchitecture = "arm64-v8a",
+                gpuAvailable = true,
+                totalMemoryMb = 8192,
+                availableStorageMb = 50000,
             )
 
         val serialized = json.encodeToString(request)
@@ -77,9 +77,9 @@ class ApiDtoSerializationTest {
         assertEquals("en_US", deserialized.locale)
         assertEquals("us", deserialized.region)
         assertEquals("2.0.0", deserialized.appVersion)
-        assertEquals("arm64-v8a", deserialized.capabilities?.cpuArchitecture)
-        assertTrue(deserialized.capabilities?.gpuAvailable == true)
-        assertEquals(8192, deserialized.capabilities?.totalMemoryMb)
+        assertEquals("arm64-v8a", deserialized.cpuArchitecture)
+        assertTrue(deserialized.gpuAvailable == true)
+        assertEquals(8192, deserialized.totalMemoryMb)
     }
 
     @Test
@@ -152,8 +152,8 @@ class ApiDtoSerializationTest {
                 sdkVersion = "1.0.0",
                 osVersion = "Android 14",
                 appVersion = "2.0.0",
-                batteryLevel = 85,
-                isCharging = true,
+                batteryPct = 85,
+                charging = true,
                 availableStorageMb = 50000,
                 availableMemoryMb = 4096,
                 networkType = "wifi",
@@ -163,8 +163,8 @@ class ApiDtoSerializationTest {
         val deserialized = json.decodeFromString<HeartbeatRequest>(serialized)
 
         assertEquals("1.0.0", deserialized.sdkVersion)
-        assertEquals(85, deserialized.batteryLevel)
-        assertEquals(true, deserialized.isCharging)
+        assertEquals(85, deserialized.batteryPct)
+        assertEquals(true, deserialized.charging)
         assertEquals("wifi", deserialized.networkType)
     }
 

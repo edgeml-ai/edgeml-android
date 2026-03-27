@@ -46,11 +46,7 @@ object DeviceUtils {
      */
     fun getDeviceCapabilities(context: Context): DeviceCapabilities =
         DeviceCapabilities(
-            cpuArchitecture = getCpuArchitecture(),
-            gpuAvailable = isGpuAvailable(),
             nnapiAvailable = isNnapiAvailable(),
-            totalMemoryMb = getTotalMemoryMb(context),
-            availableStorageMb = getAvailableStorageMb(),
         )
 
     /**

@@ -63,11 +63,7 @@ class FacadeWiringTest {
         every { DeviceUtils.getCpuArchitecture() } returns "arm64-v8a"
         every { DeviceUtils.generateDeviceIdentifier(any()) } returns "abcd1234abcd1234abcd1234abcd1234"
         every { DeviceUtils.getDeviceCapabilities(any()) } returns DeviceCapabilities(
-            cpuArchitecture = "arm64-v8a",
-            gpuAvailable = false,
             nnapiAvailable = false,
-            totalMemoryMb = 4096,
-            availableStorageMb = 2048,
         )
         every { DeviceUtils.getAvailableStorageMb() } returns 2048L
         every { DeviceUtils.getAvailableMemoryMb(any()) } returns 1024L

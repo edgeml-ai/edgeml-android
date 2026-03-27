@@ -664,6 +664,12 @@ object Octomil {
                     region = DeviceUtils.getRegion(),
                     timezone = java.util.TimeZone.getDefault().id,
                     capabilities = DeviceUtils.getDeviceCapabilities(context),
+                    cpuArchitecture = DeviceUtils.getCpuArchitecture(),
+                    gpuAvailable = DeviceUtils.isGpuAvailable(),
+                    totalMemoryMb = DeviceUtils.getTotalMemoryMb(context),
+                    availableStorageMb = DeviceUtils.getAvailableStorageMb(),
+                    batteryPct = BatteryUtils.getBatteryLevel(context),
+                    charging = BatteryUtils.isCharging(context),
                 )
 
                 val response = api.registerDevice(request)
@@ -748,8 +754,8 @@ object Octomil {
             val request = HeartbeatRequest(
                 sdkVersion = BuildConfig.OCTOMIL_VERSION,
                 osVersion = DeviceUtils.getOsVersion(),
-                batteryLevel = BatteryUtils.getBatteryLevel(context),
-                isCharging = BatteryUtils.isCharging(context),
+                batteryPct = BatteryUtils.getBatteryLevel(context),
+                charging = BatteryUtils.isCharging(context),
                 availableStorageMb = DeviceUtils.getAvailableStorageMb(),
                 availableMemoryMb = DeviceUtils.getAvailableMemoryMb(context),
                 networkType = if (NetworkUtils.isWifiConnected(context)) "wifi" else "cellular",

@@ -35,8 +35,8 @@ class ControlPlaneClientTest {
 
         val request = HeartbeatRequest(
             sdkVersion = "1.0.0",
-            batteryLevel = 80,
-            isCharging = false,
+            batteryPct = 80,
+            charging = false,
             networkType = "wifi",
         )
         client.heartbeat("device-1", request)
