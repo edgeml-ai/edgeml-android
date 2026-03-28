@@ -167,15 +167,41 @@ ai.octomil
 └── storage/             # Android Keystore-backed secure storage
 ```
 
-## Octomil Manifest
+## AppManifest and Control Plane
 
-The [Octomil Manifest](https://github.com/octomil/octomil-python#manifest) (`octomil.yaml`) is a declarative config file that describes which models your app needs, their delivery mode (`bundled`, `managed`, or `cloud`), and which capability each model serves. Generate it with the CLI:
+The Android SDK uses a **hybrid model**: your app declares what it can consume via `AppManifest` in code, and the Octomil control plane decides which specific model version each device gets.
 
-```bash
-octomil manifest init
+`AppManifest` is a Kotlin data class — not a config file. You instantiate it in code:
+
+```kotlin
+import ai.octomil.Octomil
+import ai.octomil.manifest.AppManifest
+import ai.octomil.manifest.AppModelEntry
+import ai.octomil.manifest.ModelCapability
+import ai.octomil.manifest.DeliveryMode
+import ai.octomil.auth.AuthConfig
+
+// 1. Declare capabilities and delivery modes
+val manifest = AppManifest(models = listOf(
+    AppModelEntry(id = "chat-model", capability = ModelCapability.CHAT, delivery = DeliveryMode.MANAGED,
+                  inputModalities = listOf(Modality.TEXT), outputModalities = listOf(Modality.TEXT)),
+    AppModelEntry(id = "classifier", capability = ModelCapability.CLASSIFICATION,
+                  delivery = DeliveryMode.BUNDLED, bundledPath = "models/classifier.tflite"),
+))
+
+// 2. Configure — bootstraps catalog, registers device, starts WorkManager polling
+Octomil.configure(context, manifest, auth = AuthConfig.PublishableKey("oct_pub_live_..."))
 ```
 
-The Android SDK reads `octomil.yaml` via `AppManifest` and `ModelCatalogService` to handle model downloads and runtime resolution automatically.
+**Delivery modes:**
+
+| Mode | Behaviour |
+|------|-----------|
+| `MANAGED` | Control plane assigns the model version. SDK downloads, caches, and updates it via `WorkManagerSync`. |
+| `BUNDLED` | Model is included in the APK assets at `bundledPath`. No control plane involvement. |
+| `CLOUD` | Inference routes to a cloud provider. No local artifact. |
+
+After `configure()`, the SDK registers the device (exponential backoff, up to 10 retries), starts a heartbeat loop, and schedules periodic desired-state sync via Android `WorkManager` with battery and network constraints. Use `catalog.runtimeForCapability(ModelCapability.CHAT)` to resolve the runtime by capability.
 
 ## Samples
 
