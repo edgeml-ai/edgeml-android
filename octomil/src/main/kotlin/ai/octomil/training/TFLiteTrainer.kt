@@ -7,7 +7,6 @@ import ai.octomil.models.InferenceOutput
 import ai.octomil.models.ServerModelContract
 import ai.octomil.privacy.DifferentialPrivacy
 import android.content.Context
-import android.os.Build
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
@@ -15,10 +14,7 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
-import org.tensorflow.lite.Delegate
 import org.tensorflow.lite.Interpreter
-import org.tensorflow.lite.gpu.CompatibilityList
-import org.tensorflow.lite.gpu.GpuDelegate
 import timber.log.Timber
 import java.io.File
 import java.nio.ByteBuffer
@@ -37,6 +33,8 @@ import java.util.Locale
  * - Weight delta extraction for federated learning
  * - Input/output tensor handling
  * - Resource management and cleanup
+ *
+ * Delegate lifecycle (GPU, vendor NPU, NNAPI) is managed by [DelegateManager].
  */
 class TFLiteTrainer(
     private val context: Context,
@@ -45,10 +43,11 @@ class TFLiteTrainer(
     private val defaultDispatcher: CoroutineDispatcher = Dispatchers.Default,
 ) {
     private var interpreter: Interpreter? = null
-    private var gpuDelegate: GpuDelegate? = null
-    private var vendorDelegate: Delegate? = null
     private var _currentModel: CachedModel? = null
     private val mutex = Mutex()
+
+    // Delegate management (GPU, vendor NPU, NNAPI)
+    private val delegateManager = DelegateManager(context, config)
 
     // Model metadata
     private var _inputShape: IntArray = intArrayOf()
@@ -59,7 +58,7 @@ class TFLiteTrainer(
     // Server-provided model contract for input validation (null = no validation)
     private var _serverContract: ServerModelContract? = null
 
-    // Pooled I/O buffers — allocated once in loadModel, reused across inferences
+    // Pooled I/O buffers -- allocated once in loadModel, reused across inferences
     private var _pooledInputBuffer: ByteBuffer? = null
     private var _pooledOutputBuffer: ByteBuffer? = null
 
@@ -74,36 +73,15 @@ class TFLiteTrainer(
     // Snapshot of original model bytes taken at load time for delta computation
     private var originalModelBytes: ByteArray? = null
 
-    /**
-     * Vendor NPU delegate class names fetched from the server.
-     *
-     * Populated by [fetchVendorDelegateConfig] during [loadModel].
-     * Empty list means no vendor delegates are available or the server
-     * was unreachable — only the standard NNAPI delegate will be tried.
-     */
-    private var vendorDelegateClassNames: List<VendorDelegateInfo> = emptyList()
-
     companion object {
         private const val TAG = "TFLiteTrainer"
 
         /** Signature key used by TFLite models converted with training support. */
-        private const val TRAIN_SIGNATURE = "train"
-        private const val INFER_SIGNATURE = "infer"
-        private const val SAVE_SIGNATURE = "save"
-        private const val RESTORE_SIGNATURE = "restore"
+        internal const val TRAIN_SIGNATURE = "train"
+        internal const val INFER_SIGNATURE = "infer"
+        internal const val SAVE_SIGNATURE = "save"
+        internal const val RESTORE_SIGNATURE = "restore"
     }
-
-    /**
-     * Vendor delegate class name and display name, fetched from the server.
-     */
-    data class VendorDelegateInfo(
-        val className: String,
-        val displayName: String,
-        /** SoC patterns this delegate applies to (lowercase). Empty = always try. */
-        val socPatterns: List<String> = emptyList(),
-        /** Manufacturer patterns this delegate applies to (lowercase). Empty = always try. */
-        val manufacturerPatterns: List<String> = emptyList(),
-    )
 
     // =========================================================================
     // Model Loading
@@ -130,7 +108,7 @@ class TFLiteTrainer(
                     }
 
                     // Resolve thread count: prefer big-core count on ARM big.LITTLE
-                    _effectiveThreads = resolveThreadCount()
+                    _effectiveThreads = delegateManager.resolveThreadCount()
                     val effectiveThreads = _effectiveThreads
 
                     val options = Interpreter.Options().apply {
@@ -141,23 +119,7 @@ class TFLiteTrainer(
                     // Delegate priority: vendor NPU > GPU > NNAPI (legacy) > XNNPack/CPU
                     // warmup() benchmarks the selected delegate vs CPU after loading.
                     // ---------------------------------------------------------------
-
-                    // Fetch vendor delegate class names from server (if vendor NPU enabled)
-                    if (config.enableVendorNpu && vendorDelegateClassNames.isEmpty()) {
-                        vendorDelegateClassNames = fetchVendorDelegateConfig()
-                    }
-
-                    val vendorAttached = if (config.enableVendorNpu) {
-                        tryAttachVendorNpu(options)
-                    } else false
-
-                    if (!vendorAttached && config.enableGpuAcceleration && isGpuSupported()) {
-                        tryAttachGpu(options, model)
-                    }
-
-                    if (!vendorAttached && gpuDelegate == null && config.enableNnapi) {
-                        tryAttachNnapi(options)
-                    }
+                    delegateManager.configureDelegates(options, model)
 
                     // XNNPack is always the CPU fallback (built into TFLite 2.17+)
 
@@ -182,7 +144,7 @@ class TFLiteTrainer(
                     Timber.i(
                         "Model loaded: ${model.modelId} v${model.version}, " +
                             "threads=$effectiveThreads, gpu=${isUsingGpu()}, " +
-                            "vendorNpu=${vendorDelegate != null}",
+                            "vendorNpu=${delegateManager.vendorDelegate != null}",
                     )
                     Result.success(true)
                 } catch (e: Exception) {
@@ -264,7 +226,7 @@ class TFLiteTrainer(
     suspend fun runInference(input: InferenceInput): Result<InferenceOutput> = runInference(input.data)
 
     /**
-     * Run pipelined inference — overlap preprocessing with model execution.
+     * Run pipelined inference -- overlap preprocessing with model execution.
      *
      * For camera/sensor streams, this hides preprocessing latency by running
      * the next frame's preprocessing concurrently with the current inference.
@@ -335,7 +297,7 @@ class TFLiteTrainer(
         val singleInputSize = getInputSize()
         val singleOutputSize = getOutputSize()
 
-        // Resize input tensor: [1, ...shape] → [batchSize, ...shape]
+        // Resize input tensor: [1, ...shape] -> [batchSize, ...shape]
         val batchedInputShape = _inputShape.copyOf().also { it[0] = batchSize }
         interp.resizeInput(0, batchedInputShape)
         interp.allocateTensors()
@@ -584,7 +546,7 @@ class TFLiteTrainer(
         trainingData: List<Pair<FloatArray, FloatArray>>,
         trainingConfig: TrainingConfig,
         model: CachedModel,
-    ): TrainingMetrics {
+    ): InternalTrainingMetrics {
         Timber.i("Training via runSignature API")
 
         val inputNames = interp.getSignatureInputs(TRAIN_SIGNATURE)
@@ -677,7 +639,7 @@ class TFLiteTrainer(
         val avgLoss = if (batchCount > 0) totalLoss / trainingConfig.epochs else 0.0
         val accuracy = maxOf(0.0, 1.0 - avgLoss).coerceIn(0.0, 1.0)
 
-        return TrainingMetrics(loss = avgLoss, accuracy = accuracy)
+        return InternalTrainingMetrics(loss = avgLoss, accuracy = accuracy)
     }
 
     /**
@@ -694,7 +656,7 @@ class TFLiteTrainer(
         trainingData: List<Pair<FloatArray, FloatArray>>,
         trainingConfig: TrainingConfig,
         model: CachedModel,
-    ): TrainingMetrics {
+    ): InternalTrainingMetrics {
         Timber.e(
             "DEGRADED TRAINING: Model does not have a '$TRAIN_SIGNATURE' signature. " +
                 "Weights will NOT be updated on-device. Loss/accuracy metrics reflect " +
@@ -709,7 +671,7 @@ class TFLiteTrainer(
 
         val outputSize = getOutputSize()
         if (outputSize <= 0) {
-            return TrainingMetrics(loss = 0.0, accuracy = 0.0)
+            return InternalTrainingMetrics(loss = 0.0, accuracy = 0.0)
         }
 
         for (epoch in 0 until trainingConfig.epochs) {
@@ -752,7 +714,7 @@ class TFLiteTrainer(
         val avgLoss = if (totalCount > 0) totalLoss / totalCount else 0.0
         val accuracy = if (totalCount > 0) correctCount.toDouble() / totalCount else 0.0
 
-        return TrainingMetrics(loss = avgLoss, accuracy = accuracy)
+        return InternalTrainingMetrics(loss = avgLoss, accuracy = accuracy)
     }
 
     /**
@@ -798,7 +760,7 @@ class TFLiteTrainer(
                     File(model.filePath).copyTo(updatedFile, overwrite = true)
                 }
             } else {
-                // No save signature — copy the model file
+                // No save signature -- copy the model file
                 // Note: for signature-based training, the interpreter's internal state
                 // has been updated, but we can't serialize it without a save signature.
                 // The weight delta will be computed from the interpreter's tensor state.
@@ -830,7 +792,7 @@ class TFLiteTrainer(
     }
 
     /** Internal data class for training metrics. */
-    private data class TrainingMetrics(
+    private data class InternalTrainingMetrics(
         val loss: Double,
         val accuracy: Double,
     )
@@ -942,7 +904,7 @@ class TFLiteTrainer(
      * actually faster than CPU. If not (partition stalls, bad model compat), the
      * delegate is disabled and the next one in the priority chain is tried:
      *
-     *   vendor NPU → GPU → NNAPI → XNNPack/CPU
+     *   vendor NPU -> GPU -> NNAPI -> XNNPack/CPU
      *
      * This ensures we never ship an inference path that is _slower_ than CPU.
      *
@@ -968,27 +930,29 @@ class TFLiteTrainer(
                     // --- Cascade: if active delegate is slower than CPU, try next ---
 
                     // 1. Vendor NPU active and slower?
-                    if (vendorDelegate != null && cpuLatency.warmMs < delegateLatency.warmMs) {
+                    if (delegateManager.vendorDelegate != null && cpuLatency.warmMs < delegateLatency.warmMs) {
                         logPartitionStall("Vendor NPU", delegateLatency.warmMs, cpuLatency.warmMs)
                         disabledDelegates.add("vendor_npu")
-                        closeVendorDelegate()
-                        vendorDelegate = null
+                        delegateManager.closeVendorDelegate()
 
                         // Try falling through to GPU
-                        if (config.enableGpuAcceleration && isGpuSupported()) {
-                            reloadWithGpu(model)
+                        if (config.enableGpuAcceleration && delegateManager.isGpuSupported()) {
+                            interpreter?.close()
+                            interpreter = delegateManager.reloadWithGpu(model, _effectiveThreads)
                             delegateLatency = benchmarkInference(interpreter!!, inputSize)
                         } else {
-                            reloadCpuOnly(model)
+                            interpreter?.close()
+                            interpreter = delegateManager.reloadCpuOnly(model, _effectiveThreads)
                             delegateLatency = cpuLatency
                         }
                     }
 
                     // 2. GPU active and slower?
-                    if (gpuDelegate != null && cpuLatency.warmMs < delegateLatency.warmMs) {
+                    if (delegateManager.gpuDelegate != null && cpuLatency.warmMs < delegateLatency.warmMs) {
                         logPartitionStall("GPU", delegateLatency.warmMs, cpuLatency.warmMs)
                         disabledDelegates.add("gpu")
-                        reloadCpuOnly(model)
+                        interpreter?.close()
+                        interpreter = delegateManager.reloadCpuOnly(model, _effectiveThreads)
                         delegateLatency = cpuLatency
                     }
 
@@ -999,8 +963,8 @@ class TFLiteTrainer(
                     }
 
                     val activeDelegate = when {
-                        vendorDelegate != null -> "vendor_npu"
-                        gpuDelegate != null -> "gpu"
+                        delegateManager.vendorDelegate != null -> "vendor_npu"
+                        delegateManager.gpuDelegate != null -> "gpu"
                         else -> "cpu"
                     }
 
@@ -1042,7 +1006,7 @@ class TFLiteTrainer(
     private fun logPartitionStall(delegateName: String, delegateMs: Double, cpuMs: Double) {
         Timber.e(
             "DELEGATE PARTITION STALL: %s warm=%.1fms, CPU warm=%.1fms. " +
-                "%s is %.1fx SLOWER than CPU — disabling and cascading to next delegate.",
+                "%s is %.1fx SLOWER than CPU -- disabling and cascading to next delegate.",
             delegateName,
             delegateMs,
             cpuMs,
@@ -1064,33 +1028,6 @@ class TFLiteTrainer(
         } finally {
             cpuInterp.close()
         }
-    }
-
-    /**
-     * Reload the model with GPU delegate (cascading from vendor NPU).
-     */
-    private fun reloadWithGpu(model: CachedModel) {
-        interpreter?.close()
-        gpuDelegate?.close()
-        gpuDelegate = null
-
-        val options = Interpreter.Options().apply { setNumThreads(_effectiveThreads) }
-        tryAttachGpu(options, model)
-        interpreter = Interpreter(loadModelFile(File(model.filePath)), options)
-    }
-
-    /**
-     * Reload the model CPU-only (all delegates failed).
-     */
-    private fun reloadCpuOnly(model: CachedModel) {
-        interpreter?.close()
-        gpuDelegate?.close()
-        gpuDelegate = null
-        closeVendorDelegate()
-        vendorDelegate = null
-
-        val options = Interpreter.Options().apply { setNumThreads(_effectiveThreads) }
-        interpreter = Interpreter(loadModelFile(File(model.filePath)), options)
     }
 
     /**
@@ -1119,289 +1056,18 @@ class TFLiteTrainer(
     private data class BenchmarkLatency(val coldMs: Double, val warmMs: Double)
 
     // =========================================================================
-    // GPU Support
+    // GPU Support (delegated)
     // =========================================================================
 
     /**
      * Check if GPU acceleration is supported on this device.
      */
-    fun isGpuSupported(): Boolean =
-        try {
-            val compatList = CompatibilityList()
-            compatList.isDelegateSupportedOnThisDevice
-        } catch (e: Exception) {
-            Timber.w(e, "Failed to check GPU support")
-            false
-        }
+    fun isGpuSupported(): Boolean = delegateManager.isGpuSupported()
 
     /**
      * Check if GPU delegate is currently active.
      */
-    fun isUsingGpu(): Boolean = gpuDelegate != null
-
-    // =========================================================================
-    // Delegate Setup
-    // =========================================================================
-
-    /**
-     * Attach GPU delegate with serialization and float16 options.
-     */
-    private fun tryAttachGpu(options: Interpreter.Options, model: CachedModel) {
-        try {
-            @Suppress("DEPRECATION")
-            val delegateOptions = GpuDelegate.Options()
-
-            // GPU shader serialization — cache compiled programs to skip recompilation
-            if (config.enableGpuSerialization) {
-                try {
-                    val cacheDir = context.cacheDir.resolve("gpu_cache").apply { mkdirs() }
-                    val setSerMethod = delegateOptions.javaClass.getMethod(
-                        "setSerializationParams",
-                        String::class.java,
-                        String::class.java,
-                    )
-                    setSerMethod.invoke(
-                        delegateOptions,
-                        cacheDir.absolutePath,
-                        "${model.modelId}_${model.version}",
-                    )
-                    Timber.d("GPU shader serialization enabled")
-                } catch (_: NoSuchMethodException) {
-                    Timber.d("GPU serialization not available in this TFLite version")
-                } catch (e: Exception) {
-                    Timber.w(e, "Failed to enable GPU serialization")
-                }
-            }
-
-            if (config.enableFloat16Inference) {
-                delegateOptions.setPrecisionLossAllowed(true)
-                delegateOptions.setInferencePreference(
-                    GpuDelegate.Options.INFERENCE_PREFERENCE_SUSTAINED_SPEED,
-                )
-                Timber.d("GPU float16 inference enabled")
-            }
-
-            gpuDelegate = GpuDelegate(delegateOptions)
-            options.addDelegate(gpuDelegate)
-            Timber.i("GPU delegate attached")
-        } catch (e: Exception) {
-            Timber.w(e, "Failed to create GPU delegate, falling back to CPU")
-            gpuDelegate?.close()
-            gpuDelegate = null
-        }
-    }
-
-    /**
-     * Attach NNAPI delegate for Android 8.1–14 devices.
-     * NNAPI is deprecated in Android 15+; use vendor NPU delegates instead.
-     */
-    @Suppress("DEPRECATION")
-    private fun tryAttachNnapi(options: Interpreter.Options) {
-        if (Build.VERSION.SDK_INT !in Build.VERSION_CODES.O_MR1..34) {
-            Timber.d("NNAPI skipped: API ${Build.VERSION.SDK_INT} outside supported range 27-34")
-            return
-        }
-        try {
-            options.setUseNNAPI(true)
-            Timber.i("NNAPI delegate enabled (API ${Build.VERSION.SDK_INT})")
-        } catch (e: Exception) {
-            Timber.w(e, "Failed to enable NNAPI delegate")
-        }
-    }
-
-    /**
-     * Try to attach vendor NPU delegates via reflection.
-     * Returns true if a vendor delegate was successfully attached.
-     *
-     * Delegate class names are fetched from the server at model load time.
-     * If no server config is available, no vendor delegates are tried and
-     * the standard NNAPI delegate is used as fallback.
-     *
-     * Vendor AARs are optional — if not on classpath, this silently falls through.
-     * To enable: add the vendor AAR to your app-level build.gradle dependencies.
-     */
-    private fun tryAttachVendorNpu(options: Interpreter.Options): Boolean {
-        if (vendorDelegateClassNames.isEmpty()) {
-            Timber.d("No vendor delegate config from server — skipping vendor NPU")
-            return false
-        }
-
-        val soc = getSocIdentifier().lowercase()
-        val manufacturer = Build.MANUFACTURER.lowercase()
-
-        for (delegate in vendorDelegateClassNames) {
-            // Check SoC pattern match (empty patterns = always try)
-            val socMatch = delegate.socPatterns.isEmpty() ||
-                delegate.socPatterns.any { pattern -> soc.contains(pattern) }
-            // Check manufacturer pattern match (empty patterns = always try)
-            val mfrMatch = delegate.manufacturerPatterns.isEmpty() ||
-                delegate.manufacturerPatterns.any { pattern -> manufacturer.contains(pattern) }
-
-            if (socMatch && mfrMatch) {
-                if (tryLoadReflectionDelegate(options, delegate.className, delegate.displayName)) {
-                    return true
-                }
-            }
-        }
-
-        return false
-    }
-
-    /**
-     * Fetch vendor delegate configuration from the server.
-     *
-     * Calls GET /api/v1/models/{modelId}/optimized-config/{deviceType} with
-     * the device SoC identifier. Returns a list of vendor delegate class
-     * names and their SoC/manufacturer matching patterns.
-     *
-     * Returns an empty list if the server is unreachable or returns no
-     * vendor delegate config. In that case, only the standard NNAPI
-     * delegate will be used.
-     */
-    private fun fetchVendorDelegateConfig(): List<VendorDelegateInfo> {
-        return try {
-            val soc = getSocIdentifier()
-            val modelId = config.modelId ?: return emptyList()
-            val url = "${config.serverUrl}/api/v1/models/$modelId/optimized-config/$soc"
-
-            val connection = java.net.URL(url).openConnection() as java.net.HttpURLConnection
-            connection.requestMethod = "GET"
-            connection.setRequestProperty("Authorization", "Bearer ${config.deviceAccessToken}")
-            connection.connectTimeout = 5_000
-            connection.readTimeout = 5_000
-
-            if (connection.responseCode == 200) {
-                val body = connection.inputStream.bufferedReader().readText()
-                parseVendorDelegateResponse(body)
-            } else {
-                Timber.d("Vendor delegate config fetch returned HTTP ${connection.responseCode}")
-                emptyList()
-            }
-        } catch (e: Exception) {
-            Timber.d(e, "Failed to fetch vendor delegate config from server")
-            emptyList()
-        }
-    }
-
-    /**
-     * Parse the vendor delegate configuration from the server JSON response.
-     */
-    private fun parseVendorDelegateResponse(json: String): List<VendorDelegateInfo> {
-        return try {
-            val root = org.json.JSONObject(json)
-            val delegates = root.optJSONArray("vendor_delegates") ?: return emptyList()
-            (0 until delegates.length()).mapNotNull { i ->
-                val obj = delegates.getJSONObject(i)
-                val className = obj.optString("class_name", "")
-                if (className.isBlank()) return@mapNotNull null
-
-                val socPatterns = obj.optJSONArray("soc_patterns")?.let { arr ->
-                    (0 until arr.length()).map { arr.getString(it) }
-                } ?: emptyList()
-
-                val mfrPatterns = obj.optJSONArray("manufacturer_patterns")?.let { arr ->
-                    (0 until arr.length()).map { arr.getString(it) }
-                } ?: emptyList()
-
-                VendorDelegateInfo(
-                    className = className,
-                    displayName = obj.optString("display_name", className.substringAfterLast('.')),
-                    socPatterns = socPatterns,
-                    manufacturerPatterns = mfrPatterns,
-                )
-            }
-        } catch (e: Exception) {
-            Timber.w(e, "Failed to parse vendor delegate config")
-            emptyList()
-        }
-    }
-
-    /**
-     * Load a TFLite delegate by class name via reflection.
-     * The delegate must implement [Delegate] and have a no-arg constructor.
-     */
-    private fun tryLoadReflectionDelegate(
-        options: Interpreter.Options,
-        className: String,
-        displayName: String,
-    ): Boolean {
-        return try {
-            val clazz = Class.forName(className)
-            val instance = clazz.getDeclaredConstructor().newInstance()
-            if (instance is Delegate) {
-                options.addDelegate(instance)
-                vendorDelegate = instance
-                Timber.i("$displayName delegate attached via reflection")
-                true
-            } else {
-                Timber.w("$displayName class does not implement Delegate interface")
-                false
-            }
-        } catch (_: ClassNotFoundException) {
-            Timber.d("$displayName delegate not on classpath (add vendor AAR to enable)")
-            false
-        } catch (e: Exception) {
-            Timber.w(e, "Failed to initialize $displayName delegate")
-            false
-        }
-    }
-
-    // =========================================================================
-    // Thread & SoC Detection
-    // =========================================================================
-
-    /**
-     * Resolve the effective thread count. When [OctomilConfig.preferBigCores] is true,
-     * detects ARM big.LITTLE topology and returns the performance core count.
-     */
-    private fun resolveThreadCount(): Int {
-        if (!config.preferBigCores) return config.numThreads
-        val bigCores = detectBigCoreCount()
-        if (bigCores != config.numThreads) {
-            Timber.d("Thread count: %d big cores detected (config=%d)", bigCores, config.numThreads)
-        }
-        return bigCores
-    }
-
-    /**
-     * Detect the number of "big" (performance) cores on ARM big.LITTLE SoCs by
-     * reading max CPU frequencies from sysfs. Falls back to [config.numThreads].
-     */
-    private fun detectBigCoreCount(): Int {
-        return try {
-            val cpuDir = File("/sys/devices/system/cpu/")
-            val cores = cpuDir.listFiles { file -> file.name.matches(Regex("cpu\\d+")) }
-                ?: return config.numThreads
-
-            val maxFreqs = cores.mapNotNull { core ->
-                try {
-                    File(core, "cpufreq/cpuinfo_max_freq").readText().trim().toLongOrNull()
-                } catch (_: Exception) {
-                    null
-                }
-            }
-
-            if (maxFreqs.isEmpty()) return config.numThreads
-
-            val topFreq = maxFreqs.max()
-            val threshold = (topFreq * 0.8).toLong()
-            maxFreqs.count { it >= threshold }.coerceAtLeast(1)
-        } catch (_: Exception) {
-            config.numThreads
-        }
-    }
-
-    /**
-     * Get the SoC identifier for vendor delegate gating.
-     * Uses Build.SOC_MODEL on API 31+ (e.g., "SM8550"), falls back to Build.HARDWARE.
-     */
-    private fun getSocIdentifier(): String {
-        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            Build.SOC_MODEL
-        } else {
-            Build.HARDWARE
-        }
-    }
+    fun isUsingGpu(): Boolean = delegateManager.isUsingGpu()
 
     // =========================================================================
     // Buffer Pooling
@@ -1454,14 +1120,11 @@ class TFLiteTrainer(
     private fun closeInternal() {
         try {
             interpreter?.close()
-            gpuDelegate?.close()
-            closeVendorDelegate()
+            delegateManager.closeAll()
         } catch (e: Exception) {
             Timber.w(e, "Error closing interpreter")
         } finally {
             interpreter = null
-            gpuDelegate = null
-            vendorDelegate = null
             _currentModel = null
             _inputShape = intArrayOf()
             _outputShape = intArrayOf()
@@ -1472,15 +1135,6 @@ class TFLiteTrainer(
             originalModelPath = null
             originalModelBytes = null
             updatedModelPath = null
-        }
-    }
-
-    private fun closeVendorDelegate() {
-        val delegate = vendorDelegate ?: return
-        try {
-            delegate.javaClass.getMethod("close").invoke(delegate)
-        } catch (_: Exception) {
-            // Vendor delegate may not have a close method
         }
     }
 
@@ -1554,59 +1208,4 @@ class TFLiteTrainer(
             inferenceTimeMs = inferenceTimeMs,
         )
     }
-}
-
-/**
- * Information about model tensors.
- */
-data class TensorInfo(
-    val inputShape: IntArray,
-    val outputShape: IntArray,
-    val inputType: String,
-    val outputType: String,
-) {
-    override fun equals(other: Any?): Boolean {
-        if (this === other) return true
-        if (javaClass != other?.javaClass) return false
-
-        other as TensorInfo
-
-        if (!inputShape.contentEquals(other.inputShape)) return false
-        if (!outputShape.contentEquals(other.outputShape)) return false
-        if (inputType != other.inputType) return false
-        if (outputType != other.outputType) return false
-
-        return true
-    }
-
-    override fun hashCode(): Int {
-        var result = inputShape.contentHashCode()
-        result = 31 * result + outputShape.contentHashCode()
-        result = 31 * result + inputType.hashCode()
-        result = 31 * result + outputType.hashCode()
-        return result
-    }
-}
-
-/**
- * Result of a warmup pass including delegate benchmark.
- *
- * @property coldInferenceMs First inference time (includes JIT/shader/delegate init).
- * @property warmInferenceMs Second inference time (steady-state latency with selected delegate).
- * @property cpuInferenceMs CPU-only warm latency, if GPU was benchmarked. Null when GPU wasn't active.
- * @property usingGpu Whether the GPU delegate is active after warmup (may be false if it was disabled).
- * @property delegateDisabled True if GPU was disabled during warmup because CPU was faster.
- */
-data class WarmupResult(
-    val coldInferenceMs: Double,
-    val warmInferenceMs: Double,
-    val cpuInferenceMs: Double?,
-    val usingGpu: Boolean,
-    /** Which delegate survived warmup: "vendor_npu", "gpu", or "cpu" */
-    val activeDelegate: String,
-    /** Delegates that were disabled during cascade (e.g. ["vendor_npu", "gpu"]) */
-    val disabledDelegates: List<String> = emptyList(),
-) {
-    /** True if any delegate was disabled during warmup. */
-    val delegateDisabled: Boolean get() = disabledDelegates.isNotEmpty()
 }
