@@ -31,12 +31,13 @@ data class RoutingDeviceCapabilities(
 
 /** Request body for POST /api/v1/route. */
 @Serializable
-private data class RoutingRequest(
+internal data class RoutingRequest(
     @SerialName("model_id") val modelId: String,
     @SerialName("model_params") val modelParams: Int,
     @SerialName("model_size_mb") val modelSizeMb: Double,
     @SerialName("device_capabilities") val deviceCapabilities: RoutingDeviceCapabilities,
-    val prefer: String,
+    val prefer: String? = null,
+    @SerialName("deployment_id") val deploymentId: String? = null,
 )
 
 /** Response from POST /api/v1/route. */
@@ -85,8 +86,17 @@ data class RoutingConfig(
     val apiKey: String,
     val cacheTtlMs: Long = 300_000L,
     val prefer: RoutingPreference = RoutingPreference.FASTEST,
+    /**
+     * When `true`, [prefer] was explicitly set by the caller. When `false`
+     * (the default), managed routing omits `prefer` from the request so the
+     * server applies the deployment's own `routing_preference`.
+     */
+    val preferExplicit: Boolean = false,
     val modelParams: Int = 0,
     val modelSizeMb: Double = 0.0,
+    /** Deployment identifier for managed routing. When set, the server
+     * applies the deployment's routing_preference automatically. */
+    val deploymentId: String? = null,
 )
 
 // =============================================================================
@@ -105,6 +115,14 @@ class RoutingClient(private val config: RoutingConfig) {
     private val json = Json {
         ignoreUnknownKeys = true
         encodeDefaults = true
+    }
+
+    /** Encoder that omits null fields — used for route requests so `prefer`
+     *  and `deployment_id` are excluded when not set. */
+    private val requestJson = Json {
+        ignoreUnknownKeys = true
+        encodeDefaults = false
+        explicitNulls = false
     }
 
     private val httpClient = OkHttpClient.Builder()
@@ -140,15 +158,24 @@ class RoutingClient(private val config: RoutingConfig) {
             return cached.decision
         }
 
+        // When a deploymentId is present and prefer was not explicitly set,
+        // omit prefer so the server applies the deployment's routing_preference.
+        val preferValue: String? = if (config.deploymentId != null && !config.preferExplicit) {
+            null
+        } else {
+            config.prefer.value
+        }
+
         val body = RoutingRequest(
             modelId = modelId,
             modelParams = config.modelParams,
             modelSizeMb = config.modelSizeMb,
             deviceCapabilities = deviceCapabilities,
-            prefer = config.prefer.value,
+            prefer = preferValue,
+            deploymentId = config.deploymentId,
         )
 
-        val jsonBody = json.encodeToString(RoutingRequest.serializer(), body)
+        val jsonBody = requestJson.encodeToString(RoutingRequest.serializer(), body)
         val request = Request.Builder()
             .url("$serverUrl/api/v1/route")
             .post(jsonBody.toRequestBody(JSON_MEDIA_TYPE))
