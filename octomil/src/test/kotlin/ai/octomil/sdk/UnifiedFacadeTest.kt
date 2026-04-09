@@ -11,7 +11,9 @@ import ai.octomil.runtime.core.RuntimeCapabilities
 import ai.octomil.runtime.core.RuntimeChunk
 import ai.octomil.runtime.core.RuntimeRequest
 import ai.octomil.runtime.core.RuntimeResponse
+import ai.octomil.storage.SecureStorage
 import android.content.Context
+import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.mockkObject
@@ -34,10 +36,20 @@ class UnifiedFacadeTest {
     fun setUp() {
         mockkObject(ai.octomil.Octomil)
         every { ai.octomil.Octomil.init(any()) } returns Unit
+
+        mockkObject(SecureStorage.Companion)
+        val mockStorage: SecureStorage = mockk(relaxed = true)
+        every { SecureStorage.getInstance(any(), any()) } returns mockStorage
+
+        mockkObject(DeviceContext.Companion)
+        coEvery { DeviceContext.getOrCreateInstallationId(any()) } returns "test-install-id"
+        coEvery { DeviceContext.restoreCachedToken(any(), any()) } returns Unit
     }
 
     @After
     fun tearDown() {
+        unmockkObject(DeviceContext.Companion)
+        unmockkObject(SecureStorage.Companion)
         unmockkObject(ai.octomil.Octomil)
     }
 
@@ -53,9 +65,16 @@ class UnifiedFacadeTest {
     }
 
     @Test
-    fun `constructor with apiKey creates BootstrapToken auth`() {
-        val client = Octomil(context, apiKey = "sk_test_abc")
+    fun `constructor with apiKey and orgId creates auth`() {
+        val client = Octomil(context, apiKey = "sk_test_abc", orgId = "org_123")
         assertTrue(true)
+    }
+
+    @Test
+    fun `constructor with apiKey but no orgId throws`() {
+        assertFailsWith<IllegalArgumentException> {
+            Octomil(context, apiKey = "sk_test_abc")
+        }
     }
 
     @Test
@@ -85,7 +104,7 @@ class UnifiedFacadeTest {
 
     @Test
     fun `initialize is idempotent`() = runTest {
-        val client = Octomil(context, apiKey = "sk_test_abc")
+        val client = Octomil(context, apiKey = "sk_test_abc", orgId = "org_123")
         client.initialize()
         client.initialize() // second call should not throw
         assertTrue(true)
@@ -97,7 +116,7 @@ class UnifiedFacadeTest {
 
     @Test
     fun `responses before initialize throws OctomilNotInitializedError`() {
-        val client = Octomil(context, apiKey = "sk_test_abc")
+        val client = Octomil(context, apiKey = "sk_test_abc", orgId = "org_123")
         assertFailsWith<OctomilNotInitializedError> {
             client.responses
         }
