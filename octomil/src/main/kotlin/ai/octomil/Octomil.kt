@@ -154,6 +154,7 @@ object Octomil {
         val installationId = DeviceContext.getOrCreateInstallationId(storage)
         val orgId = when (auth) {
             is ai.octomil.sdk.AuthConfig.PublishableKey -> null // resolved server-side
+            is ai.octomil.sdk.AuthConfig.OrgApiKey -> auth.orgId
             is ai.octomil.sdk.AuthConfig.BootstrapToken -> null
             is ai.octomil.sdk.AuthConfig.Anonymous -> null
             null -> null
@@ -643,6 +644,7 @@ object Octomil {
         // Extract bearer token from AuthConfig
         val bearerToken = when (auth) {
             is ai.octomil.sdk.AuthConfig.PublishableKey -> auth.key
+            is ai.octomil.sdk.AuthConfig.OrgApiKey -> auth.apiKey
             is ai.octomil.sdk.AuthConfig.BootstrapToken -> auth.token
             is ai.octomil.sdk.AuthConfig.Anonymous -> return // no registration for anonymous
         }
