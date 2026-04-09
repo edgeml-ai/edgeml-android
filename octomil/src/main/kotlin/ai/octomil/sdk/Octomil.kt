@@ -24,7 +24,7 @@ class Octomil(
         authConfig = when {
             auth != null -> auth
             publishableKey != null -> AuthConfig.PublishableKey(publishableKey)
-            apiKey != null && orgId != null -> AuthConfig.BootstrapToken(apiKey)
+            apiKey != null && orgId != null -> AuthConfig.OrgApiKey(apiKey, orgId)
             apiKey != null -> throw IllegalArgumentException(
                 "orgId is required when using apiKey authentication"
             )
@@ -47,6 +47,7 @@ class Octomil(
         val installationId = DeviceContext.getOrCreateInstallationId(storage)
         val resolvedOrgId = when (authConfig) {
             is AuthConfig.PublishableKey -> null  // resolved server-side from key
+            is AuthConfig.OrgApiKey -> authConfig.orgId
             is AuthConfig.BootstrapToken -> null
             is AuthConfig.Anonymous -> null
         }

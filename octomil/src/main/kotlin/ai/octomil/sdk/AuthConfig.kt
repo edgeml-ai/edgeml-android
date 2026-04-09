@@ -16,6 +16,7 @@ sealed class AuthConfig {
                 else -> error("Invalid key prefix") // unreachable after init validation
             }
     }
+    data class OrgApiKey(val apiKey: String, val orgId: String) : AuthConfig()
     data class BootstrapToken(val token: String) : AuthConfig()
     data class Anonymous(val appId: String) : AuthConfig()
 }
