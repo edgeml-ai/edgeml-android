@@ -37,6 +37,26 @@ fun main() = runBlocking {
 }
 ```
 
+### Embeddings
+
+```kotlin
+val result = client.embeddings.create(
+    model = "nomic-embed-text-v1.5",
+    input = "On-device AI inference at scale"
+)
+println(result.embeddings.first().take(5))
+```
+
+Batch embeddings:
+
+```kotlin
+val result = client.embeddings.create(
+    model = "nomic-embed-text-v1.5",
+    input = listOf("Hello", "World")
+)
+result.embeddings.forEach { vec -> println(vec.take(3)) }
+```
+
 ### Migrating from ai.octomil.Octomil
 
 The existing `ai.octomil.Octomil` singleton (used for `Octomil.deploy()`, local TFLite inference, and manifest-based configuration) still works exactly as before. The new `ai.octomil.sdk.Octomil` class is a convenience wrapper for the cloud-backed Responses path.
