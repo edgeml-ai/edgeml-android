@@ -15,8 +15,8 @@ import kotlinx.coroutines.flow.Flow
  * based on a [RoutingPolicy].
  *
  * The router evaluates the policy for each request and dispatches to the appropriate
- * runtime. With [RoutingPolicy.Auto], it prefers local inference and falls back to
- * cloud when no local runtime is available.
+ * runtime. With [RoutingPolicy.Auto], it follows the `preferLocal` hint and falls
+ * back to the other runtime when available.
  */
 internal class RouterModelRuntime(
     private val localFactory: RuntimeFactory? = null,
@@ -48,14 +48,20 @@ internal class RouterModelRuntime(
                     ?: throw OctomilException(OctomilErrorCode.RUNTIME_UNAVAILABLE, "No cloud runtime available")
             }
             is RoutingPolicy.Auto -> {
-                val local = localFactory?.invoke("local")
-                if (local != null) {
-                    local
-                } else if (policy.fallback == "cloud") {
-                    cloudFactory?.invoke("cloud")
-                        ?: throw OctomilException(OctomilErrorCode.RUNTIME_UNAVAILABLE, "No cloud runtime for fallback")
+                if (policy.preferLocal) {
+                    val local = localFactory?.invoke("local")
+                    if (local != null) {
+                        local
+                    } else if (policy.fallback == "cloud") {
+                        cloudFactory?.invoke("cloud")
+                            ?: throw OctomilException(OctomilErrorCode.RUNTIME_UNAVAILABLE, "No cloud runtime for fallback")
+                    } else {
+                        throw OctomilException(OctomilErrorCode.RUNTIME_UNAVAILABLE, "No local runtime and fallback disabled")
+                    }
                 } else {
-                    throw OctomilException(OctomilErrorCode.RUNTIME_UNAVAILABLE, "No local runtime and fallback disabled")
+                    cloudFactory?.invoke("cloud")
+                        ?: localFactory?.invoke("local")
+                        ?: throw OctomilException(OctomilErrorCode.RUNTIME_UNAVAILABLE, "No runtime available")
                 }
             }
         }

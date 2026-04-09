@@ -6,7 +6,6 @@ enum class ServingPolicyPreset(val code: String) {
     PRIVATE("private"),
     LOCAL_FIRST("local_first"),
     PERFORMANCE_FIRST("performance_first"),
-    QUALITY_FIRST("quality_first"),
     CLOUD_FIRST("cloud_first"),
     CLOUD_ONLY("cloud_only");
 
