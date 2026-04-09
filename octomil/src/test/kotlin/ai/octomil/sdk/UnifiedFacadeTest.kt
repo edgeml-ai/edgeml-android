@@ -19,7 +19,9 @@ import android.content.Context
 import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.mockkConstructor
 import io.mockk.mockkObject
+import io.mockk.unmockkConstructor
 import io.mockk.unmockkObject
 import io.mockk.verify
 import kotlinx.coroutines.flow.Flow
@@ -294,6 +296,42 @@ class UnifiedFacadeTest {
         assertEquals(listOf(0.1, 0.2), result.embeddings[0])
         assertEquals(listOf(0.3, 0.4), result.embeddings[1])
         verify(exactly = 1) { mockClient.embed("nomic-embed-text", input = inputList) }
+    }
+
+    // =========================================================================
+    // publishable-key embeddings.create end-to-end
+    // =========================================================================
+
+    @Test
+    fun `publishable-key auth wires through to EmbeddingClient for create`() = runTest {
+        val pubKey = "oct_pub_test_key_abc"
+        val expectedResult = EmbeddingResult(
+            embeddings = listOf(listOf(0.5, 0.6, 0.7)),
+            model = "test-embed",
+            usage = EmbeddingUsage(promptTokens = 3, totalTokens = 3),
+        )
+
+        mockkConstructor(EmbeddingClient::class)
+        try {
+            every {
+                anyConstructed<EmbeddingClient>().embed("test-embed", input = "hello")
+            } returns expectedResult
+
+            val client = Octomil(context, publishableKey = pubKey)
+            client.initialize()
+
+            val result = client.embeddings.create("test-embed", "hello")
+
+            assertEquals(expectedResult, result)
+            assertEquals(listOf(listOf(0.5, 0.6, 0.7)), result.embeddings)
+            assertEquals("test-embed", result.model)
+            assertEquals(3, result.usage.promptTokens)
+            verify(exactly = 1) {
+                anyConstructed<EmbeddingClient>().embed("test-embed", input = "hello")
+            }
+        } finally {
+            unmockkConstructor(EmbeddingClient::class)
+        }
     }
 
     // =========================================================================
