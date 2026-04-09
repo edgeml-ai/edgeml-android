@@ -6,7 +6,10 @@ data class Response(
     val output: List<OutputItem>,
     val finishReason: String,
     val usage: ResponseUsage? = null,
-)
+) {
+    val outputText: String
+        get() = output.filterIsInstance<OutputItem.Text>().joinToString("") { it.text }
+}
 
 data class ResponseUsage(
     val promptTokens: Int,

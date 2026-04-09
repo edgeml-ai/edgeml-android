@@ -23,7 +23,25 @@ dependencies {
 }
 ```
 
-## Quick Start
+## Quick Start (Unified Facade)
+
+```kotlin
+import ai.octomil.sdk.Octomil
+import kotlinx.coroutines.runBlocking
+
+fun main() = runBlocking {
+    val client = Octomil(context = applicationContext, publishableKey = "oct_pub_live_...")
+    client.initialize()
+    val response = client.responses.create(model = "phi-4-mini", input = "Hello")
+    println(response.outputText)
+}
+```
+
+### Migrating from ai.octomil.Octomil
+
+The existing `ai.octomil.Octomil` singleton (used for `Octomil.deploy()`, local TFLite inference, and manifest-based configuration) still works exactly as before. The new `ai.octomil.sdk.Octomil` class is a convenience wrapper for the cloud-backed Responses path.
+
+## Local Inference (Octomil.deploy)
 
 ```kotlin
 import ai.octomil.Octomil
