@@ -1,5 +1,8 @@
 package ai.octomil.sdk
 
+import ai.octomil.client.EmbeddingClient
+import ai.octomil.client.EmbeddingResult
+import ai.octomil.client.EmbeddingUsage
 import ai.octomil.sdk.FacadeResponses
 import ai.octomil.responses.OctomilResponses
 import ai.octomil.responses.OutputItem
@@ -18,6 +21,7 @@ import io.mockk.every
 import io.mockk.mockk
 import io.mockk.mockkObject
 import io.mockk.unmockkObject
+import io.mockk.verify
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.test.runTest
@@ -26,6 +30,7 @@ import org.junit.Before
 import org.junit.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
 class UnifiedFacadeTest {
@@ -220,6 +225,75 @@ class UnifiedFacadeTest {
     fun `OctomilNotInitializedError is an IllegalStateException`() {
         val error = OctomilNotInitializedError()
         assertTrue(error is IllegalStateException)
+    }
+
+    // =========================================================================
+    // embeddings before initialize
+    // =========================================================================
+
+    @Test
+    fun `embeddings before initialize throws OctomilNotInitializedError`() {
+        val client = Octomil(context, apiKey = "sk_test_abc", orgId = "org_123")
+        assertFailsWith<OctomilNotInitializedError> {
+            client.embeddings
+        }
+    }
+
+    // =========================================================================
+    // embeddings namespace exists after initialize
+    // =========================================================================
+
+    @Test
+    fun `embeddings namespace exists after initialize`() = runTest {
+        val client = Octomil(context, apiKey = "sk_test_abc", orgId = "org_123")
+        client.initialize()
+        assertNotNull(client.embeddings)
+    }
+
+    // =========================================================================
+    // FacadeEmbeddings delegates to EmbeddingClient
+    // =========================================================================
+
+    @Test
+    fun `FacadeEmbeddings create single delegates to EmbeddingClient`() = runTest {
+        val expectedResult = EmbeddingResult(
+            embeddings = listOf(listOf(0.1, 0.2, 0.3)),
+            model = "nomic-embed-text",
+            usage = EmbeddingUsage(promptTokens = 5, totalTokens = 5),
+        )
+        val mockClient: EmbeddingClient = mockk {
+            every { embed("nomic-embed-text", input = "hello") } returns expectedResult
+        }
+        val facade = FacadeEmbeddings(mockClient)
+
+        val result = facade.create("nomic-embed-text", "hello")
+
+        assertEquals(expectedResult, result)
+        assertEquals(listOf(listOf(0.1, 0.2, 0.3)), result.embeddings)
+        assertEquals("nomic-embed-text", result.model)
+        assertEquals(5, result.usage.promptTokens)
+        verify(exactly = 1) { mockClient.embed("nomic-embed-text", input = "hello") }
+    }
+
+    @Test
+    fun `FacadeEmbeddings create batch delegates to EmbeddingClient`() = runTest {
+        val expectedResult = EmbeddingResult(
+            embeddings = listOf(listOf(0.1, 0.2), listOf(0.3, 0.4)),
+            model = "nomic-embed-text",
+            usage = EmbeddingUsage(promptTokens = 10, totalTokens = 10),
+        )
+        val inputList = listOf("hello", "world")
+        val mockClient: EmbeddingClient = mockk {
+            every { embed("nomic-embed-text", input = inputList) } returns expectedResult
+        }
+        val facade = FacadeEmbeddings(mockClient)
+
+        val result = facade.create("nomic-embed-text", inputList)
+
+        assertEquals(2, result.embeddings.size)
+        assertEquals(listOf(0.1, 0.2), result.embeddings[0])
+        assertEquals(listOf(0.3, 0.4), result.embeddings[1])
+        verify(exactly = 1) { mockClient.embed("nomic-embed-text", input = inputList) }
     }
 
     // =========================================================================

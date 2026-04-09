@@ -1,5 +1,7 @@
 package ai.octomil.sdk
 
+import ai.octomil.client.EmbeddingClient
+import ai.octomil.config.OctomilConfig
 import ai.octomil.responses.InputItem
 import ai.octomil.responses.OctomilResponses
 import ai.octomil.responses.Response
@@ -15,10 +17,12 @@ class Octomil(
     apiKey: String? = null,
     orgId: String? = null,
     auth: AuthConfig? = null,
+    private val serverUrl: String = OctomilConfig.DEFAULT_SERVER_URL,
 ) {
     private var initialized = false
     private val authConfig: AuthConfig
     private var _responses: OctomilResponses? = null
+    private var _embeddings: FacadeEmbeddings? = null
 
     init {
         authConfig = when {
@@ -65,6 +69,15 @@ class Octomil(
         // Create OctomilResponses with the wired device context
         _responses = OctomilResponses(deviceContext = deviceContext)
 
+        // Create EmbeddingClient for the embeddings namespace
+        val embeddingApiKey = when (val a = authConfig) {
+            is AuthConfig.OrgApiKey -> a.apiKey
+            is AuthConfig.PublishableKey -> a.key
+            is AuthConfig.BootstrapToken -> a.token
+            is AuthConfig.Anonymous -> ""
+        }
+        _embeddings = FacadeEmbeddings(EmbeddingClient(serverUrl, embeddingApiKey))
+
         initialized = true
     }
 
@@ -72,6 +85,12 @@ class Octomil(
         get() {
             if (!initialized) throw OctomilNotInitializedError()
             return FacadeResponses(_responses!!)
+        }
+
+    val embeddings: FacadeEmbeddings
+        get() {
+            if (!initialized) throw OctomilNotInitializedError()
+            return _embeddings!!
         }
 }
 
