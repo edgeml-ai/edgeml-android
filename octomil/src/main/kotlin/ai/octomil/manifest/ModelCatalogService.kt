@@ -155,6 +155,15 @@ class ModelCatalogService(
             fallback = "cloud",
         )
         ai.octomil.generated.RoutingPolicy.CLOUD_ONLY -> RoutingPolicy.CloudOnly
+        ai.octomil.generated.RoutingPolicy.CLOUD_FIRST -> RoutingPolicy.Auto(
+            preferLocal = false,
+            fallback = "local",
+        )
+        ai.octomil.generated.RoutingPolicy.PRIVATE -> RoutingPolicy.LocalOnly
+        ai.octomil.generated.RoutingPolicy.PERFORMANCE_FIRST -> RoutingPolicy.Auto(
+            preferLocal = true,
+            fallback = "cloud",
+        )
         ai.octomil.generated.RoutingPolicy.AUTO -> RoutingPolicy.Auto(
             preferLocal = true,
             fallback = "cloud",
