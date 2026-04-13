@@ -2,14 +2,12 @@ package ai.octomil.generated
 
 // Auto-generated from octomil-contracts. Do not edit.
 
-enum class Modality(val code: String) {
-    TEXT("text"),
-    IMAGE("image"),
-    AUDIO("audio"),
-    VIDEO("video");
+enum class BillingInterval(val code: String) {
+    MONTHLY("monthly"),
+    ANNUAL("annual");
 
     companion object {
-        fun fromCode(code: String): Modality? =
+        fun fromCode(code: String): BillingInterval? =
             entries.firstOrNull { it.code == code }
     }
 }

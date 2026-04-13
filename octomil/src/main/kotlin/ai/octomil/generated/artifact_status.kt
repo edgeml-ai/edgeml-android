@@ -19,7 +19,8 @@ enum class ArtifactStatus(val code: String) {
     FAILED_RETRYABLE("failed_retryable"),
     FAILED_CORRUPT("failed_corrupt"),
     FAILED_HEALTHCHECK("failed_healthcheck"),
-    ROLLBACK_PENDING("rollback_pending");
+    ROLLBACK_PENDING("rollback_pending"),
+    ROLLED_BACK("rolled_back");
 
     companion object {
         fun fromCode(code: String): ArtifactStatus? =

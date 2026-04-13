@@ -22,6 +22,9 @@ object SpanEventAttribute {
     const val OCTOMIL_RUNTIME_INIT_MS = "octomil.runtime.init_ms"
     const val OCTOMIL_TOOL_EXTRACTION_STRATEGY = "octomil.tool.extraction_strategy"
     const val OCTOMIL_TOOL_RAW_TEXT_PREVIEW = "octomil.tool.raw_text_preview"
+    const val OCTOMIL_KV_CACHE_STRATEGY = "octomil.kv_cache.strategy"
+    const val OCTOMIL_KV_CACHE_QUANTIZATION_BITS = "octomil.kv_cache.quantization_bits"
+    const val OCTOMIL_KV_CACHE_BACKEND = "octomil.kv_cache.backend"
 
     val EVENT_REQUIRED_ATTRIBUTES: Map<String, List<String>> = mapOf(
         "first_token" to listOf("octomil.ttft_ms"),
@@ -35,5 +38,6 @@ object SpanEventAttribute {
         "runtime_initialized" to listOf("octomil.runtime.executor", "octomil.runtime.init_ms"),
         "tool_call_parse_succeeded" to listOf("octomil.tool.name", "octomil.tool.extraction_strategy"),
         "tool_call_parse_failed" to listOf("octomil.tool.extraction_strategy"),
+        "kv_cache_applied" to listOf("octomil.kv_cache.strategy"),
     )
 }
