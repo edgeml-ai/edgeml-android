@@ -34,7 +34,11 @@ class RuntimePlannerTest {
         ramTotalBytes = 8_589_934_592L,
         accelerators = listOf("nnapi", "gpu"),
         installedRuntimes = listOf(
-            InstalledRuntime(engine = "tflite", available = true),
+            InstalledRuntime(
+                engine = "tflite",
+                available = true,
+                metadata = mapOf("models" to "gemma-2b", "capabilities" to "text"),
+            ),
             InstalledRuntime(engine = "llama_cpp", available = true),
         ),
     )
@@ -85,7 +89,7 @@ class RuntimePlannerTest {
         )
 
         assertEquals("local", result.locality)
-        assertEquals("llama_cpp", result.engine)
+        assertEquals("llama.cpp", result.engine)
         assertEquals("server_plan", result.source)
     }
 
@@ -203,7 +207,7 @@ class RuntimePlannerTest {
         )
 
         assertEquals("local", result.locality)
-        assertEquals("llama_cpp", result.engine)
+        assertEquals("llama.cpp", result.engine)
         assertEquals("cache", result.source)
         // No server requests should have been made
         assertEquals(0, server.requestCount)
@@ -333,7 +337,7 @@ class RuntimePlannerTest {
         assertNotNull(result.engine)
         // Should pick first installed runtime (tflite)
         assertEquals("tflite", result.engine)
-        assertEquals("local_benchmark", result.source)
+        assertEquals("local_default", result.source)
     }
 
     @Test
@@ -371,32 +375,37 @@ class RuntimePlannerTest {
     // =========================================================================
 
     @Test
-    fun `resolve uploads benchmark telemetry on local selection`() {
-        // First request: plan fetch fails
-        server.enqueue(MockResponse().setResponseCode(500))
-        // Second request: benchmark upload
+    fun `recordBenchmark uploads benchmark telemetry`() {
         server.enqueue(MockResponse().setResponseCode(200))
 
-        val result = planner().resolve(
+        planner().recordBenchmark(
             model = "gemma-2b",
             capability = "text",
+            engine = "llama_cpp",
+            tokensPerSecond = 22.0,
+            ttftMs = 100.0,
+            memoryMb = 512.0,
         )
 
-        assertEquals("local", result.locality)
-        // Should have made 2 server requests: failed plan fetch + benchmark upload
-        assertEquals(2, server.requestCount)
+        assertEquals(1, server.requestCount)
+        val body = server.takeRequest().body.readUtf8()
+        assertTrue(body.contains("\"engine\":\"llama.cpp\""))
+        assertTrue(body.contains("\"tokens_per_second\":22.0"))
     }
 
     @Test
-    fun `resolve persists benchmark locally after selection`() {
-        server.enqueue(MockResponse().setResponseCode(500))
-        server.enqueue(MockResponse().setResponseCode(200))
-
-        planner().resolve("gemma-2b", "text")
+    fun `recordBenchmark persists benchmark locally`() {
+        planner(client = null).recordBenchmark(
+            model = "gemma-2b",
+            capability = "text",
+            engine = "llama_cpp",
+            tokensPerSecond = 31.0,
+        )
 
         // Second resolve should find the cached benchmark
-        val result = planner().resolve("gemma-2b", "text")
+        val result = planner(client = null).resolve("gemma-2b", "text")
         assertEquals("cache", result.source)
+        assertEquals("llama.cpp", result.engine)
     }
 
     // =========================================================================
@@ -412,7 +421,7 @@ class RuntimePlannerTest {
         // Second resolve should use cache
         val result = planner().resolve("test", "text")
         assertEquals("cache", result.source)
-        assertEquals("llama_cpp", result.engine)
+        assertEquals("llama.cpp", result.engine)
         // Only 1 server request (the first plan fetch)
         assertEquals(1, server.requestCount)
     }

@@ -29,6 +29,34 @@ data class InstalledRuntime(
 )
 
 /**
+ * Canonical runtime engine identifiers shared with the server planner.
+ */
+internal object RuntimeEngineIds {
+    private val aliases = mapOf(
+        "mlx" to "mlx-lm",
+        "mlx_lm" to "mlx-lm",
+        "mlxlm" to "mlx-lm",
+        "llamacpp" to "llama.cpp",
+        "llama_cpp" to "llama.cpp",
+        "llama-cpp" to "llama.cpp",
+        "whisper" to "whisper.cpp",
+        "whispercpp" to "whisper.cpp",
+        "whisper_cpp" to "whisper.cpp",
+        "whisper-cpp" to "whisper.cpp",
+    )
+
+    fun canonical(engine: String): String {
+        val normalized = engine.trim().lowercase()
+        return aliases[normalized] ?: normalized
+    }
+
+    fun canonicalOrNull(engine: String?): String? = engine?.let(::canonical)
+}
+
+internal fun InstalledRuntime.canonicalized(): InstalledRuntime =
+    copy(engine = RuntimeEngineIds.canonical(engine))
+
+/**
  * Hardware and software profile sent to the server planner endpoint.
  *
  * Collects only privacy-safe hardware descriptors. No user data, prompts,
@@ -119,10 +147,10 @@ data class RuntimePlanResponse(
  * Final resolved runtime selection from the planner.
  *
  * @property locality Where inference will run: "local" or "cloud".
- * @property engine Engine wire name (e.g. "llama_cpp", "tflite") or null.
+ * @property engine Engine wire name (e.g. "llama.cpp", "tflite") or null.
  * @property artifact Artifact recommendation if available.
  * @property benchmarkRan Whether a local benchmark was run during resolution.
- * @property source How the selection was made: "cache", "server_plan", "local_benchmark", "fallback".
+ * @property source How the selection was made: "cache", "server_plan", "local_default", "fallback".
  * @property fallbackCandidates Remaining fallback candidates from the plan.
  * @property reason Human-readable explanation.
  */

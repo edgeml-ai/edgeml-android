@@ -40,7 +40,7 @@ object DeviceRuntimeProfileCollector {
             ramTotalBytes = getRamTotalBytes(context),
             gpuCoreCount = null, // Not reliably detectable on Android
             accelerators = detectAccelerators(),
-            installedRuntimes = detectInstalledRuntimes(),
+            installedRuntimes = detectInstalledRuntimes().map { it.canonicalized() },
         )
     }
 
@@ -165,14 +165,22 @@ object DeviceRuntimeProfileCollector {
     internal fun detectInstalledRuntimes(): List<InstalledRuntime> {
         val runtimes = mutableListOf<InstalledRuntime>()
 
-        // TFLite is always available (core dependency)
-        runtimes.add(
-            InstalledRuntime(
-                engine = "tflite",
-                available = true,
-                accelerator = "cpu",
+        // TFLite is available when either the Octomil engine wrapper or the
+        // upstream interpreter is present. We report engine availability here,
+        // not model-specific support; the planner requires a server plan,
+        // benchmark cache, or explicit metadata before choosing it locally.
+        if (
+            isClassAvailable("ai.octomil.runtime.engines.tflite.LLMEngine") ||
+            isClassAvailable("org.tensorflow.lite.Interpreter")
+        ) {
+            runtimes.add(
+                InstalledRuntime(
+                    engine = "tflite",
+                    available = true,
+                    accelerator = "cpu",
+                )
             )
-        )
+        }
 
         // ONNX Runtime
         if (isClassAvailable("ai.onnxruntime.OrtSession")) {
@@ -189,7 +197,7 @@ object DeviceRuntimeProfileCollector {
         if (isClassAvailable("ai.octomil.runtime.llama.LlamaCppEngine")) {
             runtimes.add(
                 InstalledRuntime(
-                    engine = "llama_cpp",
+                    engine = "llama.cpp",
                     available = true,
                     accelerator = "cpu",
                 )
@@ -222,7 +230,7 @@ object DeviceRuntimeProfileCollector {
         if (isClassAvailable("ai.octomil.runtime.sherpa.SherpaOnnxEngine")) {
             runtimes.add(
                 InstalledRuntime(
-                    engine = "whisper",
+                    engine = "whisper.cpp",
                     available = true,
                     accelerator = "cpu",
                 )

@@ -123,8 +123,17 @@ class RuntimePlannerStoreTest {
         val retrieved = store.getBenchmark("bm_key1")
         assertNotNull(retrieved)
         assertEquals("gemma-2b", retrieved.model)
-        assertEquals("llama_cpp", retrieved.engine)
+        assertEquals("llama.cpp", retrieved.engine)
         assertEquals(15.3, retrieved.tokensPerSecond)
+    }
+
+    @Test
+    fun `putBenchmark canonicalizes engine aliases`() {
+        store.putBenchmark("bm_alias", CachedBenchmark("m", "text", "llamacpp", 12.0))
+
+        val retrieved = store.getBenchmark("bm_alias")
+        assertNotNull(retrieved)
+        assertEquals("llama.cpp", retrieved.engine)
     }
 
     @Test
@@ -280,6 +289,17 @@ class RuntimePlannerStoreTest {
         assertEquals(
             RuntimePlannerStore.installedRuntimesHash(a),
             RuntimePlannerStore.installedRuntimesHash(b),
+        )
+    }
+
+    @Test
+    fun `installedRuntimesHash treats aliases as equivalent`() {
+        val canonical = listOf(InstalledRuntime(engine = "llama.cpp", available = true))
+        val alias = listOf(InstalledRuntime(engine = "llama_cpp", available = true))
+
+        assertEquals(
+            RuntimePlannerStore.installedRuntimesHash(canonical),
+            RuntimePlannerStore.installedRuntimesHash(alias),
         )
     }
 

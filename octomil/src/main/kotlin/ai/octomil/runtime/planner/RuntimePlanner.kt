@@ -11,11 +11,9 @@ import timber.log.Timber
  * 2. Check local plan cache
  * 3. If network allowed and not private policy, fetch server plan
  * 4. Validate server plan against installed runtimes
- * 5. Check local benchmark cache
- * 6. If benchmark_required flag set, run local benchmark primitives
- * 7. Persist benchmark locally
- * 8. Upload privacy-safe benchmark telemetry (not for private policy)
- * 9. Return [RuntimeSelection]
+ * 5. Check real local benchmark cache
+ * 6. Select an explicitly model-capable local runtime, if one exists
+ * 7. Return [RuntimeSelection]
  *
  * Privacy guarantees:
  * - No prompts, responses, file paths, or user input in telemetry
@@ -78,8 +76,9 @@ class RuntimePlanner(
         val cachedPlan = store.getPlan(cacheKey)
         if (cachedPlan != null) {
             Timber.d("Using cached plan for %s/%s", model, capability)
-            return resolveFromServerPlan(cachedPlan, device, source = "cache")
-                ?: fallbackSelection(routingPolicy, "cached plan had no viable candidates")
+            val selection = resolveFromServerPlan(cachedPlan, device, source = "cache")
+            if (selection != null) return selection
+            Timber.d("Cached plan had no viable candidates; continuing resolution")
         }
 
         // Step 3: Fetch server plan if network allowed and not private
@@ -127,7 +126,7 @@ class RuntimePlanner(
         if (cachedBenchmark != null) {
             return RuntimeSelection(
                 locality = "local",
-                engine = cachedBenchmark.engine,
+                engine = RuntimeEngineIds.canonical(cachedBenchmark.engine),
                 benchmarkRan = false,
                 source = "cache",
                 reason = "cached benchmark: %.1f tok/s".format(cachedBenchmark.tokensPerSecond),
@@ -144,43 +143,83 @@ class RuntimePlanner(
             )
         }
 
-        // For local engines: select the first available installed runtime as
-        // the best candidate. Real benchmarking is delegated to the engine
-        // registry's BenchmarkRunner; the planner does not duplicate that logic.
-        val installedEngines = device.installedRuntimes.filter { it.available }
+        // For no-plan local selection, only use runtimes that explicitly
+        // declare support for this model/capability. Plain engine availability
+        // is not enough to prove the requested model can run.
+        val installedEngines = device.installedRuntimes.filter {
+            supportsLocalDefault(it, model, capability)
+        }
         if (installedEngines.isNotEmpty()) {
             val best = installedEngines.first()
-
-            // Persist the selection as a benchmark cache entry
-            store.putBenchmark(
-                bmCacheKey,
-                CachedBenchmark(
-                    model = model,
-                    capability = capability,
-                    engine = best.engine,
-                ),
-            )
-
-            // Step 8: Upload telemetry best-effort (not for private)
-            if (!isPrivate && client != null && allowNetwork) {
-                uploadBenchmarkTelemetry(
-                    model = model,
-                    capability = capability,
-                    engine = best.engine,
-                    device = device,
-                )
-            }
+            val engine = RuntimeEngineIds.canonical(best.engine)
 
             return RuntimeSelection(
                 locality = "local",
-                engine = best.engine,
+                engine = engine,
                 benchmarkRan = false,
-                source = "local_benchmark",
-                reason = "selected local engine: ${best.engine}",
+                source = "local_default",
+                reason = "selected explicitly reported local engine: $engine",
             )
         }
 
         return fallbackSelection(routingPolicy, "no local engine available")
+    }
+
+    /**
+     * Persist and upload a benchmark collected from a real inference run.
+     *
+     * The planner does not synthesize benchmark entries during resolution;
+     * engine integrations should call this after actual execution.
+     */
+    fun recordBenchmark(
+        model: String,
+        capability: String,
+        engine: String,
+        tokensPerSecond: Double,
+        ttftMs: Double = 0.0,
+        memoryMb: Double = 0.0,
+        routingPolicy: String = "local_first",
+        success: Boolean = true,
+        allowNetwork: Boolean = true,
+    ) {
+        val device = profileCollector?.invoke()
+            ?: DeviceRuntimeProfileCollector.collect(context)
+        val bmCacheKey = RuntimePlannerStore.makeCacheKey(
+            model = model,
+            capability = capability,
+            policy = routingPolicy,
+            sdkVersion = device.sdkVersion,
+            platform = device.platform,
+            arch = device.arch,
+            chip = device.chip,
+            installedHash = RuntimePlannerStore.installedRuntimesHash(device.installedRuntimes),
+        )
+        val canonicalEngine = RuntimeEngineIds.canonical(engine)
+
+        store.putBenchmark(
+            bmCacheKey,
+            CachedBenchmark(
+                model = model,
+                capability = capability,
+                engine = canonicalEngine,
+                tokensPerSecond = tokensPerSecond,
+                ttftMs = ttftMs,
+                memoryMb = memoryMb,
+            ),
+        )
+
+        if (routingPolicy != "private" && client != null && allowNetwork) {
+            uploadBenchmarkTelemetry(
+                model = model,
+                capability = capability,
+                engine = canonicalEngine,
+                device = device,
+                success = success,
+                tokensPerSecond = tokensPerSecond,
+                ttftMs = ttftMs,
+                memoryMb = memoryMb,
+            )
+        }
     }
 
     // =========================================================================
@@ -194,48 +233,59 @@ class RuntimePlanner(
     ): RuntimeSelection? {
         val installedEngines = device.installedRuntimes
             .filter { it.available }
-            .map { it.engine }
+            .map { RuntimeEngineIds.canonical(it.engine) }
             .toSet()
 
-        // Try primary candidates
-        for (candidate in plan.candidates) {
+        selectCandidate(
+            candidates = plan.candidates,
+            installedEngines = installedEngines,
+            source = source,
+            fallbackCandidates = plan.fallbackCandidates,
+            fallbackPrefix = null,
+        )?.let { return it }
+
+        return selectCandidate(
+            candidates = plan.fallbackCandidates,
+            installedEngines = installedEngines,
+            source = source,
+            fallbackCandidates = emptyList(),
+            fallbackPrefix = "fallback: ",
+        )
+    }
+
+    private fun selectCandidate(
+        candidates: List<RuntimeCandidatePlan>,
+        installedEngines: Set<String>,
+        source: String,
+        fallbackCandidates: List<RuntimeCandidatePlan>,
+        fallbackPrefix: String?,
+    ): RuntimeSelection? {
+        for (candidate in candidates) {
             if (candidate.locality == "local") {
-                if (candidate.engine != null && candidate.engine !in installedEngines) {
+                val engine = RuntimeEngineIds.canonicalOrNull(candidate.engine)
+                if (engine != null && engine !in installedEngines) {
                     continue // Skip engines we don't have
+                } else if (engine == null && installedEngines.isEmpty()) {
+                    continue // "any local" still requires at least one runtime
                 }
                 return RuntimeSelection(
                     locality = "local",
-                    engine = candidate.engine,
+                    engine = engine,
                     artifact = candidate.artifact,
                     benchmarkRan = false,
                     source = source,
-                    fallbackCandidates = plan.fallbackCandidates,
-                    reason = candidate.reason,
+                    fallbackCandidates = fallbackCandidates,
+                    reason = "${fallbackPrefix.orEmpty()}${candidate.reason}",
                 )
             } else if (candidate.locality == "cloud") {
                 return RuntimeSelection(
                     locality = "cloud",
-                    engine = candidate.engine,
+                    engine = RuntimeEngineIds.canonicalOrNull(candidate.engine),
                     artifact = candidate.artifact,
                     benchmarkRan = false,
                     source = source,
-                    fallbackCandidates = plan.fallbackCandidates,
-                    reason = candidate.reason,
-                )
-            }
-        }
-
-        // Try fallback candidates
-        for (candidate in plan.fallbackCandidates) {
-            if (candidate.locality == "local" && candidate.engine in installedEngines) {
-                return RuntimeSelection(
-                    locality = "local",
-                    engine = candidate.engine,
-                    artifact = candidate.artifact,
-                    benchmarkRan = false,
-                    source = source,
-                    fallbackCandidates = emptyList(),
-                    reason = "fallback: ${candidate.reason}",
+                    fallbackCandidates = fallbackCandidates,
+                    reason = "${fallbackPrefix.orEmpty()}${candidate.reason}",
                 )
             }
         }
@@ -252,6 +302,10 @@ class RuntimePlanner(
         capability: String,
         engine: String,
         device: DeviceRuntimeProfile,
+        success: Boolean,
+        tokensPerSecond: Double,
+        ttftMs: Double,
+        memoryMb: Double,
     ) {
         try {
             client?.uploadBenchmark(
@@ -259,10 +313,13 @@ class RuntimePlanner(
                     source = "planner",
                     model = model,
                     capability = capability,
-                    engine = engine,
+                    engine = RuntimeEngineIds.canonical(engine),
                     device = device,
-                    success = true,
-                    metadata = mapOf("selection_source" to "local_benchmark"),
+                    success = success,
+                    tokensPerSecond = tokensPerSecond,
+                    ttftMs = ttftMs,
+                    peakMemoryBytes = (memoryMb * 1024 * 1024).toLong(),
+                    metadata = mapOf("selection_source" to "benchmark"),
                 )
             )
         } catch (e: Exception) {
@@ -290,5 +347,28 @@ class RuntimePlanner(
                 reason = "$reason -- falling back to cloud",
             )
         }
+    }
+
+    private fun supportsLocalDefault(
+        runtime: InstalledRuntime,
+        model: String,
+        capability: String,
+    ): Boolean {
+        if (!runtime.available) return false
+
+        val models = metadataList(runtime.metadata, "model", "model_id", "models")
+        if ("*" !in models && model.lowercase() !in models) return false
+
+        val capabilities = metadataList(runtime.metadata, "capability", "capabilities")
+        return capabilities.isEmpty() || "*" in capabilities || capability.lowercase() in capabilities
+    }
+
+    private fun metadataList(metadata: Map<String, String>, vararg keys: String): Set<String> {
+        return keys
+            .mapNotNull { metadata[it] }
+            .flatMap { it.split(",") }
+            .map { it.trim().lowercase() }
+            .filter { it.isNotEmpty() }
+            .toSet()
     }
 }

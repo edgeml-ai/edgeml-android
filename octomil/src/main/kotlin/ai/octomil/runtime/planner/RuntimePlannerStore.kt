@@ -125,7 +125,10 @@ class RuntimePlannerStore(
     fun putBenchmark(cacheKey: String, benchmark: CachedBenchmark) {
         val key = "$BENCHMARK_PREFIX$cacheKey"
         try {
-            val encoded = json.encodeToString(CachedBenchmark.serializer(), benchmark)
+            val encoded = json.encodeToString(
+                CachedBenchmark.serializer(),
+                benchmark.copy(engine = RuntimeEngineIds.canonical(benchmark.engine)),
+            )
             prefs.edit()
                 .putString(key, encoded)
                 .putLong("${key}_ts", nowSeconds())
@@ -213,6 +216,7 @@ class RuntimePlannerStore(
         fun installedRuntimesHash(runtimes: List<InstalledRuntime>): String {
             val sorted = runtimes
                 .filter { it.available }
+                .map { it.canonicalized() }
                 .sortedBy { it.engine }
                 .joinToString(",") { "${it.engine}:${it.version ?: ""}" }
             return sha256Prefix(sorted, 16)

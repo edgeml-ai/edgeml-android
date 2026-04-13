@@ -89,9 +89,9 @@ class DeviceRuntimeProfileCollectorTest {
     // =========================================================================
 
     @Test
-    fun `detectInstalledRuntimes always includes tflite`() {
+    fun `detectInstalledRuntimes returns canonical engine ids`() {
         val runtimes = DeviceRuntimeProfileCollector.detectInstalledRuntimes()
-        assertTrue(runtimes.any { it.engine == "tflite" })
+        assertTrue(runtimes.all { it.engine == RuntimeEngineIds.canonical(it.engine) })
     }
 
     @Test
