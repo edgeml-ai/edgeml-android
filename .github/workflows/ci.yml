@@ -39,7 +39,7 @@ jobs:
           gradle-version: wrapper
 
       - name: Run tests with coverage
-        run: gradle :octomil:testDebugUnitTest :octomil:jacocoTestReport
+        run: ./gradlew :octomil:testDebugUnitTest :octomil:jacocoTestReport --no-configuration-cache
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@671740ac38dd9b0130fbe1cec585b89eea48d3de # v5
@@ -91,7 +91,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-        run: gradle sonar --no-configuration-cache
+        run: ./gradlew sonar --no-configuration-cache
 
   security:
     name: Security Scan
@@ -114,7 +114,7 @@ jobs:
           gradle-version: wrapper
 
       - name: Run Android Lint
-        run: gradle :octomil:lintDebug
+        run: ./gradlew :octomil:lintDebug --no-configuration-cache
 
       - name: Upload lint reports
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
