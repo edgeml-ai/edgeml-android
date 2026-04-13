@@ -6,6 +6,7 @@ import ai.octomil.generated.DeliveryMode
 import ai.octomil.generated.ModelCapability
 import ai.octomil.runtime.core.ModelRuntime
 import ai.octomil.runtime.core.ModelRuntimeRegistry
+import ai.octomil.runtime.core.RuntimeFactory
 import ai.octomil.runtime.engines.LocalFileModelRuntime
 import ai.octomil.runtime.routing.CloudModelRuntime
 import ai.octomil.runtime.routing.RouterModelRuntime
@@ -13,6 +14,84 @@ import ai.octomil.runtime.routing.RoutingPolicy
 import android.content.Context
 import timber.log.Timber
 import java.io.File
+
+internal fun catalogRoutingPolicy(
+    policy: ai.octomil.generated.RoutingPolicy,
+): RoutingPolicy = when (policy) {
+    ai.octomil.generated.RoutingPolicy.LOCAL_ONLY -> RoutingPolicy.LocalOnly
+    ai.octomil.generated.RoutingPolicy.LOCAL_FIRST -> RoutingPolicy.Auto(
+        preferLocal = true,
+        fallback = "cloud",
+    )
+    ai.octomil.generated.RoutingPolicy.CLOUD_ONLY -> RoutingPolicy.CloudOnly
+    ai.octomil.generated.RoutingPolicy.AUTO -> RoutingPolicy.Auto(
+        preferLocal = true,
+        fallback = "cloud",
+    )
+}
+
+internal fun buildCatalogRuntime(
+    policy: ai.octomil.generated.RoutingPolicy,
+    localFactory: RuntimeFactory?,
+    cloudFactory: RuntimeFactory?,
+    preferDeferredLocal: Boolean = false,
+): ModelRuntime {
+    val routingPolicy = catalogRoutingPolicy(policy)
+
+    return when (routingPolicy) {
+        RoutingPolicy.LocalOnly ->
+            if (preferDeferredLocal) {
+                RouterModelRuntime(
+                    localFactory = localFactory,
+                    cloudFactory = null,
+                    defaultPolicy = routingPolicy,
+                )
+            } else {
+                localFactory?.invoke("local")
+                    ?: RouterModelRuntime(
+                        localFactory = localFactory,
+                        cloudFactory = null,
+                        defaultPolicy = routingPolicy,
+                    )
+            }
+
+        RoutingPolicy.CloudOnly ->
+            cloudFactory?.invoke("cloud")
+                ?: RouterModelRuntime(
+                    localFactory = null,
+                    cloudFactory = cloudFactory,
+                    defaultPolicy = routingPolicy,
+                )
+
+        is RoutingPolicy.Auto ->
+            when {
+                localFactory != null && (cloudFactory != null || preferDeferredLocal) ->
+                    RouterModelRuntime(
+                        localFactory = localFactory,
+                        cloudFactory = cloudFactory,
+                        defaultPolicy = routingPolicy,
+                    )
+
+                routingPolicy.preferLocal ->
+                    localFactory?.invoke("local")
+                        ?: cloudFactory?.invoke("cloud")
+                        ?: RouterModelRuntime(
+                            localFactory = localFactory,
+                            cloudFactory = cloudFactory,
+                            defaultPolicy = routingPolicy,
+                        )
+
+                else ->
+                    cloudFactory?.invoke("cloud")
+                        ?: localFactory?.invoke("local")
+                        ?: RouterModelRuntime(
+                            localFactory = localFactory,
+                            cloudFactory = cloudFactory,
+                            defaultPolicy = routingPolicy,
+                        )
+            }
+    }
+}
 
 /**
  * Bootstraps runtimes from an [AppManifest] and provides capability-based lookup.
@@ -90,10 +169,16 @@ class ModelCatalogService(
         // Build resource bindings from manifest resources
         val bindings = buildResourceBindings(entry, file.parentFile ?: file)
 
-        return LocalFileModelRuntime(
+        val localRuntime = LocalFileModelRuntime(
             modelFile = file,
             resourceBindings = bindings,
             engineConfig = entry.engineConfig,
+        )
+
+        return buildCatalogRuntime(
+            policy = entry.effectiveRoutingPolicy,
+            localFactory = { _ -> localRuntime },
+            cloudFactory = cloudFactoryFor(entry),
         )
     }
 
@@ -112,17 +197,11 @@ class ModelCatalogService(
             )
         }
 
-        val cloudFactory = when (entry.effectiveRoutingPolicy) {
-            ai.octomil.generated.RoutingPolicy.LOCAL_ONLY -> null
-            else -> { _: String -> CloudModelRuntime(serverUrl, apiKey, entry.id) }
-        }
-
-        val routingPolicy = toInternalRoutingPolicy(entry.effectiveRoutingPolicy)
-
-        return RouterModelRuntime(
+        return buildCatalogRuntime(
+            policy = entry.effectiveRoutingPolicy,
             localFactory = localFactory,
-            cloudFactory = cloudFactory,
-            defaultPolicy = routingPolicy,
+            cloudFactory = cloudFactoryFor(entry),
+            preferDeferredLocal = true,
         )
     }
 
@@ -146,18 +225,8 @@ class ModelCatalogService(
         }
     }
 
-    private fun toInternalRoutingPolicy(
-        policy: ai.octomil.generated.RoutingPolicy,
-    ): RoutingPolicy = when (policy) {
-        ai.octomil.generated.RoutingPolicy.LOCAL_ONLY -> RoutingPolicy.LocalOnly
-        ai.octomil.generated.RoutingPolicy.LOCAL_FIRST -> RoutingPolicy.Auto(
-            preferLocal = true,
-            fallback = "cloud",
-        )
-        ai.octomil.generated.RoutingPolicy.CLOUD_ONLY -> RoutingPolicy.CloudOnly
-        ai.octomil.generated.RoutingPolicy.AUTO -> RoutingPolicy.Auto(
-            preferLocal = true,
-            fallback = "cloud",
-        )
+    private fun cloudFactoryFor(entry: AppModelEntry): RuntimeFactory? = when (entry.effectiveRoutingPolicy) {
+        ai.octomil.generated.RoutingPolicy.LOCAL_ONLY -> null
+        else -> { _: String -> CloudModelRuntime(serverUrl, apiKey, entry.id) }
     }
 }

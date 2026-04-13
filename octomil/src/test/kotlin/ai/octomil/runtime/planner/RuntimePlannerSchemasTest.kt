@@ -192,8 +192,9 @@ class RuntimePlannerSchemasTest {
         assertEquals(1, decoded.priority)
         assertEquals(0.95, decoded.confidence)
         assertEquals("llama_cpp", decoded.engine)
-        assertNotNull(decoded.artifact)
-        assertEquals("gguf", decoded.artifact!!.format)
+        val decodedArtifact = decoded.artifact
+        assertNotNull(decodedArtifact)
+        assertEquals("gguf", decodedArtifact.format)
         assertTrue(decoded.benchmarkRequired)
     }
 

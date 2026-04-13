@@ -65,7 +65,7 @@ class RuntimePlannerClient(
                     Timber.d("Plan fetch returned HTTP %d from %s", response.code, url)
                     return null
                 }
-                val responseBody = response.body?.string() ?: return null
+                val responseBody = response.body.string().ifEmpty { return null }
                 json.decodeFromString(RuntimePlanResponse.serializer(), responseBody)
             }
         } catch (e: Exception) {

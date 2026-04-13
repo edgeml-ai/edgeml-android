@@ -193,10 +193,11 @@ class RuntimePlannerClientTest {
         )
         assertNotNull(plan)
         val candidate = plan.candidates.first()
-        assertNotNull(candidate.artifact)
-        assertEquals("gguf", candidate.artifact!!.format)
-        assertEquals("q4_k_m", candidate.artifact!!.quantization)
-        assertEquals(4_294_967_296L, candidate.artifact!!.sizeBytes)
+        val artifact = candidate.artifact
+        assertNotNull(artifact)
+        assertEquals("gguf", artifact.format)
+        assertEquals("q4_k_m", artifact.quantization)
+        assertEquals(4_294_967_296L, artifact.sizeBytes)
     }
 
     // =========================================================================
