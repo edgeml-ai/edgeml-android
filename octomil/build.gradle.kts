@@ -9,6 +9,15 @@ plugins {
     id("signing")
 }
 
+// Gate optional engine runtime dependencies behind a Gradle property.
+// Default is false — CI and clean checkouts build without unpublished AARs.
+// Local dev with sibling engine repos: ./gradlew ... -Poctomil.includeExternalRuntimes=true
+val includeExternalRuntimes: Boolean =
+    providers.gradleProperty("octomil.includeExternalRuntimes")
+        .map(String::toBoolean)
+        .orElse(false)
+        .get()
+
 android {
     namespace = "ai.octomil"
     compileSdk = 36
@@ -73,6 +82,15 @@ android {
                 }
             }
         }
+    }
+
+    // Exclude source files that import unpublished external runtime classes
+    // when those runtimes are not on the classpath.
+    if (!includeExternalRuntimes) {
+        sourceSets["main"].java.exclude(
+            "**/runtime/engines/llama/LlamaCppRuntime.kt",
+            "**/speech/SherpaStreamingRuntime.kt",
+        )
     }
 
     packaging {
@@ -152,11 +170,15 @@ dependencies {
     //   implementation("com.mediatek.neuropilot:tflite-neuron-delegate:1.+")
     //   // AAR from NeuroPilot SDK: https://neuropilot.mediatek.com/
 
-    // Engine runtimes — published as Maven Central artifacts.
+    // Engine runtimes — optional, published as Maven Central artifacts.
     // Composite build substitution (in settings.gradle.kts) replaces these
     // with local projects when engine repos are present on disk.
-    implementation("ai.octomil:octomil-runtime-sherpa-android:1.0.0")
-    implementation("ai.octomil:octomil-runtime-llama-android:1.0.0")
+    // Gated behind -Poctomil.includeExternalRuntimes=true because these
+    // artifacts are not yet published to Maven Central.
+    if (includeExternalRuntimes) {
+        implementation("ai.octomil:octomil-runtime-sherpa-android:1.0.0")
+        implementation("ai.octomil:octomil-runtime-llama-android:1.0.0")
+    }
 
     // Logging
     implementation("com.jakewharton.timber:timber:5.0.1")

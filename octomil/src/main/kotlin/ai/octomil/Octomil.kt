@@ -10,7 +10,6 @@ import ai.octomil.models.CachedModel
 import ai.octomil.responses.OctomilResponses
 import ai.octomil.runtime.core.Engine
 import ai.octomil.runtime.core.ModelRuntimeRegistry
-import ai.octomil.runtime.engines.llama.LlamaCppRuntime
 import ai.octomil.runtime.engines.tflite.EngineRegistry
 import ai.octomil.runtime.engines.tflite.LLMRuntimeAdapter
 import ai.octomil.api.OctomilApiFactory
@@ -20,7 +19,6 @@ import ai.octomil.api.dto.HeartbeatRequest
 import ai.octomil.control.ControlPlaneClient
 import ai.octomil.sdk.DeviceContext
 import ai.octomil.sdk.MonitoringConfig
-import ai.octomil.speech.SherpaStreamingRuntime
 import ai.octomil.speech.SpeechRuntimeRegistry
 import ai.octomil.storage.SecureStorage
 import ai.octomil.text.OctomilText
@@ -206,13 +204,9 @@ object Octomil {
         appContext = context.applicationContext
 
         // Wire LLM runtime — llama.cpp for GGUF models.
-        // SDK unconditionally owns runtime wiring.
-        LLMRuntimeRegistry.factory = { modelFile ->
-            val mmproj = modelFile.parentFile?.listFiles()?.firstOrNull { f ->
-                f.name.contains("mmproj", ignoreCase = true) && f.extension == "gguf"
-            }
-            LlamaCppRuntime(modelFile, mmproj, context.applicationContext)
-        }
+        // Uses reflection so the core SDK compiles without the optional
+        // octomil-runtime-llama-android artifact.
+        wireLlamaCppRuntime(context.applicationContext)
 
         ModelRuntimeRegistry.defaultFactory = factory@{ modelId ->
             val ctx = appContext ?: return@factory null
@@ -221,12 +215,74 @@ object Octomil {
             LLMRuntimeAdapter(llm)
         }
 
-        // Wire speech runtime — sherpa-onnx streaming recognizer with punctuation
-        val punctDir = extractPunctAssets(context.applicationContext)
-        SpeechRuntimeRegistry.factory = { modelDir -> SherpaStreamingRuntime(modelDir, punctDir) }
+        // Wire speech runtime — sherpa-onnx streaming recognizer with punctuation.
+        // Uses reflection so the core SDK compiles without the optional
+        // octomil-runtime-sherpa-android artifact.
+        wireSherpaRuntime(context.applicationContext)
 
         // Prediction runtime: no longer wired here. OctomilTextPredictions uses
         // LLMRuntime.supportsPrediction() + handle-based API via LLMRuntimeRegistry.
+    }
+
+    /**
+     * Wire LlamaCppRuntime via reflection.
+     *
+     * When octomil-runtime-llama-android is on the classpath, creates
+     * LlamaCppRuntime(modelFile, mmprojFile, context) via its constructor.
+     * When absent, LLMRuntimeRegistry.factory stays null and the SDK
+     * gracefully falls back to TFLite or cloud routing.
+     */
+    private fun wireLlamaCppRuntime(appCtx: Context) {
+        try {
+            val clazz = Class.forName("ai.octomil.runtime.engines.llama.LlamaCppRuntime")
+            val ctor = clazz.getDeclaredConstructor(
+                File::class.java,
+                File::class.java,
+                Context::class.java,
+            )
+            ctor.isAccessible = true
+
+            LLMRuntimeRegistry.factory = { modelFile ->
+                val mmproj = modelFile.parentFile?.listFiles()?.firstOrNull { f ->
+                    f.name.contains("mmproj", ignoreCase = true) && f.extension == "gguf"
+                }
+                ctor.newInstance(modelFile, mmproj, appCtx) as ai.octomil.chat.LLMRuntime
+            }
+            Timber.d("LlamaCppRuntime wired via reflection")
+        } catch (_: ClassNotFoundException) {
+            Timber.d("LlamaCppRuntime not available — llama.cpp engine disabled")
+        } catch (e: Exception) {
+            Timber.w(e, "Failed to wire LlamaCppRuntime")
+        }
+    }
+
+    /**
+     * Wire SherpaStreamingRuntime via reflection.
+     *
+     * When octomil-runtime-sherpa-android is on the classpath, creates
+     * SherpaStreamingRuntime(modelDir, punctDir) via its constructor.
+     * When absent, SpeechRuntimeRegistry.factory stays null and audio
+     * transcription is unavailable.
+     */
+    private fun wireSherpaRuntime(appCtx: Context) {
+        try {
+            val clazz = Class.forName("ai.octomil.speech.SherpaStreamingRuntime")
+            val ctor = clazz.getDeclaredConstructor(
+                File::class.java,
+                File::class.java,
+            )
+            ctor.isAccessible = true
+
+            val punctDir = extractPunctAssets(appCtx)
+            SpeechRuntimeRegistry.factory = { modelDir ->
+                ctor.newInstance(modelDir, punctDir) as ai.octomil.speech.SpeechRuntime
+            }
+            Timber.d("SherpaStreamingRuntime wired via reflection")
+        } catch (_: ClassNotFoundException) {
+            Timber.d("SherpaStreamingRuntime not available — sherpa speech engine disabled")
+        } catch (e: Exception) {
+            Timber.w(e, "Failed to wire SherpaStreamingRuntime")
+        }
     }
 
     /**
