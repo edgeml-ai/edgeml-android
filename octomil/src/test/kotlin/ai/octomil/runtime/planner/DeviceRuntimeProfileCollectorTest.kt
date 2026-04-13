@@ -1,5 +1,6 @@
 package ai.octomil.runtime.planner
 
+import org.junit.After
 import org.junit.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotEquals
@@ -7,6 +8,103 @@ import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
 class DeviceRuntimeProfileCollectorTest {
+
+    @After
+    fun tearDown() {
+        DeviceRuntimeProfileCollector.clearEvidence()
+    }
+
+    // =========================================================================
+    // Model-capable evidence registration
+    // =========================================================================
+
+    @Test
+    fun `registerEvidence adds model-capable entry`() {
+        val evidence = InstalledRuntime.modelCapable(
+            engine = "llama.cpp",
+            model = "phi-4-mini",
+            capability = "text",
+        )
+        DeviceRuntimeProfileCollector.registerEvidence(evidence)
+
+        val registered = DeviceRuntimeProfileCollector.getRegisteredEvidence()
+        assertEquals(1, registered.size)
+        assertEquals("llama.cpp", registered[0].engine)
+        assertEquals("phi-4-mini", registered[0].metadata["models"])
+        assertEquals("text", registered[0].metadata["capabilities"])
+    }
+
+    @Test
+    fun `registerEvidence deduplicates by engine and model`() {
+        val evidence1 = InstalledRuntime.modelCapable(
+            engine = "llama.cpp",
+            model = "phi-4-mini",
+            capability = "text",
+        )
+        val evidence2 = InstalledRuntime.modelCapable(
+            engine = "llama.cpp",
+            model = "phi-4-mini",
+            capability = "text",
+            version = "v2",
+        )
+        DeviceRuntimeProfileCollector.registerEvidence(evidence1)
+        DeviceRuntimeProfileCollector.registerEvidence(evidence2)
+
+        val registered = DeviceRuntimeProfileCollector.getRegisteredEvidence()
+        assertEquals(1, registered.size)
+        assertEquals("v2", registered[0].version)
+    }
+
+    @Test
+    fun `registerEvidence allows different models for same engine`() {
+        DeviceRuntimeProfileCollector.registerEvidence(
+            InstalledRuntime.modelCapable(
+                engine = "llama.cpp",
+                model = "phi-4-mini",
+                capability = "text",
+            ),
+        )
+        DeviceRuntimeProfileCollector.registerEvidence(
+            InstalledRuntime.modelCapable(
+                engine = "llama.cpp",
+                model = "gemma-2b",
+                capability = "text",
+            ),
+        )
+
+        val registered = DeviceRuntimeProfileCollector.getRegisteredEvidence()
+        assertEquals(2, registered.size)
+    }
+
+    @Test
+    fun `clearEvidence removes all entries`() {
+        DeviceRuntimeProfileCollector.registerEvidence(
+            InstalledRuntime.modelCapable(
+                engine = "llama.cpp",
+                model = "test",
+                capability = "text",
+            ),
+        )
+        DeviceRuntimeProfileCollector.clearEvidence()
+
+        val registered = DeviceRuntimeProfileCollector.getRegisteredEvidence()
+        assertTrue(registered.isEmpty())
+    }
+
+    @Test
+    fun `registerEvidence canonicalizes engine aliases`() {
+        DeviceRuntimeProfileCollector.registerEvidence(
+            InstalledRuntime.modelCapable(
+                engine = "llamacpp",
+                model = "test",
+                capability = "text",
+            ),
+        )
+
+        val registered = DeviceRuntimeProfileCollector.getRegisteredEvidence()
+        assertEquals(1, registered.size)
+        assertEquals("llama.cpp", registered[0].engine)
+    }
 
     // =========================================================================
     // SDK Version

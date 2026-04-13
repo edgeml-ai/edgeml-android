@@ -5,6 +5,9 @@ import ai.octomil.chat.LLMRuntime
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import ai.octomil.runtime.planner.DeviceRuntimeProfileCollector
+import ai.octomil.runtime.planner.InstalledRuntime
+import ai.octomil.runtime.planner.modelCapable
 import android.util.Log
 import com.arm.aichat.AiChat
 import com.arm.aichat.InferenceEngine
@@ -60,6 +63,10 @@ internal class LlamaCppRuntime(
         }
         modelLoaded.set(true)
         Log.i(TAG, "Model loaded successfully")
+
+        // Register model-capable evidence now that we know the GGUF can load.
+        // No file paths or user data -- only model ID and engine.
+        registerModelEvidence()
 
         // Load mmproj if available. Use NonCancellable so a scope cancellation
         // during loading doesn't leave us with a native mmproj loaded but the
@@ -163,6 +170,30 @@ internal class LlamaCppRuntime(
             Log.i(TAG, "Closing runtime")
             engine.cleanUp()
             engine.destroy()
+        }
+    }
+
+    /**
+     * Register model-capable evidence for this loaded GGUF model.
+     *
+     * Called once after successful model load. Only privacy-safe metadata
+     * is included: model ID (from filename), engine, capability, format.
+     * No file paths, prompts, or user data.
+     */
+    private fun registerModelEvidence() {
+        try {
+            val modelId = modelFile.nameWithoutExtension
+            DeviceRuntimeProfileCollector.registerEvidence(
+                InstalledRuntime.modelCapable(
+                    engine = "llama.cpp",
+                    model = modelId,
+                    capability = "text",
+                    artifactFormat = "gguf",
+                ),
+            )
+            Log.d(TAG, "Registered model evidence: llama.cpp/$modelId")
+        } catch (e: Exception) {
+            Log.d(TAG, "Failed to register model evidence (non-fatal): ${e.message}")
         }
     }
 
