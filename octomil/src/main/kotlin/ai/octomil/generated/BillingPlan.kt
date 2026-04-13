@@ -35,7 +35,7 @@ data class PlanPricing(
     val overagePerDeviceCents: Int?
 )
 
-enum class BillingSupportTier(val code: String) {
+enum class SupportTier(val code: String) {
     COMMUNITY("community"),
     EMAIL("email"),
     DEDICATED("dedicated");
@@ -47,7 +47,7 @@ enum class BillingPlan(
     val limits: PlanLimits,
     val features: PlanFeatures,
     val pricing: PlanPricing,
-    val support: BillingSupportTier,
+    val support: SupportTier,
 ) {
     FREE(
         code = "free",
@@ -55,7 +55,7 @@ enum class BillingPlan(
         limits = PlanLimits(maxDevices = 25, maxModels = 3, maxEnvironments = 1, storageGb = 5, requestsMonthly = 100000, trainingRoundsMonthly = 100, federatedRoundsMonthly = 1, modelDownloadsMonthly = 2500, modelConversionsMonthly = 20, dataRetentionDays = 7),
         features = PlanFeatures(sso = false, federatedLearning = true, differentialPrivacy = false, secureAggregation = false, hipaaMode = false, advancedMonitoring = false, webhooks = false, experiments = true, rollouts = true, scim = false, siemExport = false),
         pricing = PlanPricing(monthlyCents = 0, annualCents = 0, overagePerDeviceCents = 0),
-        support = BillingSupportTier.COMMUNITY,
+        support = SupportTier.COMMUNITY,
     ),
     TEAM(
         code = "team",
@@ -63,7 +63,7 @@ enum class BillingPlan(
         limits = PlanLimits(maxDevices = 1000, maxModels = 20, maxEnvironments = 3, storageGb = 100, requestsMonthly = 1000000, trainingRoundsMonthly = 10000, federatedRoundsMonthly = 10, modelDownloadsMonthly = 50000, modelConversionsMonthly = 500, dataRetentionDays = 90),
         features = PlanFeatures(sso = true, federatedLearning = true, differentialPrivacy = false, secureAggregation = false, hipaaMode = false, advancedMonitoring = true, webhooks = true, experiments = true, rollouts = true, scim = false, siemExport = false),
         pricing = PlanPricing(monthlyCents = 120000, annualCents = 1152000, overagePerDeviceCents = 5),
-        support = BillingSupportTier.EMAIL,
+        support = SupportTier.EMAIL,
     ),
     ENTERPRISE(
         code = "enterprise",
@@ -71,7 +71,7 @@ enum class BillingPlan(
         limits = PlanLimits(maxDevices = null, maxModels = null, maxEnvironments = null, storageGb = 10000, requestsMonthly = 100000000, trainingRoundsMonthly = null, federatedRoundsMonthly = null, modelDownloadsMonthly = null, modelConversionsMonthly = null, dataRetentionDays = null),
         features = PlanFeatures(sso = true, federatedLearning = true, differentialPrivacy = true, secureAggregation = true, hipaaMode = true, advancedMonitoring = true, webhooks = true, experiments = true, rollouts = true, scim = true, siemExport = true),
         pricing = PlanPricing(monthlyCents = null, annualCents = null, overagePerDeviceCents = null),
-        support = BillingSupportTier.DEDICATED,
+        support = SupportTier.DEDICATED,
     );
 
     companion object {
