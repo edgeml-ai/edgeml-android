@@ -13,7 +13,9 @@ enum class Scope(val code: String) {
     ROLLOUTS_READ("rollouts:read"),
     ROLLOUTS_WRITE("rollouts:write"),
     BENCHMARKS_WRITE("benchmarks:write"),
-    EVALS_WRITE("evals:write");
+    EVALS_WRITE("evals:write"),
+    CLOUD_INFERENCE("cloud:inference"),
+    CLOUD_CREDENTIALS("cloud:credentials");
 
     companion object {
         fun fromCode(code: String): Scope? =

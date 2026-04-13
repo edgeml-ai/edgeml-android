@@ -8,7 +8,9 @@ enum class ModelCapability(val code: String) {
     TEXT_COMPLETION("text_completion"),
     KEYBOARD_PREDICTION("keyboard_prediction"),
     EMBEDDING("embedding"),
-    CLASSIFICATION("classification");
+    CLASSIFICATION("classification"),
+    REASONING("reasoning"),
+    VISION("vision");
 
     companion object {
         fun fromCode(code: String): ModelCapability? =
