@@ -63,7 +63,7 @@ jobs:
           cache: gradle
 
       - name: Build release AAR
-        run: ./gradlew :octomil:assembleRelease
+        run: ./gradlew :octomil:assembleRelease -Poctomil.includeExternalRuntimes=true
 
       - name: Verify AAR exists
         run: |
