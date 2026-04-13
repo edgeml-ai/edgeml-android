@@ -28,8 +28,19 @@ jobs:
           output: "trivy-fs.sarif"
           severity: "CRITICAL,HIGH"
 
-      - name: Upload Trivy SARIF
+      - name: Check SARIF exists
+        id: sarif
         if: always()
+        shell: bash
+        run: |
+          if [[ -s trivy-fs.sarif ]]; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Upload Trivy SARIF
+        if: always() && steps.sarif.outputs.exists == 'true'
         uses: github/codeql-action/upload-sarif@9e907b5e64f6b83e7804b09294d44122997950d6 # v4.32.3
         with:
           sarif_file: "trivy-fs.sarif"
