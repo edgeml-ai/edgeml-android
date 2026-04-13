@@ -84,13 +84,10 @@ android {
         }
     }
 
-    // Exclude source files that import unpublished external runtime classes
-    // when those runtimes are not on the classpath.
-    if (!includeExternalRuntimes) {
-        sourceSets["main"].java.exclude(
-            "**/runtime/engines/llama/LlamaCppRuntime.kt",
-            "**/speech/SherpaStreamingRuntime.kt",
-        )
+    // Optional engine runtimes live in src/externalRuntimes/kotlin.
+    // Include that source set only when the external runtime artifacts are available.
+    if (includeExternalRuntimes) {
+        sourceSets["main"].kotlin.srcDir("src/externalRuntimes/kotlin")
     }
 
     packaging {
