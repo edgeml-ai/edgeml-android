@@ -7,12 +7,19 @@ import ai.octomil.runtime.core.GenerationConfig
 import ai.octomil.runtime.core.RuntimeContentPart
 import ai.octomil.runtime.core.RuntimeMessage
 import ai.octomil.runtime.core.RuntimeRequest
+import ai.octomil.runtime.planner.CachedBenchmark
+import ai.octomil.runtime.planner.FakePlannerPrefs
+import ai.octomil.runtime.planner.RuntimePlanner
+import ai.octomil.runtime.planner.RuntimePlannerStore
+import android.content.Context
+import io.mockk.mockk
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class LLMRuntimeAdapterTest {
@@ -96,6 +103,191 @@ class LLMRuntimeAdapterTest {
         val adapter = LLMRuntimeAdapter(llm)
         adapter.close()
         assert(closed)
+    }
+
+    // =========================================================================
+    // Real benchmark recording
+    // =========================================================================
+
+    @Test
+    fun `run records benchmark when planner is wired`() = runTest {
+        val llm = object : LLMRuntime {
+            override fun generate(prompt: String, config: GenerateConfig): Flow<String> = flow {
+                emit("Hello")
+                emit(" world")
+            }
+            override fun close() {}
+        }
+
+        val context: Context = mockk(relaxed = true)
+        val prefs = FakePlannerPrefs()
+        val store = RuntimePlannerStore(prefs)
+        val planner = RuntimePlanner(
+            context = context,
+            store = store,
+            client = null,
+            profileCollector = {
+                ai.octomil.runtime.planner.DeviceRuntimeProfile(
+                    sdkVersion = "1.0.0",
+                    arch = "arm64-v8a",
+                )
+            },
+        )
+
+        val adapter = LLMRuntimeAdapter(llm).also {
+            it.planner = planner
+            it.modelName = "test-model"
+            it.engineId = "llama.cpp"
+        }
+
+        adapter.run(stubRequest("test"))
+
+        // Verify benchmark was recorded in the planner store
+        val cacheKey = RuntimePlannerStore.makeCacheKey(
+            model = "test-model",
+            capability = "text",
+            policy = "local_first",
+            sdkVersion = "1.0.0",
+            arch = "arm64-v8a",
+        )
+        val cached = store.getBenchmark(cacheKey)
+        assertNotNull(cached)
+        assertEquals("test-model", cached!!.model)
+        assertEquals("llama.cpp", cached.engine)
+        assertTrue(cached.tokensPerSecond > 0)
+    }
+
+    @Test
+    fun `run does not record benchmark without planner`() = runTest {
+        val llm = object : LLMRuntime {
+            override fun generate(prompt: String, config: GenerateConfig): Flow<String> = flow {
+                emit("ok")
+            }
+            override fun close() {}
+        }
+
+        val adapter = LLMRuntimeAdapter(llm)
+        // planner is null by default -- should not throw or crash
+        adapter.run(stubRequest("test"))
+    }
+
+    @Test
+    fun `run does not record benchmark without model name`() = runTest {
+        val llm = object : LLMRuntime {
+            override fun generate(prompt: String, config: GenerateConfig): Flow<String> = flow {
+                emit("ok")
+            }
+            override fun close() {}
+        }
+
+        val context: Context = mockk(relaxed = true)
+        val prefs = FakePlannerPrefs()
+        val store = RuntimePlannerStore(prefs)
+        val planner = RuntimePlanner(
+            context = context,
+            store = store,
+            client = null,
+        )
+
+        val adapter = LLMRuntimeAdapter(llm).also {
+            it.planner = planner
+            // modelName is null -- should skip recording
+        }
+
+        adapter.run(stubRequest("test"))
+        // No crash, no benchmark recorded
+    }
+
+    // =========================================================================
+    // recordBenchmarkResult companion
+    // =========================================================================
+
+    @Test
+    fun `recordBenchmarkResult converts BenchmarkResult to planner cache entry`() {
+        val context: Context = mockk(relaxed = true)
+        val prefs = FakePlannerPrefs()
+        val store = RuntimePlannerStore(prefs)
+        val planner = RuntimePlanner(
+            context = context,
+            store = store,
+            client = null,
+            profileCollector = {
+                ai.octomil.runtime.planner.DeviceRuntimeProfile(
+                    sdkVersion = "1.0.0",
+                    arch = "arm64-v8a",
+                )
+            },
+        )
+
+        val result = BenchmarkResult(
+            engineName = "llama_cpp",
+            tokensPerSecond = 25.0,
+            ttftMs = 150.0,
+            memoryMb = 512.0,
+        )
+
+        LLMRuntimeAdapter.recordBenchmarkResult(
+            planner = planner,
+            result = result,
+            modelName = "phi-4-mini",
+        )
+
+        val cacheKey = RuntimePlannerStore.makeCacheKey(
+            model = "phi-4-mini",
+            capability = "text",
+            policy = "local_first",
+            sdkVersion = "1.0.0",
+            arch = "arm64-v8a",
+        )
+        val cached = store.getBenchmark(cacheKey)
+        assertNotNull(cached)
+        assertEquals("phi-4-mini", cached!!.model)
+        assertEquals("llama.cpp", cached.engine)
+        assertEquals(25.0, cached.tokensPerSecond, 0.01)
+    }
+
+    @Test
+    fun `recordBenchmarkResult skips errored results`() {
+        val context: Context = mockk(relaxed = true)
+        val prefs = FakePlannerPrefs()
+        val store = RuntimePlannerStore(prefs)
+        val planner = RuntimePlanner(
+            context = context,
+            store = store,
+            client = null,
+            profileCollector = {
+                ai.octomil.runtime.planner.DeviceRuntimeProfile(
+                    sdkVersion = "1.0.0",
+                    arch = "arm64-v8a",
+                )
+            },
+        )
+
+        val result = BenchmarkResult(
+            engineName = "tflite",
+            tokensPerSecond = 0.0,
+            ttftMs = 0.0,
+            memoryMb = 0.0,
+            error = "model load failed",
+        )
+
+        LLMRuntimeAdapter.recordBenchmarkResult(
+            planner = planner,
+            result = result,
+            modelName = "test-model",
+        )
+
+        // No benchmark should be stored for failed results
+        val cacheKey = RuntimePlannerStore.makeCacheKey(
+            model = "test-model",
+            capability = "text",
+            policy = "local_first",
+            sdkVersion = "1.0.0",
+            arch = "arm64-v8a",
+        )
+        val cached = store.getBenchmark(cacheKey)
+        // Result had error, so recordBenchmarkResult should have returned early
+        kotlin.test.assertNull(cached)
     }
 
     private fun stubRequest(text: String) = RuntimeRequest(
