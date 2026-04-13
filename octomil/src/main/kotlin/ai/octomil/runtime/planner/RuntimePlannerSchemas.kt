@@ -26,7 +26,9 @@ data class InstalledRuntime(
     @SerialName("available") val available: Boolean = true,
     @SerialName("accelerator") val accelerator: String? = null,
     @SerialName("metadata") val metadata: Map<String, String> = emptyMap(),
-)
+) {
+    companion object
+}
 
 /**
  * Canonical runtime engine identifiers shared with the server planner.
