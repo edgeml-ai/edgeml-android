@@ -253,6 +253,41 @@ class RuntimePlannerE2ETest {
         assertEquals("local_default", result.source)
     }
 
+    @Test
+    fun `server plan local candidate without evidence or artifact does not use classpath-only runtime`() {
+        server.enqueue(
+            MockResponse()
+                .setResponseCode(200)
+                .setBody("""
+                    {
+                        "model": "gemma-2b",
+                        "capability": "text",
+                        "policy": "local_first",
+                        "candidates": [
+                            {
+                                "locality": "local",
+                                "priority": 1,
+                                "confidence": 0.95,
+                                "reason": "bare tflite candidate",
+                                "engine": "tflite"
+                            }
+                        ],
+                        "fallback_candidates": []
+                    }
+                """),
+        )
+
+        val result = planner(device = deviceWithClasspathOnlyDetection).resolve(
+            model = "gemma-2b",
+            capability = "text",
+            routingPolicy = "local_first",
+        )
+
+        assertEquals("cloud", result.locality, "Server plan without artifact/evidence must not use classpath-only runtime")
+        assertEquals("fallback", result.source)
+        assertNull(result.engine)
+    }
+
     // =========================================================================
     // Test 3: Server plan primary unavailable + fallback local selected
     // =========================================================================
@@ -590,6 +625,93 @@ class RuntimePlannerE2ETest {
     }
 
     @Test
+    fun `cloud_only ignores cached local benchmark`() {
+        val p = planner(client = null, device = deviceWithModelCapableEvidence)
+
+        p.recordBenchmark(
+            model = "gemma-2b",
+            capability = "text",
+            engine = "tflite",
+            tokensPerSecond = 99.0,
+            routingPolicy = "cloud_only",
+        )
+
+        val result = p.resolve(
+            model = "gemma-2b",
+            capability = "text",
+            routingPolicy = "cloud_only",
+        )
+
+        assertEquals("cloud", result.locality, "cloud_only must not use cached local benchmarks")
+        assertNull(result.engine)
+        assertEquals("fallback", result.source)
+    }
+
+    @Test
+    fun `cloud_only ignores stale cached local plan`() {
+        val device = deviceWithModelCapableEvidence
+        val policy = "cloud_only"
+        store.putPlan(
+            planCacheKey(device, "gemma-2b", "text", policy),
+            RuntimePlanResponse(
+                model = "gemma-2b",
+                capability = "text",
+                policy = policy,
+                candidates = listOf(
+                    RuntimeCandidatePlan(
+                        locality = "local",
+                        engine = "tflite",
+                        artifact = RuntimeArtifactPlan(modelId = "gemma-2b"),
+                        reason = "stale local plan",
+                    ),
+                ),
+            ),
+        )
+
+        val result = planner(client = null, device = device).resolve(
+            model = "gemma-2b",
+            capability = "text",
+            routingPolicy = policy,
+        )
+
+        assertEquals("cloud", result.locality)
+        assertNull(result.engine)
+        assertEquals("fallback", result.source)
+    }
+
+    @Test
+    fun `private policy ignores cached cloud plan`() {
+        val device = deviceWithClasspathOnlyDetection
+        val policy = "private"
+        store.putPlan(
+            planCacheKey(device, "gemma-2b", "text", policy),
+            RuntimePlanResponse(
+                model = "gemma-2b",
+                capability = "text",
+                policy = policy,
+                candidates = listOf(
+                    RuntimeCandidatePlan(
+                        locality = "cloud",
+                        engine = "cloud",
+                        reason = "stale cloud plan",
+                    ),
+                ),
+            ),
+        )
+
+        val result = planner(device = device).resolve(
+            model = "gemma-2b",
+            capability = "text",
+            routingPolicy = policy,
+        )
+
+        assertEquals("local", result.locality, "private policy must not honor cached cloud plans")
+        assertNull(result.engine)
+        assertEquals("fallback", result.source)
+        assertEquals(0, server.requestCount, "private policy must not contact server")
+    }
+
+    @Test
     fun `recordBenchmark uploads telemetry with canonical engine when not private`() {
         // Server accepts the telemetry upload
         server.enqueue(MockResponse().setResponseCode(200))
@@ -736,4 +858,20 @@ class RuntimePlannerE2ETest {
                 """),
         )
     }
+
+    private fun planCacheKey(
+        device: DeviceRuntimeProfile,
+        model: String,
+        capability: String,
+        policy: String,
+    ): String = RuntimePlannerStore.makeCacheKey(
+        model = model,
+        capability = capability,
+        policy = policy,
+        sdkVersion = device.sdkVersion,
+        platform = device.platform,
+        arch = device.arch,
+        chip = device.chip,
+        installedHash = RuntimePlannerStore.installedRuntimesHash(device.installedRuntimes),
+    )
 }

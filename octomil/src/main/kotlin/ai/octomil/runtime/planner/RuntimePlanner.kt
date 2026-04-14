@@ -61,6 +61,17 @@ class RuntimePlanner(
         val isPrivate = routingPolicy == "private"
         val isCloudOnly = routingPolicy == "cloud_only"
 
+        // Cloud-only is exact. Never allow stale local plan or benchmark cache
+        // entries to route this request back to on-device execution.
+        if (isCloudOnly) {
+            return RuntimeSelection(
+                locality = "cloud",
+                engine = null,
+                source = "fallback",
+                reason = "cloud_only policy -- no local engines attempted",
+            )
+        }
+
         // Step 2: Check local plan cache
         val cacheKey = RuntimePlannerStore.makeCacheKey(
             model = model,
@@ -76,7 +87,7 @@ class RuntimePlanner(
         val cachedPlan = store.getPlan(cacheKey)
         if (cachedPlan != null) {
             Timber.d("Using cached plan for %s/%s", model, capability)
-            val selection = resolveFromServerPlan(cachedPlan, device, source = "cache")
+            val selection = resolveFromServerPlan(cachedPlan, device, source = "cache", routingPolicy = routingPolicy)
             if (selection != null) return selection
             Timber.d("Cached plan had no viable candidates; continuing resolution")
         }
@@ -106,7 +117,7 @@ class RuntimePlanner(
 
         // Step 4: Validate server plan against installed runtimes
         if (serverPlan != null) {
-            val selection = resolveFromServerPlan(serverPlan, device, source = "server_plan")
+            val selection = resolveFromServerPlan(serverPlan, device, source = "server_plan", routingPolicy = routingPolicy)
             if (selection != null) return selection
         }
 
@@ -130,16 +141,6 @@ class RuntimePlanner(
                 benchmarkRan = false,
                 source = "cache",
                 reason = "cached benchmark: %.1f tok/s".format(cachedBenchmark.tokensPerSecond),
-            )
-        }
-
-        // Step 6-7: Cloud-only skips local benchmarking
-        if (isCloudOnly) {
-            return RuntimeSelection(
-                locality = "cloud",
-                engine = null,
-                source = "fallback",
-                reason = "cloud_only policy -- no local engines attempted",
             )
         }
 
@@ -230,15 +231,18 @@ class RuntimePlanner(
         plan: RuntimePlanResponse,
         device: DeviceRuntimeProfile,
         source: String,
+        routingPolicy: String,
     ): RuntimeSelection? {
-        val installedEngines = device.installedRuntimes
-            .filter { it.available }
-            .map { RuntimeEngineIds.canonical(it.engine) }
-            .toSet()
+        val installedRuntimes = device.installedRuntimes.filter { it.available }
+        val installedEngines = installedRuntimes.map { RuntimeEngineIds.canonical(it.engine) }.toSet()
 
         selectCandidate(
             candidates = plan.candidates,
             installedEngines = installedEngines,
+            installedRuntimes = installedRuntimes,
+            model = plan.model,
+            capability = plan.capability,
+            routingPolicy = routingPolicy,
             source = source,
             fallbackCandidates = plan.fallbackCandidates,
             fallbackPrefix = null,
@@ -247,6 +251,10 @@ class RuntimePlanner(
         return selectCandidate(
             candidates = plan.fallbackCandidates,
             installedEngines = installedEngines,
+            installedRuntimes = installedRuntimes,
+            model = plan.model,
+            capability = plan.capability,
+            routingPolicy = routingPolicy,
             source = source,
             fallbackCandidates = emptyList(),
             fallbackPrefix = "fallback: ",
@@ -256,17 +264,28 @@ class RuntimePlanner(
     private fun selectCandidate(
         candidates: List<RuntimeCandidatePlan>,
         installedEngines: Set<String>,
+        installedRuntimes: List<InstalledRuntime>,
+        model: String,
+        capability: String,
+        routingPolicy: String,
         source: String,
         fallbackCandidates: List<RuntimeCandidatePlan>,
         fallbackPrefix: String?,
     ): RuntimeSelection? {
         for (candidate in candidates) {
+            if (!candidateAllowedByPolicy(candidate, routingPolicy)) {
+                continue
+            }
+
             if (candidate.locality == "local") {
                 val engine = RuntimeEngineIds.canonicalOrNull(candidate.engine)
                 if (engine != null && engine !in installedEngines) {
                     continue // Skip engines we don't have
                 } else if (engine == null && installedEngines.isEmpty()) {
                     continue // "any local" still requires at least one runtime
+                }
+                if (!localCandidateHasProof(candidate, engine, installedRuntimes, model, capability)) {
+                    continue
                 }
                 return RuntimeSelection(
                     locality = "local",
@@ -291,6 +310,33 @@ class RuntimePlanner(
         }
 
         return null
+    }
+
+    private fun candidateAllowedByPolicy(candidate: RuntimeCandidatePlan, routingPolicy: String): Boolean {
+        if (routingPolicy in listOf("private", "local_only") && candidate.locality == "cloud") {
+            return false
+        }
+        if (routingPolicy == "cloud_only" && candidate.locality == "local") {
+            return false
+        }
+        return true
+    }
+
+    private fun localCandidateHasProof(
+        candidate: RuntimeCandidatePlan,
+        engine: String?,
+        installedRuntimes: List<InstalledRuntime>,
+        model: String,
+        capability: String,
+    ): Boolean {
+        if (candidate.artifact?.modelId?.lowercase() == model.lowercase()) {
+            return true
+        }
+
+        return installedRuntimes.any { runtime ->
+            val runtimeEngine = RuntimeEngineIds.canonical(runtime.engine)
+            (engine == null || runtimeEngine == engine) && supportsLocalDefault(runtime, model, capability)
+        }
     }
 
     // =========================================================================
