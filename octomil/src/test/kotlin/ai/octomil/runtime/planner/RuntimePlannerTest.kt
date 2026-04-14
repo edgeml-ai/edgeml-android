@@ -153,7 +153,8 @@ class RuntimePlannerTest {
                                 "priority": 2,
                                 "confidence": 0.5,
                                 "reason": "fallback",
-                                "engine": "tflite"
+                                "engine": "tflite",
+                                "artifact": {"model_id": "test"}
                             }
                         ]
                     }
@@ -194,6 +195,7 @@ class RuntimePlannerTest {
                     RuntimeCandidatePlan(
                         locality = "local",
                         engine = "llama_cpp",
+                        artifact = RuntimeArtifactPlan(modelId = "gemma-2b"),
                         reason = "cached",
                     ),
                 ),
@@ -449,12 +451,12 @@ class RuntimePlannerTest {
                 ),
             ),
         )
-        val result = planner().resolveFromServerPlan(plan, testDevice, "server_plan")
+        val result = planner().resolveFromServerPlan(plan, testDevice, "server_plan", routingPolicy = "local_first")
         assertNull(result)
     }
 
     @Test
-    fun `resolveFromServerPlan accepts candidate with null engine`() {
+    fun `resolveFromServerPlan accepts candidate with null engine and artifact proof`() {
         val plan = RuntimePlanResponse(
             model = "test",
             capability = "text",
@@ -463,11 +465,12 @@ class RuntimePlannerTest {
                 RuntimeCandidatePlan(
                     locality = "local",
                     engine = null, // Server says "use any local engine"
+                    artifact = RuntimeArtifactPlan(modelId = "test"),
                     reason = "any local",
                 ),
             ),
         )
-        val result = planner().resolveFromServerPlan(plan, testDevice, "server_plan")
+        val result = planner().resolveFromServerPlan(plan, testDevice, "server_plan", routingPolicy = "local_first")
         assertNotNull(result)
         assertEquals("local", result.locality)
         assertNull(result.engine)
@@ -493,6 +496,7 @@ class RuntimePlannerTest {
                                 "priority": 1,
                                 "confidence": 0.9,
                                 $engineField
+                                "artifact": {"model_id": "$model"},
                                 "reason": "server selected"
                             }
                         ],
