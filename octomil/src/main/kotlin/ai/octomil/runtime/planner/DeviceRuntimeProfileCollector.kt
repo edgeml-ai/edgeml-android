@@ -22,12 +22,93 @@ import timber.log.Timber
 object DeviceRuntimeProfileCollector {
 
     /**
+     * Model-capable evidence entries registered by engine integrations
+     * when they load a concrete local artifact.
+     *
+     * These are merged with the classpath-detected runtimes to give the
+     * planner explicit proof that a model can run locally, enabling no-plan
+     * local selection without requiring a server plan or benchmark cache hit.
+     *
+     * Thread-safe: guarded by [evidenceLock].
+     */
+    private val modelCapableEvidence = mutableListOf<InstalledRuntime>()
+    private val evidenceLock = Any()
+
+    /**
+     * Register model-capable evidence for a concrete loaded artifact.
+     *
+     * Engine integrations should call this after successfully loading a model,
+     * providing the model ID, capability, and engine. The evidence is included
+     * in subsequent [collect] calls, allowing the planner to select this engine
+     * for no-plan local resolution.
+     *
+     * Duplicate registrations (same engine + model) are deduplicated.
+     *
+     * @param evidence An [InstalledRuntime] with model-capable metadata
+     *                 (created via [InstalledRuntime.modelCapable]).
+     */
+    fun registerEvidence(evidence: InstalledRuntime) {
+        synchronized(evidenceLock) {
+            val canonicalized = evidence.canonicalized()
+            val existingIndex = modelCapableEvidence.indexOfFirst { existing ->
+                existing.engine == canonicalized.engine &&
+                    existing.metadata[RuntimeEvidenceMetadataKeys.MODELS] ==
+                    canonicalized.metadata[RuntimeEvidenceMetadataKeys.MODELS]
+            }
+            if (existingIndex >= 0) {
+                modelCapableEvidence[existingIndex] = canonicalized
+            } else {
+                modelCapableEvidence.add(canonicalized)
+            }
+        }
+    }
+
+    /**
+     * Remove all model-capable evidence entries.
+     *
+     * Primarily for testing. Production code should not need to call this.
+     */
+    fun clearEvidence() {
+        synchronized(evidenceLock) {
+            modelCapableEvidence.clear()
+        }
+    }
+
+    /**
+     * Return a snapshot of registered model-capable evidence.
+     */
+    internal fun getRegisteredEvidence(): List<InstalledRuntime> {
+        synchronized(evidenceLock) {
+            return modelCapableEvidence.toList()
+        }
+    }
+
+    /**
      * Collect the device runtime profile.
+     *
+     * Merges classpath-detected engine availability with model-capable
+     * evidence registered by engine integrations. Generic classpath entries
+     * are useful for the server profile but NOT sufficient for no-plan
+     * local selection -- only entries with model/capability metadata pass
+     * the planner's `supportsLocalDefault` gate.
      *
      * @param context Application context for system service access.
      * @return Populated [DeviceRuntimeProfile].
      */
     fun collect(context: Context): DeviceRuntimeProfile {
+        val classpathRuntimes = detectInstalledRuntimes().map { it.canonicalized() }
+        val evidence = getRegisteredEvidence()
+
+        // Merge: classpath entries first, then model-capable evidence.
+        // Evidence entries supplement (don't replace) classpath entries because
+        // they carry different metadata -- classpath entries report availability,
+        // evidence entries declare model + capability support.
+        val merged = (classpathRuntimes + evidence).distinctBy { rt ->
+            // Deduplicate by engine + models metadata.
+            // Two entries for the same engine are kept if they declare different models.
+            rt.engine to (rt.metadata[RuntimeEvidenceMetadataKeys.MODELS] ?: "")
+        }
+
         return DeviceRuntimeProfile(
             sdk = "android",
             sdkVersion = getSdkVersion(),
@@ -40,7 +121,7 @@ object DeviceRuntimeProfileCollector {
             ramTotalBytes = getRamTotalBytes(context),
             gpuCoreCount = null, // Not reliably detectable on Android
             accelerators = detectAccelerators(),
-            installedRuntimes = detectInstalledRuntimes().map { it.canonicalized() },
+            installedRuntimes = merged,
         )
     }
 
