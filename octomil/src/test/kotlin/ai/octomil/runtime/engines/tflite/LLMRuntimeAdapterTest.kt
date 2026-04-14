@@ -119,6 +119,10 @@ class LLMRuntimeAdapterTest {
             override fun close() {}
         }
 
+        val testProfile = ai.octomil.runtime.planner.DeviceRuntimeProfile(
+            sdkVersion = "1.0.0",
+            arch = "arm64-v8a",
+        )
         val context: Context = mockk(relaxed = true)
         val prefs = FakePlannerPrefs()
         val store = RuntimePlannerStore(prefs)
@@ -126,12 +130,7 @@ class LLMRuntimeAdapterTest {
             context = context,
             store = store,
             client = null,
-            profileCollector = {
-                ai.octomil.runtime.planner.DeviceRuntimeProfile(
-                    sdkVersion = "1.0.0",
-                    arch = "arm64-v8a",
-                )
-            },
+            profileCollector = { testProfile },
         )
 
         val adapter = LLMRuntimeAdapter(llm).also {
@@ -142,13 +141,18 @@ class LLMRuntimeAdapterTest {
 
         adapter.run(stubRequest("test"))
 
-        // Verify benchmark was recorded in the planner store
+        // Verify benchmark was recorded in the planner store.
+        // The cache key must match what recordBenchmark computes internally,
+        // including the installed runtimes hash from the device profile.
         val cacheKey = RuntimePlannerStore.makeCacheKey(
             model = "test-model",
             capability = "text",
             policy = "local_first",
-            sdkVersion = "1.0.0",
-            arch = "arm64-v8a",
+            sdkVersion = testProfile.sdkVersion,
+            platform = testProfile.platform,
+            arch = testProfile.arch,
+            chip = testProfile.chip,
+            installedHash = RuntimePlannerStore.installedRuntimesHash(testProfile.installedRuntimes),
         )
         val cached = store.getBenchmark(cacheKey)
         assertNotNull(cached)
@@ -204,6 +208,10 @@ class LLMRuntimeAdapterTest {
 
     @Test
     fun `recordBenchmarkResult converts BenchmarkResult to planner cache entry`() {
+        val testProfile = ai.octomil.runtime.planner.DeviceRuntimeProfile(
+            sdkVersion = "1.0.0",
+            arch = "arm64-v8a",
+        )
         val context: Context = mockk(relaxed = true)
         val prefs = FakePlannerPrefs()
         val store = RuntimePlannerStore(prefs)
@@ -211,12 +219,7 @@ class LLMRuntimeAdapterTest {
             context = context,
             store = store,
             client = null,
-            profileCollector = {
-                ai.octomil.runtime.planner.DeviceRuntimeProfile(
-                    sdkVersion = "1.0.0",
-                    arch = "arm64-v8a",
-                )
-            },
+            profileCollector = { testProfile },
         )
 
         val result = BenchmarkResult(
@@ -236,8 +239,11 @@ class LLMRuntimeAdapterTest {
             model = "phi-4-mini",
             capability = "text",
             policy = "local_first",
-            sdkVersion = "1.0.0",
-            arch = "arm64-v8a",
+            sdkVersion = testProfile.sdkVersion,
+            platform = testProfile.platform,
+            arch = testProfile.arch,
+            chip = testProfile.chip,
+            installedHash = RuntimePlannerStore.installedRuntimesHash(testProfile.installedRuntimes),
         )
         val cached = store.getBenchmark(cacheKey)
         assertNotNull(cached)
@@ -248,6 +254,10 @@ class LLMRuntimeAdapterTest {
 
     @Test
     fun `recordBenchmarkResult skips errored results`() {
+        val testProfile = ai.octomil.runtime.planner.DeviceRuntimeProfile(
+            sdkVersion = "1.0.0",
+            arch = "arm64-v8a",
+        )
         val context: Context = mockk(relaxed = true)
         val prefs = FakePlannerPrefs()
         val store = RuntimePlannerStore(prefs)
@@ -255,12 +265,7 @@ class LLMRuntimeAdapterTest {
             context = context,
             store = store,
             client = null,
-            profileCollector = {
-                ai.octomil.runtime.planner.DeviceRuntimeProfile(
-                    sdkVersion = "1.0.0",
-                    arch = "arm64-v8a",
-                )
-            },
+            profileCollector = { testProfile },
         )
 
         val result = BenchmarkResult(
@@ -282,8 +287,11 @@ class LLMRuntimeAdapterTest {
             model = "test-model",
             capability = "text",
             policy = "local_first",
-            sdkVersion = "1.0.0",
-            arch = "arm64-v8a",
+            sdkVersion = testProfile.sdkVersion,
+            platform = testProfile.platform,
+            arch = testProfile.arch,
+            chip = testProfile.chip,
+            installedHash = RuntimePlannerStore.installedRuntimesHash(testProfile.installedRuntimes),
         )
         val cached = store.getBenchmark(cacheKey)
         // Result had error, so recordBenchmarkResult should have returned early
