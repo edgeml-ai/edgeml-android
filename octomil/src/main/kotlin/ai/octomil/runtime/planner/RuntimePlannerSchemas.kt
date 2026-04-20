@@ -168,6 +168,43 @@ data class RuntimeSelection(
 )
 
 // =========================================================================
+// Routing policy names — cross-SDK canonical constants
+// =========================================================================
+
+/**
+ * Canonical routing policy name constants shared across SDKs.
+ *
+ * These match the Python SDK's `RoutingPolicy` enum values and the
+ * contract-generated `ai.octomil.generated.RoutingPolicy` enum codes.
+ * Use these constants when constructing [RuntimePlanRequest] or
+ * interpreting server plan responses.
+ *
+ * Policy semantics:
+ * - [PRIVATE]: never send inference inputs to cloud; on-device only, no telemetry.
+ * - [LOCAL_ONLY]: always use on-device inference; fail if none available.
+ * - [LOCAL_FIRST]: prefer on-device; fall back to cloud when unavailable.
+ * - [CLOUD_FIRST]: prefer cloud; fall back to on-device when unavailable.
+ * - [CLOUD_ONLY]: always use cloud; never attempt local execution.
+ * - [PERFORMANCE_FIRST]: choose lowest-latency viable route.
+ *
+ * Note: `quality_first` is intentionally excluded — it is not a valid policy.
+ */
+object RoutingPolicyNames {
+    const val PRIVATE = "private"
+    const val LOCAL_ONLY = "local_only"
+    const val LOCAL_FIRST = "local_first"
+    const val CLOUD_FIRST = "cloud_first"
+    const val CLOUD_ONLY = "cloud_only"
+    const val PERFORMANCE_FIRST = "performance_first"
+
+    /** All valid policy names as a set, for validation. */
+    val ALL: Set<String> = setOf(
+        PRIVATE, LOCAL_ONLY, LOCAL_FIRST,
+        CLOUD_FIRST, CLOUD_ONLY, PERFORMANCE_FIRST,
+    )
+}
+
+// =========================================================================
 // Benchmark telemetry (upload payload)
 // =========================================================================
 
@@ -190,3 +227,82 @@ data class BenchmarkTelemetryPayload(
     @SerialName("peak_memory_bytes") val peakMemoryBytes: Long? = null,
     @SerialName("metadata") val metadata: Map<String, String> = emptyMap(),
 )
+
+// =========================================================================
+// Benchmark submission — privacy-safe wrapper with banned-key validation
+// =========================================================================
+
+/**
+ * Privacy-safe benchmark submission with metadata validation.
+ *
+ * Wraps [BenchmarkTelemetryPayload] construction with explicit rejection of
+ * metadata keys that could leak user data (prompts, inputs, file paths, etc.).
+ *
+ * Use [BenchmarkSubmission.create] instead of constructing
+ * [BenchmarkTelemetryPayload] directly when accepting caller-provided metadata.
+ */
+object BenchmarkSubmission {
+
+    /**
+     * Metadata keys that MUST NOT appear in benchmark submissions.
+     *
+     * These keys could carry user data (prompts, model outputs, file paths,
+     * PII). The server rejects payloads containing them; the SDK validates
+     * client-side to fail fast.
+     */
+    val BANNED_METADATA_KEYS: Set<String> = setOf(
+        "prompt",
+        "input",
+        "output",
+        "response",
+        "file",
+        "path",
+        "file_path",
+        "user",
+        "user_input",
+        "user_data",
+        "content",
+        "message",
+        "messages",
+        "text",
+        "query",
+        "context",
+        "instruction",
+        "system_prompt",
+    )
+
+    /**
+     * Create a [BenchmarkTelemetryPayload] after validating metadata keys.
+     *
+     * @throws IllegalArgumentException if any [BANNED_METADATA_KEYS] are present.
+     */
+    fun create(
+        model: String,
+        capability: String,
+        engine: String,
+        device: DeviceRuntimeProfile,
+        success: Boolean,
+        tokensPerSecond: Double? = null,
+        ttftMs: Double? = null,
+        peakMemoryBytes: Long? = null,
+        metadata: Map<String, String> = emptyMap(),
+    ): BenchmarkTelemetryPayload {
+        val violations = metadata.keys.filter { it.lowercase() in BANNED_METADATA_KEYS }
+        require(violations.isEmpty()) {
+            "Benchmark metadata contains banned keys that could leak user data: $violations"
+        }
+
+        return BenchmarkTelemetryPayload(
+            source = "planner",
+            model = model,
+            capability = capability,
+            engine = RuntimeEngineIds.canonical(engine),
+            device = device,
+            success = success,
+            tokensPerSecond = tokensPerSecond,
+            ttftMs = ttftMs,
+            peakMemoryBytes = peakMemoryBytes,
+            metadata = metadata,
+        )
+    }
+}
