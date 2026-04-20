@@ -139,6 +139,24 @@ data class RuntimeCandidatePlan(
 )
 
 /**
+ * Server-resolved application context for @app/{slug}/{capability} references.
+ */
+@Serializable
+data class AppResolution(
+    @SerialName("app_id") val appId: String,
+    @SerialName("app_slug") val appSlug: String? = null,
+    @SerialName("capability") val capability: String,
+    @SerialName("routing_policy") val routingPolicy: String,
+    @SerialName("selected_model") val selectedModel: String,
+    @SerialName("selected_model_variant_id") val selectedModelVariantId: String? = null,
+    @SerialName("selected_model_version") val selectedModelVersion: String? = null,
+    @SerialName("artifact_candidates") val artifactCandidates: List<RuntimeArtifactPlan> = emptyList(),
+    @SerialName("preferred_engines") val preferredEngines: List<String> = emptyList(),
+    @SerialName("fallback_policy") val fallbackPolicy: String? = null,
+    @SerialName("plan_ttl_seconds") val planTtlSeconds: Int = 604800,
+)
+
+/**
  * Full plan response from `POST /api/v2/runtime/plan`.
  */
 @Serializable
@@ -151,6 +169,7 @@ data class RuntimePlanResponse(
     @SerialName("plan_ttl_seconds") val planTtlSeconds: Int = 604800,
     @SerialName("fallback_allowed") val fallbackAllowed: Boolean = true,
     @SerialName("server_generated_at") val serverGeneratedAt: String = "",
+    @SerialName("app_resolution") val appResolution: AppResolution? = null,
 )
 
 // =========================================================================

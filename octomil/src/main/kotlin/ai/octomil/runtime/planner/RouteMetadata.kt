@@ -1,5 +1,7 @@
 package ai.octomil.runtime.planner
 
+import ai.octomil.runtime.routing.FallbackTrigger
+import ai.octomil.runtime.routing.RouteAttempt
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
@@ -66,6 +68,9 @@ data class PlannerInfo(
 @Serializable
 data class FallbackInfo(
     @SerialName("used") val used: Boolean = false,
+    @SerialName("from_attempt") val fromAttempt: Int? = null,
+    @SerialName("to_attempt") val toAttempt: Int? = null,
+    @SerialName("trigger") val trigger: FallbackTrigger? = null,
 )
 
 @Serializable
@@ -82,6 +87,7 @@ data class RouteMetadata(
     @SerialName("artifact") val artifact: RouteArtifact? = null,
     @SerialName("planner") val planner: PlannerInfo = PlannerInfo(),
     @SerialName("fallback") val fallback: FallbackInfo = FallbackInfo(),
+    @SerialName("attempts") val attempts: List<RouteAttempt> = emptyList(),
     @SerialName("reason") val reason: RouteReason = RouteReason(),
 ) {
     companion object {
