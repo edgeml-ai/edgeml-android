@@ -112,6 +112,16 @@ data class RuntimeArtifactPlan(
     @SerialName("min_ram_bytes") val minRamBytes: Long? = null,
 )
 
+@Serializable
+data class CandidateGate(
+    @SerialName("code") val code: String,
+    @SerialName("required") val required: Boolean = true,
+    @SerialName("threshold_number") val thresholdNumber: Double? = null,
+    @SerialName("threshold_string") val thresholdString: String? = null,
+    @SerialName("window_seconds") val windowSeconds: Int? = null,
+    @SerialName("source") val source: String = "server",
+)
+
 /**
  * A single candidate in a runtime plan (local or cloud).
  */
@@ -125,6 +135,7 @@ data class RuntimeCandidatePlan(
     @SerialName("engine_version_constraint") val engineVersionConstraint: String? = null,
     @SerialName("artifact") val artifact: RuntimeArtifactPlan? = null,
     @SerialName("benchmark_required") val benchmarkRequired: Boolean = false,
+    @SerialName("gates") val gates: List<CandidateGate> = emptyList(),
 )
 
 /**
@@ -138,6 +149,7 @@ data class RuntimePlanResponse(
     @SerialName("candidates") val candidates: List<RuntimeCandidatePlan>,
     @SerialName("fallback_candidates") val fallbackCandidates: List<RuntimeCandidatePlan> = emptyList(),
     @SerialName("plan_ttl_seconds") val planTtlSeconds: Int = 604800,
+    @SerialName("fallback_allowed") val fallbackAllowed: Boolean = true,
     @SerialName("server_generated_at") val serverGeneratedAt: String = "",
 )
 

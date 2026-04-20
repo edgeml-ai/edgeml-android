@@ -16,6 +16,8 @@ import ai.octomil.runtime.core.RuntimeResponse
 import ai.octomil.runtime.core.RuntimeToolCall
 import ai.octomil.runtime.core.RuntimeToolDef
 import ai.octomil.runtime.core.RuntimeUsage
+import ai.octomil.runtime.planner.RuntimeCandidatePlan
+import ai.octomil.runtime.routing.CandidateAttemptRunner
 import ai.octomil.sdk.DeviceContext
 import ai.octomil.wrapper.TelemetryQueue
 import kotlinx.coroutines.flow.Flow
@@ -33,7 +35,17 @@ class OctomilResponses(
         val runtime = resolveRuntime(request.model, request.modelRef)
         val effectiveRequest = applyConversationChaining(request)
         val runtimeRequest = buildRuntimeRequest(effectiveRequest)
-        val runtimeResponse = runtime.run(runtimeRequest)
+        val attemptResult = CandidateAttemptRunner(fallbackAllowed = false).runWithInference(
+            candidates = listOf(attemptCandidate(request.model)),
+        ) { _, _ ->
+            runtime.run(runtimeRequest)
+        }
+        val runtimeResponse = attemptResult.value ?: throw (
+            attemptResult.error ?: OctomilException(
+                OctomilErrorCode.RUNTIME_UNAVAILABLE,
+                "No runtime for model: ${request.model}",
+            )
+        )
         val response = buildResponse(request.model, runtimeResponse)
         responseCache[response.id] = response
         return response
@@ -43,46 +55,62 @@ class OctomilResponses(
         val runtime = resolveRuntime(request.model, request.modelRef)
         val effectiveRequest = applyConversationChaining(request)
         val runtimeRequest = buildRuntimeRequest(effectiveRequest)
+        val attemptRunner = CandidateAttemptRunner(fallbackAllowed = false, streaming = true)
+        val readiness = attemptRunner.run(listOf(attemptCandidate(request.model)))
+        if (readiness.selectedAttempt == null) {
+            throw OctomilException(
+                OctomilErrorCode.RUNTIME_UNAVAILABLE,
+                "No runtime for model: ${request.model}",
+            )
+        }
         val responseId = generateId()
         val textParts = mutableListOf<String>()
         val toolCallBuffers = mutableMapOf<Int, ToolCallBuffer>()
         var lastUsage: RuntimeUsage? = null
         var chunkIndex = 0
+        var firstOutputEmitted = false
 
-        runtime.stream(runtimeRequest).collect { chunk ->
-            chunk.text?.let { text ->
-                textParts.add(text)
-                emit(ResponseStreamEvent.TextDelta(text))
-            }
+        try {
+            runtime.stream(runtimeRequest).collect { chunk ->
+                chunk.text?.let { text ->
+                    firstOutputEmitted = true
+                    textParts.add(text)
+                    emit(ResponseStreamEvent.TextDelta(text))
+                }
 
-            chunk.toolCallDelta?.let { delta ->
-                val buffer = toolCallBuffers.getOrPut(delta.index) { ToolCallBuffer() }
-                if (delta.id != null) buffer.id = delta.id
-                if (delta.name != null) buffer.name = delta.name
-                if (delta.argumentsDelta != null) buffer.arguments.append(delta.argumentsDelta)
+                chunk.toolCallDelta?.let { delta ->
+                    firstOutputEmitted = true
+                    val buffer = toolCallBuffers.getOrPut(delta.index) { ToolCallBuffer() }
+                    if (delta.id != null) buffer.id = delta.id
+                    if (delta.name != null) buffer.name = delta.name
+                    if (delta.argumentsDelta != null) buffer.arguments.append(delta.argumentsDelta)
 
-                emit(
-                    ResponseStreamEvent.ToolCallDelta(
-                        index = delta.index,
-                        id = delta.id,
-                        name = delta.name,
-                        argumentsDelta = delta.argumentsDelta,
+                    emit(
+                        ResponseStreamEvent.ToolCallDelta(
+                            index = delta.index,
+                            id = delta.id,
+                            name = delta.name,
+                            argumentsDelta = delta.argumentsDelta,
+                        )
                     )
-                )
-            }
+                }
 
-            // Emit inference.chunk_produced telemetry for every chunk
-            try {
-                TelemetryQueue.shared?.reportInferenceChunkProduced(
-                    modelId = request.model,
-                    chunkIndex = chunkIndex,
-                )
-            } catch (_: Exception) {
-                // Telemetry must never crash the streaming flow
-            }
-            chunkIndex++
+                // Emit inference.chunk_produced telemetry for every chunk
+                try {
+                    TelemetryQueue.shared?.reportInferenceChunkProduced(
+                        modelId = request.model,
+                        chunkIndex = chunkIndex,
+                    )
+                } catch (_: Exception) {
+                    // Telemetry must never crash the streaming flow
+                }
+                chunkIndex++
 
-            if (chunk.usage != null) lastUsage = chunk.usage
+                if (chunk.usage != null) lastUsage = chunk.usage
+            }
+        } catch (error: Throwable) {
+            attemptRunner.shouldFallbackAfterInferenceError(firstOutputEmitted)
+            throw error
         }
 
         val output = mutableListOf<OutputItem>()
@@ -117,6 +145,15 @@ class OctomilResponses(
         responseCache[response.id] = response
         emit(ResponseStreamEvent.Done(response))
     }
+
+    private fun attemptCandidate(model: String): RuntimeCandidatePlan =
+        RuntimeCandidatePlan(
+            locality = "local",
+            priority = 0,
+            confidence = 1.0,
+            reason = "registered model runtime",
+            engine = "registered",
+        )
 
     private fun resolveRuntime(model: String, ref: ModelRef? = null): ModelRuntime {
         // 1. ModelRef via catalog (capability-based or ID-based)
