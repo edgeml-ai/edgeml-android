@@ -16,17 +16,20 @@ import kotlin.test.assertTrue
  * Cross-SDK parity tests for the runtime planner.
  *
  * Validates that the Android SDK's planner types, policy names, route metadata,
- * and benchmark submission rules match the Python SDK. These tests are the
- * Android counterpart to the Python SDK's planner parity assertions.
+ * and benchmark submission rules match the contract-backed shape defined in
+ * octomil-contracts. These tests are the Android counterpart to the Python
+ * SDK's planner parity assertions.
  *
  * Groups:
  * 1. Policy name parity with Python SDK
- * 2. RouteMetadata field presence and mapping
+ * 2. RouteMetadata nested contract shape and field presence
  * 3. Private policy: no cloud candidates
  * 4. Cloud-only policy: no local candidates
  * 5. Benchmark submission rejects banned metadata keys
  * 6. RuntimeCandidatePlan field parity
  * 7. RuntimePlanResponse field parity
+ * 8. Locality contract: "on_device" never appears
+ * 9. Execution mode correctness
  */
 class RuntimePlannerParityTest {
 
@@ -96,52 +99,93 @@ class RuntimePlannerParityTest {
     }
 
     // =========================================================================
-    // 2. RouteMetadata field presence and mapping
+    // 2. RouteMetadata nested contract shape and field presence
     // =========================================================================
 
     @Test
-    fun `RouteMetadata has all Python SDK fields`() {
+    fun `RouteMetadata has nested contract shape with all fields`() {
         val meta = RouteMetadata(
-            locality = "on_device",
-            engine = "llama.cpp",
-            plannerSource = "server",
-            fallbackUsed = false,
-            reason = "best match",
+            status = "selected",
+            execution = RouteExecution(
+                locality = "local",
+                mode = "sdk_runtime",
+                engine = "llama.cpp",
+            ),
+            model = RouteModel(
+                requested = RouteModelRequested(
+                    ref = "gemma-2b",
+                    kind = "model",
+                    capability = "text",
+                ),
+                resolved = RouteModelResolved(
+                    id = "gemma-2b-id",
+                    slug = "gemma-2b",
+                ),
+            ),
+            artifact = RouteArtifact(
+                id = "art-1",
+                format = "gguf",
+            ),
+            planner = PlannerInfo(source = "server"),
+            fallback = FallbackInfo(used = false),
+            reason = RouteReason(code = "ok", message = "best match"),
         )
-        assertEquals("on_device", meta.locality)
-        assertEquals("llama.cpp", meta.engine)
-        assertEquals("server", meta.plannerSource)
-        assertFalse(meta.fallbackUsed)
-        assertEquals("best match", meta.reason)
+        assertEquals("selected", meta.status)
+        assertEquals("local", meta.execution?.locality)
+        assertEquals("sdk_runtime", meta.execution?.mode)
+        assertEquals("llama.cpp", meta.execution?.engine)
+        assertEquals("gemma-2b", meta.model.requested.ref)
+        assertEquals("model", meta.model.requested.kind)
+        assertEquals("text", meta.model.requested.capability)
+        assertEquals("gemma-2b-id", meta.model.resolved?.id)
+        assertEquals("art-1", meta.artifact?.id)
+        assertEquals("gguf", meta.artifact?.format)
+        assertEquals("server", meta.planner.source)
+        assertFalse(meta.fallback.used)
+        assertEquals("ok", meta.reason.code)
+        assertEquals("best match", meta.reason.message)
     }
 
     @Test
-    fun `RouteMetadata defaults match Python SDK`() {
-        val meta = RouteMetadata()
-        assertEquals("", meta.locality)
-        assertNull(meta.engine)
-        assertEquals("", meta.plannerSource)
-        assertFalse(meta.fallbackUsed)
-        assertEquals("", meta.reason)
+    fun `RouteMetadata defaults match contract spec`() {
+        val meta = RouteMetadata(
+            model = RouteModel(
+                requested = RouteModelRequested(ref = "test"),
+            ),
+        )
+        assertEquals("selected", meta.status)
+        assertNull(meta.execution)
+        assertEquals("test", meta.model.requested.ref)
+        assertEquals("unknown", meta.model.requested.kind)
+        assertNull(meta.model.requested.capability)
+        assertNull(meta.model.resolved)
+        assertNull(meta.artifact)
+        assertEquals("offline", meta.planner.source)
+        assertFalse(meta.fallback.used)
+        assertEquals("", meta.reason.code)
+        assertEquals("", meta.reason.message)
     }
 
     @Test
-    fun `RouteMetadata fromSelection maps local to on_device`() {
+    fun `RouteMetadata fromSelection maps local to local with sdk_runtime mode`() {
         val selection = RuntimeSelection(
             locality = "local",
             engine = "tflite",
             source = "server_plan",
             reason = "server selected",
         )
-        val meta = RouteMetadata.fromSelection(selection)
-        assertEquals("on_device", meta.locality)
-        assertEquals("tflite", meta.engine)
-        assertEquals("server", meta.plannerSource)
-        assertFalse(meta.fallbackUsed)
+        val meta = RouteMetadata.fromSelection(selection, modelRef = "gemma-2b", capability = "text")
+        assertEquals("local", meta.execution?.locality)
+        assertEquals("sdk_runtime", meta.execution?.mode)
+        assertEquals("tflite", meta.execution?.engine)
+        assertEquals("server", meta.planner.source)
+        assertFalse(meta.fallback.used)
+        assertEquals("gemma-2b", meta.model.requested.ref)
+        assertEquals("text", meta.model.requested.capability)
     }
 
     @Test
-    fun `RouteMetadata fromSelection maps cloud locality`() {
+    fun `RouteMetadata fromSelection maps cloud locality with hosted_gateway mode`() {
         val selection = RuntimeSelection(
             locality = "cloud",
             engine = null,
@@ -149,10 +193,11 @@ class RuntimePlannerParityTest {
             reason = "no local engine",
         )
         val meta = RouteMetadata.fromSelection(selection)
-        assertEquals("cloud", meta.locality)
-        assertNull(meta.engine)
-        assertEquals("offline", meta.plannerSource)
-        assertTrue(meta.fallbackUsed)
+        assertEquals("cloud", meta.execution?.locality)
+        assertEquals("hosted_gateway", meta.execution?.mode)
+        assertNull(meta.execution?.engine)
+        assertEquals("offline", meta.planner.source)
+        assertTrue(meta.fallback.used)
     }
 
     @Test
@@ -164,7 +209,7 @@ class RuntimePlannerParityTest {
             reason = "cached benchmark: 25.0 tok/s",
         )
         val meta = RouteMetadata.fromSelection(selection)
-        assertEquals("cache", meta.plannerSource)
+        assertEquals("cache", meta.planner.source)
     }
 
     @Test
@@ -176,17 +221,48 @@ class RuntimePlannerParityTest {
             reason = "selected explicitly reported local engine: tflite",
         )
         val meta = RouteMetadata.fromSelection(selection)
-        assertEquals("offline", meta.plannerSource)
+        assertEquals("offline", meta.planner.source)
+    }
+
+    @Test
+    fun `RouteMetadata fromSelection populates artifact from selection artifact`() {
+        val selection = RuntimeSelection(
+            locality = "local",
+            engine = "tflite",
+            source = "server_plan",
+            reason = "server selected",
+            artifact = RuntimeArtifactPlan(
+                modelId = "gemma-2b",
+                artifactId = "art-123",
+                modelVersion = "1.0",
+                format = "tflite",
+                digest = "sha256:abc",
+            ),
+        )
+        val meta = RouteMetadata.fromSelection(selection, modelRef = "gemma-2b")
+        val art = meta.artifact
+        assertNotNull(art)
+        assertEquals("art-123", art.id)
+        assertEquals("1.0", art.version)
+        assertEquals("tflite", art.format)
+        assertEquals("sha256:abc", art.digest)
     }
 
     @Test
     fun `RouteMetadata round-trips through JSON serialization`() {
         val original = RouteMetadata(
-            locality = "on_device",
-            engine = "llama.cpp",
-            plannerSource = "server",
-            fallbackUsed = true,
-            reason = "fallback: tflite unavailable",
+            status = "selected",
+            execution = RouteExecution(
+                locality = "local",
+                mode = "sdk_runtime",
+                engine = "llama.cpp",
+            ),
+            model = RouteModel(
+                requested = RouteModelRequested(ref = "gemma-2b", kind = "model", capability = "text"),
+            ),
+            planner = PlannerInfo(source = "server"),
+            fallback = FallbackInfo(used = true),
+            reason = RouteReason(code = "fallback", message = "fallback: tflite unavailable"),
         )
         val encoded = json.encodeToString(RouteMetadata.serializer(), original)
         val decoded = json.decodeFromString(RouteMetadata.serializer(), encoded)
@@ -194,18 +270,29 @@ class RuntimePlannerParityTest {
     }
 
     @Test
-    fun `RouteMetadata JSON uses snake_case field names`() {
+    fun `RouteMetadata JSON uses snake_case for nested field names`() {
         val meta = RouteMetadata(
-            locality = "cloud",
-            plannerSource = "cache",
-            fallbackUsed = true,
-            reason = "test",
+            execution = RouteExecution(locality = "cloud", mode = "hosted_gateway"),
+            model = RouteModel(
+                requested = RouteModelRequested(ref = "test"),
+                resolved = RouteModelResolved(versionId = "v1", variantId = "var1"),
+            ),
+            artifact = RouteArtifact(
+                cache = ArtifactCache(status = "hit", managedBy = "octomil"),
+            ),
+            planner = PlannerInfo(source = "cache"),
+            fallback = FallbackInfo(used = true),
+            reason = RouteReason(code = "ok", message = "test"),
         )
         val encoded = json.encodeToString(RouteMetadata.serializer(), meta)
-        assertTrue(encoded.contains("\"planner_source\""))
-        assertTrue(encoded.contains("\"fallback_used\""))
-        assertFalse(encoded.contains("\"plannerSource\""))
-        assertFalse(encoded.contains("\"fallbackUsed\""))
+        // Nested snake_case fields
+        assertTrue(encoded.contains("\"version_id\""), "Should use snake_case version_id, got: $encoded")
+        assertTrue(encoded.contains("\"variant_id\""), "Should use snake_case variant_id, got: $encoded")
+        assertTrue(encoded.contains("\"managed_by\""), "Should use snake_case managed_by, got: $encoded")
+        // Should NOT contain camelCase
+        assertFalse(encoded.contains("\"versionId\""), "Should not contain camelCase versionId")
+        assertFalse(encoded.contains("\"variantId\""), "Should not contain camelCase variantId")
+        assertFalse(encoded.contains("\"managedBy\""), "Should not contain camelCase managedBy")
     }
 
     // =========================================================================
@@ -619,6 +706,122 @@ class RuntimePlannerParityTest {
         assertTrue(encoded.contains("\"plan_ttl_seconds\""))
         assertTrue(encoded.contains("\"server_generated_at\""))
         assertTrue(encoded.contains("\"fallback_candidates\""))
+    }
+
+    // =========================================================================
+    // 8. Locality contract: "on_device" never appears
+    // =========================================================================
+
+    @Test
+    fun `RouteMetadata fromSelection never produces on_device as locality`() {
+        // Local selection -- should be "local", NOT "on_device"
+        val localSelection = RuntimeSelection(
+            locality = "local",
+            engine = "tflite",
+            source = "server_plan",
+            reason = "server selected",
+        )
+        val localMeta = RouteMetadata.fromSelection(localSelection)
+        assertEquals("local", localMeta.execution?.locality, "Locality must be 'local', never 'on_device'")
+        assertFalse(
+            localMeta.execution?.locality == "on_device",
+            "on_device must never appear in RouteMetadata.execution.locality",
+        )
+
+        // Cloud selection
+        val cloudSelection = RuntimeSelection(
+            locality = "cloud",
+            engine = null,
+            source = "fallback",
+            reason = "no local engine",
+        )
+        val cloudMeta = RouteMetadata.fromSelection(cloudSelection)
+        assertEquals("cloud", cloudMeta.execution?.locality)
+    }
+
+    @Test
+    fun `on_device never appears in any RouteMetadata locality field across policies`() {
+        val sources = listOf("server_plan", "cache", "local_default", "fallback")
+        val localities = listOf("local", "cloud")
+
+        for (source in sources) {
+            for (locality in localities) {
+                val selection = RuntimeSelection(
+                    locality = locality,
+                    engine = if (locality == "local") "tflite" else null,
+                    source = source,
+                    reason = "test $source $locality",
+                )
+                val meta = RouteMetadata.fromSelection(selection)
+                assertFalse(
+                    meta.execution?.locality == "on_device",
+                    "on_device must never appear; source=$source locality=$locality produced: ${meta.execution?.locality}",
+                )
+            }
+        }
+    }
+
+    // =========================================================================
+    // 9. Execution mode correctness
+    // =========================================================================
+
+    @Test
+    fun `execution mode is sdk_runtime for local selection`() {
+        val selection = RuntimeSelection(
+            locality = "local",
+            engine = "llama.cpp",
+            source = "server_plan",
+            reason = "selected",
+        )
+        val meta = RouteMetadata.fromSelection(selection)
+        assertEquals("sdk_runtime", meta.execution?.mode, "Local selection must use sdk_runtime mode")
+    }
+
+    @Test
+    fun `execution mode is hosted_gateway for cloud selection`() {
+        val selection = RuntimeSelection(
+            locality = "cloud",
+            engine = null,
+            source = "fallback",
+            reason = "no local engine",
+        )
+        val meta = RouteMetadata.fromSelection(selection)
+        assertEquals("hosted_gateway", meta.execution?.mode, "Cloud selection must use hosted_gateway mode")
+    }
+
+    @Test
+    fun `nested structure access works correctly`() {
+        val selection = RuntimeSelection(
+            locality = "local",
+            engine = "tflite",
+            source = "cache",
+            reason = "cached benchmark",
+        )
+        val route = RouteMetadata.fromSelection(selection, modelRef = "gemma-2b", capability = "text")
+
+        // Test nested structure access patterns
+        assertEquals("local", route.execution?.locality)
+        assertEquals("sdk_runtime", route.execution?.mode)
+        assertEquals("tflite", route.execution?.engine)
+        assertEquals("cache", route.planner.source)
+        assertFalse(route.fallback.used)
+        assertEquals("gemma-2b", route.model.requested.ref)
+        assertEquals("text", route.model.requested.capability)
+        assertEquals("ok", route.reason.code)
+        assertEquals("cached benchmark", route.reason.message)
+    }
+
+    @Test
+    fun `fallback selection sets fallback used and reason code`() {
+        val selection = RuntimeSelection(
+            locality = "cloud",
+            engine = null,
+            source = "fallback",
+            reason = "no local engine available -- falling back to cloud",
+        )
+        val route = RouteMetadata.fromSelection(selection)
+        assertTrue(route.fallback.used, "Fallback source should set fallback.used = true")
+        assertEquals("fallback", route.reason.code, "Fallback source should set reason.code = fallback")
     }
 
     // =========================================================================
