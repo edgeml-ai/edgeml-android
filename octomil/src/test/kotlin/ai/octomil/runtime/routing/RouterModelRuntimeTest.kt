@@ -47,6 +47,35 @@ class RouterModelRuntimeTest {
         assertEquals("cloud-response", response.text)
     }
 
+    @Test
+    fun `cloud first uses cloud when available`() = runTest {
+        val localRuntime = stubRuntime("local-response")
+        val cloudRuntime = stubRuntime("cloud-response")
+
+        val router = RouterModelRuntime(
+            localFactory = { _ -> localRuntime },
+            cloudFactory = { _ -> cloudRuntime },
+            defaultPolicy = RoutingPolicy.Auto(preferLocal = false),
+        )
+
+        val response = router.run(stubRequest())
+        assertEquals("cloud-response", response.text)
+    }
+
+    @Test
+    fun `cloud first falls back to local when cloud unavailable`() = runTest {
+        val localRuntime = stubRuntime("local-response")
+
+        val router = RouterModelRuntime(
+            localFactory = { _ -> localRuntime },
+            cloudFactory = null,
+            defaultPolicy = RoutingPolicy.Auto(preferLocal = false),
+        )
+
+        val response = router.run(stubRequest())
+        assertEquals("local-response", response.text)
+    }
+
     @Test(expected = ai.octomil.errors.OctomilException::class)
     fun `local only throws when no local runtime`() = runTest {
         val router = RouterModelRuntime(
