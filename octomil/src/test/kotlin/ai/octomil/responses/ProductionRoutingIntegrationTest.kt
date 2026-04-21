@@ -364,15 +364,8 @@ class ProductionRoutingIntegrationTest {
     }
 
     // =========================================================================
-    // 9. Capability ref via model parser
+    // 9. Capability ref via model parser (covered above in section 4)
     // =========================================================================
-
-    @Test
-    fun `capability ref kind is capability`() {
-        val ref = ai.octomil.runtime.routing.ModelRefParser.parse("@capability/embeddings")
-        assertEquals("capability", ref.kind)
-        assertEquals("@capability/embeddings", ref.ref)
-    }
 
     // =========================================================================
     // 10. Route metadata present on streamed responses with all ref types
