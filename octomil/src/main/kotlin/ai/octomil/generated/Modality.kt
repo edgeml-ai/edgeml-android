@@ -4,8 +4,8 @@ package ai.octomil.generated
 
 enum class Modality(val code: String) {
     TEXT("text"),
-    IMAGE("image"),
     AUDIO("audio"),
+    IMAGE("image"),
     VIDEO("video");
 
     companion object {

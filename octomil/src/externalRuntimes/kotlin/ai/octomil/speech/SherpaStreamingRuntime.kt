@@ -1,5 +1,8 @@
 package ai.octomil.speech
 
+import ai.octomil.runtime.planner.DeviceRuntimeProfileCollector
+import ai.octomil.runtime.planner.InstalledRuntime
+import ai.octomil.runtime.planner.modelCapable
 import android.util.Log
 import com.k2fsa.sherpa.onnx.EndpointConfig
 import com.k2fsa.sherpa.onnx.EndpointRule
@@ -47,6 +50,11 @@ internal class SherpaStreamingRuntime(
         recognizer = OnlineRecognizer(config = config)
         Log.i(TAG, "Initialized recognizer from ${modelDir.absolutePath}")
 
+        // Register model-capable evidence for this speech model.
+        // Only privacy-safe metadata: model ID (from directory name),
+        // engine, capability, format. No file paths or user data.
+        registerModelEvidence()
+
         punct = punctDir?.let { dir ->
             val modelFile = File(dir, "model.int8.onnx")
             val vocabFile = File(dir, "bpe.vocab")
@@ -79,6 +87,31 @@ internal class SherpaStreamingRuntime(
     override fun release() {
         recognizer.release()
         Log.i(TAG, "Released recognizer")
+    }
+
+    /**
+     * Register model-capable evidence for this speech recognizer model.
+     *
+     * Called once during init after successful recognizer creation.
+     * Only privacy-safe metadata: model ID (from directory name),
+     * engine="whisper.cpp", capability="audio_transcription", format="onnx".
+     * No file paths, audio data, or user data.
+     */
+    private fun registerModelEvidence() {
+        try {
+            val modelId = modelDir.name
+            DeviceRuntimeProfileCollector.registerEvidence(
+                InstalledRuntime.modelCapable(
+                    engine = "whisper.cpp",
+                    model = modelId,
+                    capability = "audio_transcription",
+                    artifactFormat = "onnx",
+                ),
+            )
+            Log.d(TAG, "Registered model evidence: whisper.cpp/$modelId")
+        } catch (e: Exception) {
+            Log.d(TAG, "Failed to register model evidence (non-fatal): ${e.message}")
+        }
     }
 
     companion object {

@@ -9,7 +9,8 @@ enum class ArtifactFormat(val code: String) {
     GGUF("gguf"),
     MLX("mlx"),
     MNN("mnn"),
-    TRANSFORMERSJS("transformersjs");
+    TRANSFORMERSJS("transformersjs"),
+    CLOUD("cloud");
 
     companion object {
         fun fromCode(code: String): ArtifactFormat? =
