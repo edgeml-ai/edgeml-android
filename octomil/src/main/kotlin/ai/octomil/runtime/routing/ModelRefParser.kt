@@ -84,12 +84,12 @@ sealed class ParsedModelRef {
     }
 
     data class ExperimentRef(val experimentId: String, val variantId: String) : ParsedModelRef() {
-        override val kind = "deployment"  // experiments resolve like deployments
+        override val kind = "experiment"
         override val ref = "$experimentId/$variantId"
     }
 
     data class DirectRef(val model: String) : ParsedModelRef() {
-        override val kind = "direct"
+        override val kind = "model"
         override val ref = model
     }
 }

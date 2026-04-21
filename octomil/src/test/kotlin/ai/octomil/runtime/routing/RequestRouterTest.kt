@@ -81,7 +81,7 @@ class RequestRouterTest {
         assertNotNull(meta.execution)
         assertNotNull(meta.model)
         assertEquals("gemma-2b", meta.model.requested.ref)
-        assertEquals("direct", meta.model.requested.kind)
+        assertEquals("model", meta.model.requested.kind)
         assertNotNull(meta.planner)
         assertNotNull(meta.fallback)
         assertNotNull(meta.reason)

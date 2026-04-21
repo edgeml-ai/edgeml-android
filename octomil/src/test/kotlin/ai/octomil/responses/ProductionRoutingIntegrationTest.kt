@@ -47,7 +47,7 @@ class ProductionRoutingIntegrationTest {
         assertEquals("local", response.routeMetadata!!.execution!!.locality)
         assertEquals("sdk_runtime", response.routeMetadata!!.execution!!.mode)
         assertEquals("gemma-2b", response.routeMetadata!!.model.requested.ref)
-        assertEquals("direct", response.routeMetadata!!.model.requested.kind)
+        assertEquals("model", response.routeMetadata!!.model.requested.kind)
     }
 
     @Test
@@ -74,8 +74,7 @@ class ProductionRoutingIntegrationTest {
         )
 
         assertNotNull(response.routeMetadata)
-        // Experiments resolve like deployments per ModelRefParser
-        assertEquals("deployment", response.routeMetadata!!.model.requested.kind)
+        assertEquals("experiment", response.routeMetadata!!.model.requested.kind)
     }
 
     @Test
@@ -112,7 +111,7 @@ class ProductionRoutingIntegrationTest {
         assertEquals(1, events.size)
         val event = events.first()
         assertEquals("chat", event.capability)
-        assertEquals("direct", event.modelRefKind)
+        assertEquals("model", event.modelRefKind)
         assertFalse(event.fallbackUsed)
     }
 
@@ -255,10 +254,9 @@ class ProductionRoutingIntegrationTest {
     }
 
     @Test
-    fun `experiment ref kind is deployment`() {
-        // Per contract: experiments resolve like deployments
+    fun `experiment ref kind is experiment`() {
         val ref = ai.octomil.runtime.routing.ModelRefParser.parse("exp_v1/variant_a")
-        assertEquals("deployment", ref.kind)
+        assertEquals("experiment", ref.kind)
         assertEquals("exp_v1/variant_a", ref.ref)
     }
 
@@ -277,9 +275,9 @@ class ProductionRoutingIntegrationTest {
     }
 
     @Test
-    fun `plain model ref kind is direct`() {
+    fun `plain model ref kind is model`() {
         val ref = ai.octomil.runtime.routing.ModelRefParser.parse("gemma-2b")
-        assertEquals("direct", ref.kind)
+        assertEquals("model", ref.kind)
         assertEquals("gemma-2b", ref.ref)
     }
 
