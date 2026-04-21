@@ -190,6 +190,7 @@ class TelemetryQueue internal constructor(
                     "route.experiment_id" to event.experimentId,
                     "route.variant_id" to event.variantId,
                     "route.artifact_id" to event.artifactId,
+                    "route.cache_status" to event.cacheStatus,
                 ),
             )
         )

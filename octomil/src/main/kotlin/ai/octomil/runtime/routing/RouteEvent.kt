@@ -63,6 +63,8 @@ data class RouteEvent(
     @SerialName("variant_id") val variantId: String? = null,
     /** Artifact ID of the model artifact used. */
     @SerialName("artifact_id") val artifactId: String? = null,
+    /** Cache status for the route decision: "hit", "miss", or "not_applicable". */
+    @SerialName("cache_status") val cacheStatus: String? = null,
 ) {
     companion object {
         /** Generate a unique route ID. */
@@ -123,6 +125,10 @@ val FORBIDDEN_TELEMETRY_KEYS: Set<String> = setOf(
     "messages",
     "system_prompt",
     "documents",
+    "image",
+    "image_url",
+    "embedding",
+    "embeddings",
 )
 
 /**
