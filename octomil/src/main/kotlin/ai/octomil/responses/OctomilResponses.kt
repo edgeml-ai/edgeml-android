@@ -16,25 +16,54 @@ import ai.octomil.runtime.core.RuntimeResponse
 import ai.octomil.runtime.core.RuntimeToolCall
 import ai.octomil.runtime.core.RuntimeToolDef
 import ai.octomil.runtime.core.RuntimeUsage
+import ai.octomil.runtime.planner.RouteMetadata
 import ai.octomil.runtime.planner.RuntimeCandidatePlan
 import ai.octomil.runtime.routing.CandidateAttemptRunner
+import ai.octomil.runtime.routing.ModelRefParser
+import ai.octomil.runtime.routing.RequestRouter
+import ai.octomil.runtime.routing.RequestRoutingContext
+import ai.octomil.runtime.routing.RouteEvent
+import ai.octomil.runtime.routing.RoutingDecisionResult
 import ai.octomil.sdk.DeviceContext
 import ai.octomil.wrapper.TelemetryQueue
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import java.util.UUID
 
+/**
+ * Callback interface for route event telemetry.
+ *
+ * Implementations receive privacy-safe route events after every routed
+ * request. NEVER receives prompt, input, output, audio, filePath, or content.
+ */
+fun interface RouteEventListener {
+    fun onRouteEvent(event: RouteEvent)
+}
+
 class OctomilResponses(
     private val runtimeResolver: ((String) -> ModelRuntime?)? = null,
     private val catalogProvider: (() -> ModelCatalogService?)? = null,
     private val deviceContext: DeviceContext? = null,
+    private val routeEventListener: RouteEventListener? = null,
 ) {
     private val responseCache = LinkedHashMap<String, Response>(100, 0.75f, true)
+    private val requestRouter = RequestRouter()
 
     suspend fun create(request: ResponseRequest): Response {
         val runtime = resolveRuntime(request.model, request.modelRef)
         val effectiveRequest = applyConversationChaining(request)
         val runtimeRequest = buildRuntimeRequest(effectiveRequest)
+
+        // Resolve routing via RequestRouter for plan-backed requests,
+        // or fall through to direct execution with attempt metadata.
+        val routingContext = RequestRoutingContext(
+            model = request.model,
+            capability = inferCapability(request),
+            streaming = false,
+            routingPolicy = request.routing?.code,
+        )
+        val routingDecision = requestRouter.resolve(routingContext)
+
         val attemptResult = CandidateAttemptRunner(fallbackAllowed = false).runWithInference(
             candidates = listOf(attemptCandidate(request.model)),
         ) { _, _ ->
@@ -46,8 +75,13 @@ class OctomilResponses(
                 "No runtime for model: ${request.model}",
             )
         )
-        val response = buildResponse(request.model, runtimeResponse)
+
+        val response = buildResponse(request.model, runtimeResponse, routingDecision.routeMetadata)
         responseCache[response.id] = response
+
+        // Emit route event telemetry (privacy-safe, never contains content)
+        emitRouteEvent(routingDecision, response.id, inferCapability(request))
+
         return response
     }
 
@@ -55,6 +89,16 @@ class OctomilResponses(
         val runtime = resolveRuntime(request.model, request.modelRef)
         val effectiveRequest = applyConversationChaining(request)
         val runtimeRequest = buildRuntimeRequest(effectiveRequest)
+
+        // Resolve routing via RequestRouter
+        val routingContext = RequestRoutingContext(
+            model = request.model,
+            capability = inferCapability(request),
+            streaming = true,
+            routingPolicy = request.routing?.code,
+        )
+        val routingDecision = requestRouter.resolve(routingContext)
+
         val attemptRunner = CandidateAttemptRunner(fallbackAllowed = false, streaming = true)
         val readiness = attemptRunner.run(listOf(attemptCandidate(request.model)))
         if (readiness.selectedAttempt == null) {
@@ -141,8 +185,13 @@ class OctomilResponses(
             output = output,
             finishReason = finishReason,
             usage = usage,
+            routeMetadata = routingDecision.routeMetadata,
         )
         responseCache[response.id] = response
+
+        // Emit route event telemetry (privacy-safe, never contains content)
+        emitRouteEvent(routingDecision, response.id, inferCapability(request))
+
         emit(ResponseStreamEvent.Done(response))
     }
 
@@ -293,7 +342,11 @@ class OctomilResponses(
         )
     }
 
-    private fun buildResponse(model: String, runtimeResponse: RuntimeResponse): Response {
+    private fun buildResponse(
+        model: String,
+        runtimeResponse: RuntimeResponse,
+        routeMetadata: RouteMetadata? = null,
+    ): Response {
         val output = mutableListOf<OutputItem>()
 
         if (runtimeResponse.text.isNotEmpty()) {
@@ -328,7 +381,36 @@ class OctomilResponses(
             output = output,
             finishReason = finishReason,
             usage = usage,
+            routeMetadata = routeMetadata,
         )
+    }
+
+    /**
+     * Infer the capability from a request.
+     *
+     * Defaults to "chat" for most requests. Future: audio/embeddings
+     * capabilities will be inferred from content parts.
+     */
+    private fun inferCapability(request: ResponseRequest): String {
+        return "chat"
+    }
+
+    /**
+     * Emit a privacy-safe route event.
+     *
+     * NEVER includes prompt, input, output, audio, filePath, or content.
+     */
+    private fun emitRouteEvent(
+        decision: RoutingDecisionResult,
+        responseId: String,
+        capability: String,
+    ) {
+        try {
+            val event = RouteEvent.from(decision, responseId, capability)
+            routeEventListener?.onRouteEvent(event)
+        } catch (_: Exception) {
+            // Telemetry must never crash the request flow
+        }
     }
 
     private fun generateId(): String =

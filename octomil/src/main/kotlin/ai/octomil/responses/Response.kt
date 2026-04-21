@@ -6,6 +6,8 @@ data class Response(
     val output: List<OutputItem>,
     val finishReason: String,
     val usage: ResponseUsage? = null,
+    /** Privacy-safe route metadata describing how this request was routed. */
+    val routeMetadata: ai.octomil.runtime.planner.RouteMetadata? = null,
 ) {
     val outputText: String
         get() = output.filterIsInstance<OutputItem.Text>().joinToString("") { it.text }
