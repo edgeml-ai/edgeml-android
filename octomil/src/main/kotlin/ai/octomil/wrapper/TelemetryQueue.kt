@@ -3,6 +3,8 @@ package ai.octomil.wrapper
 import ai.octomil.generated.SpanAttribute
 import ai.octomil.generated.SpanName
 import ai.octomil.generated.TelemetryEvent as ContractTelemetryEvent
+import ai.octomil.runtime.routing.RouteEvent
+import ai.octomil.runtime.routing.stripForbiddenKeys
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -128,7 +130,7 @@ class TelemetryQueue internal constructor(
         // Attempt to load and resend any persisted events from a previous session
         scope.launch { loadPersistedEvents() }
 
-        if (sender != null && shared == null) {
+        if (sender != null) {
             shared = this
         }
     }
@@ -148,12 +150,49 @@ class TelemetryQueue internal constructor(
      * Enqueue a generic v2 telemetry event. Non-blocking. Enables training,
      * experiment, deploy, and inference.started events to flow through the
      * same pipeline.
+     *
+     * Forbidden telemetry keys are stripped from attributes before buffering
+     * to prevent user content leakage into telemetry.
      */
     fun enqueueV2Event(event: TelemetryV2Event) {
-        v2Queue.add(event)
+        val sanitized = event.copy(attributes = stripForbiddenKeys(event.attributes))
+        v2Queue.add(sanitized)
         if (totalPendingCount >= batchSize) {
             scope.launch { flush() }
         }
+    }
+
+    fun reportRouteEvent(event: RouteEvent) {
+        enqueueV2Event(
+            TelemetryV2Event(
+                name = "route.decision",
+                timestamp = isoFormatter.format(Date()),
+                attributes = TelemetryAttributes.of(
+                    "route.id" to event.routeId,
+                    "route.request_id" to event.requestId,
+                    "route.capability" to event.capability,
+                    "route.final_locality" to event.finalLocality,
+                    "route.selected_locality" to event.selectedLocality,
+                    "route.final_mode" to event.finalMode,
+                    "route.fallback_used" to event.fallbackUsed,
+                    "route.candidate_attempts" to event.candidateAttempts,
+                    "route.plan_id" to event.planId,
+                    "route.policy" to event.policy,
+                    "route.planner_source" to event.plannerSource,
+                    "route.engine" to event.engine,
+                    "route.fallback_trigger_code" to event.fallbackTriggerCode,
+                    "route.fallback_trigger_stage" to event.fallbackTriggerStage,
+                    "route.model_ref" to event.modelRef,
+                    "route.model_ref_kind" to event.modelRefKind,
+                    "route.app_slug" to event.appSlug,
+                    "route.app_id" to event.appId,
+                    "route.deployment_id" to event.deploymentId,
+                    "route.experiment_id" to event.experimentId,
+                    "route.variant_id" to event.variantId,
+                    "route.artifact_id" to event.artifactId,
+                ),
+            )
+        )
     }
 
     /**
@@ -165,6 +204,9 @@ class TelemetryQueue internal constructor(
      * The number of generic v2 events currently buffered.
      */
     val pendingV2Count: Int get() = v2Queue.size
+
+    internal val bufferedV2Events: List<TelemetryV2Event>
+        get() = v2Queue.toList()
 
     /**
      * Total number of events buffered across both queues.

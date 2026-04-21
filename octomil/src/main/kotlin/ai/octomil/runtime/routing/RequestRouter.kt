@@ -58,56 +58,6 @@ data class RoutingDecisionResult(
 )
 
 // =============================================================================
-// RouteEvent — canonical telemetry event
-// =============================================================================
-
-/**
- * Privacy-safe telemetry event emitted after each routed request.
- *
- * NEVER contains: prompt, input, output, audio, filePath, content, messages.
- * Only operational metadata for routing telemetry and debugging.
- */
-data class RouteEvent(
-    val routeId: String,
-    val requestId: String,
-    val planId: String? = null,
-    val capability: String,
-    val policy: String? = null,
-    val plannerSource: String? = null,
-    val finalLocality: String,
-    val engine: String? = null,
-    val fallbackUsed: Boolean = false,
-    val fallbackTriggerCode: String? = null,
-    val candidateAttempts: Int = 0,
-    val modelRefKind: String = "direct",
-) {
-    companion object {
-        /** Build a [RouteEvent] from a [RoutingDecisionResult] and a request ID. */
-        fun from(
-            decision: RoutingDecisionResult,
-            requestId: String,
-            capability: String,
-        ): RouteEvent {
-            val meta = decision.routeMetadata
-            return RouteEvent(
-                routeId = meta.status, // route is identified by the metadata block
-                requestId = requestId,
-                planId = null,
-                capability = capability,
-                policy = meta.fallback.trigger?.code,
-                plannerSource = meta.planner.source,
-                finalLocality = meta.execution?.locality ?: decision.locality,
-                engine = meta.execution?.engine,
-                fallbackUsed = meta.fallback.used,
-                fallbackTriggerCode = meta.fallback.trigger?.code,
-                candidateAttempts = meta.attempts.size,
-                modelRefKind = meta.model.requested.kind,
-            )
-        }
-    }
-}
-
-// =============================================================================
 // RequestRouter
 // =============================================================================
 

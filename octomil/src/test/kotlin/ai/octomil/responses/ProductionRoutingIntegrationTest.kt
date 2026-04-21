@@ -44,8 +44,8 @@ class ProductionRoutingIntegrationTest {
 
         assertNotNull(response.routeMetadata)
         assertNotNull(response.routeMetadata!!.execution)
-        assertEquals("cloud", response.routeMetadata!!.execution!!.locality)
-        assertEquals("hosted_gateway", response.routeMetadata!!.execution!!.mode)
+        assertEquals("local", response.routeMetadata!!.execution!!.locality)
+        assertEquals("sdk_runtime", response.routeMetadata!!.execution!!.mode)
         assertEquals("gemma-2b", response.routeMetadata!!.model.requested.ref)
         assertEquals("direct", response.routeMetadata!!.model.requested.kind)
     }
@@ -170,8 +170,8 @@ class ProductionRoutingIntegrationTest {
 
         val done = events.filterIsInstance<ResponseStreamEvent.Done>().first()
         assertNotNull(done.response.routeMetadata)
-        assertEquals("cloud", done.response.routeMetadata!!.execution!!.locality)
-        assertEquals("hosted_gateway", done.response.routeMetadata!!.execution!!.mode)
+        assertEquals("local", done.response.routeMetadata!!.execution!!.locality)
+        assertEquals("sdk_runtime", done.response.routeMetadata!!.execution!!.mode)
     }
 
     // =========================================================================

@@ -278,6 +278,8 @@ class OctomilResponses(
                     engine = it.engine,
                 )
             }
+        } else if (shouldPreferLocalRuntimeWithoutPlan(context.routingPolicy) && hasLocalRuntime(model)) {
+            listOf(attemptCandidate(model, locality = "local", engine = "registered"))
         } else {
             listOf(attemptCandidate(model, decision.locality, decision.engine))
         }
@@ -290,6 +292,15 @@ class OctomilResponses(
             reason = "registered model runtime",
             engine = engine,
         )
+
+    private fun shouldPreferLocalRuntimeWithoutPlan(policy: String?): Boolean =
+        when (policy) {
+            "cloud_only", "cloud_first" -> false
+            else -> true
+        }
+
+    private fun hasLocalRuntime(model: String): Boolean =
+        runtimeResolver?.invoke(model) != null || ModelRuntimeRegistry.resolve(model) != null
 
     private fun resolveRuntimeForAttempt(request: ResponseRequest, attempt: RouteAttempt): ModelRuntime =
         resolveRuntime(request.model, request.modelRef)
@@ -546,6 +557,7 @@ class OctomilResponses(
         try {
             val event = RouteEvent.from(decision, responseId, capability)
             routeEventListener?.onRouteEvent(event)
+            TelemetryQueue.shared?.reportRouteEvent(event)
         } catch (_: Exception) {
             // Telemetry must never crash the request flow
         }
