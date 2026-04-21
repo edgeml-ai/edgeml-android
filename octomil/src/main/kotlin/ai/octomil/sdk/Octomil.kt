@@ -18,9 +18,22 @@ class Octomil(
     orgId: String? = null,
     auth: AuthConfig? = null,
     private val serverUrl: String = OctomilConfig.DEFAULT_SERVER_URL,
+    /**
+     * Explicit planner routing override.
+     *
+     * - `null` (default): planner routing is ON when auth credentials exist,
+     *   OFF otherwise.
+     * - `true`: force planner routing ON.
+     * - `false`: force planner routing OFF (direct/legacy routing only).
+     *
+     * Privacy invariant: "private" and "local_only" routing policies NEVER
+     * route to cloud regardless of this setting.
+     */
+    plannerRouting: Boolean? = null,
 ) {
     private var initialized = false
     private val authConfig: AuthConfig
+    internal val plannerEnabled: Boolean
     private var _responses: OctomilResponses? = null
     private var _embeddings: FacadeEmbeddings? = null
 
@@ -36,6 +49,12 @@ class Octomil(
                 "One of publishableKey, apiKey + orgId, or auth must be provided"
             )
         }
+
+        plannerEnabled = PlannerRoutingDefaults.resolve(
+            explicitOverride = plannerRouting,
+            authConfig = authConfig,
+            serverUrl = serverUrl,
+        )
     }
 
     suspend fun initialize() {
@@ -66,8 +85,35 @@ class Octomil(
         )
         DeviceContext.restoreCachedToken(deviceContext, storage)
 
-        // Create OctomilResponses with the wired device context
-        _responses = OctomilResponses(deviceContext = deviceContext)
+        // Create RuntimePlanner when planner routing is enabled
+        val runtimePlanner = if (plannerEnabled) {
+            val plannerApiKey = when (val a = authConfig) {
+                is AuthConfig.OrgApiKey -> a.apiKey
+                is AuthConfig.PublishableKey -> a.key
+                is AuthConfig.BootstrapToken -> a.token
+                is AuthConfig.Anonymous -> null
+            }
+            if (plannerApiKey != null) {
+                val plannerClient = ai.octomil.runtime.planner.RuntimePlannerClient(
+                    baseUrl = serverUrl,
+                    apiKey = plannerApiKey,
+                )
+                ai.octomil.runtime.planner.RuntimePlanner(
+                    context = appCtx,
+                    client = plannerClient,
+                )
+            } else {
+                null
+            }
+        } else {
+            null
+        }
+
+        // Create OctomilResponses with the wired device context and planner
+        _responses = OctomilResponses(
+            deviceContext = deviceContext,
+            runtimePlanner = runtimePlanner,
+        )
 
         // Create EmbeddingClient for the embeddings namespace
         val embeddingApiKey = when (val a = authConfig) {
