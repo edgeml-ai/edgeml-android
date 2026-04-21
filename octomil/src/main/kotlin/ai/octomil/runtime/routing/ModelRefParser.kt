@@ -8,7 +8,8 @@ package ai.octomil.runtime.routing
  * - `@capability/cap`      -> CapabilityRef(cap)
  * - `deploy_xxx`           -> DeploymentRef(id)
  * - `exp/variant`          -> ExperimentRef(experimentId, variantId)
- * - bare string            -> DirectRef(model)
+ * - empty/blank             -> DefaultRef (kind "default")
+ * - bare string             -> DirectRef (kind "model")
  *
  * The parser is deterministic and offline -- no network calls. Parsing failures
  * fall through to [ParsedModelRef.DirectRef] so unknown formats are treated
@@ -17,7 +18,7 @@ package ai.octomil.runtime.routing
 object ModelRefParser {
 
     fun parse(model: String): ParsedModelRef {
-        if (model.isBlank()) return ParsedModelRef.DirectRef(model)
+        if (model.isBlank()) return ParsedModelRef.DefaultRef(model)
 
         // @app/slug/capability
         if (model.startsWith("@app/")) {
@@ -90,6 +91,11 @@ sealed class ParsedModelRef {
 
     data class DirectRef(val model: String) : ParsedModelRef() {
         override val kind = "model"
+        override val ref = model
+    }
+
+    data class DefaultRef(val model: String) : ParsedModelRef() {
+        override val kind = "default"
         override val ref = model
     }
 }
