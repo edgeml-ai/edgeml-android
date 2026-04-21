@@ -281,6 +281,20 @@ class ProductionRoutingIntegrationTest {
         assertEquals("gemma-2b", ref.ref)
     }
 
+    @Test
+    fun `alias ref kind is alias`() {
+        val ref = ai.octomil.runtime.routing.ModelRefParser.parse("alias:my-model")
+        assertEquals("alias", ref.kind)
+        assertEquals("alias:my-model", ref.ref)
+    }
+
+    @Test
+    fun `unknown scoped ref kind is unknown`() {
+        val ref = ai.octomil.runtime.routing.ModelRefParser.parse("@unknown/scope")
+        assertEquals("unknown", ref.kind)
+        assertEquals("@unknown/scope", ref.ref)
+    }
+
     // =========================================================================
     // 6. Private policy enforcement
     // =========================================================================
@@ -364,18 +378,7 @@ class ProductionRoutingIntegrationTest {
     }
 
     // =========================================================================
-    // 9. Capability ref via model parser
-    // =========================================================================
-
-    @Test
-    fun `capability ref kind is capability`() {
-        val ref = ai.octomil.runtime.routing.ModelRefParser.parse("@capability/embeddings")
-        assertEquals("capability", ref.kind)
-        assertEquals("@capability/embeddings", ref.ref)
-    }
-
-    // =========================================================================
-    // 10. Route metadata present on streamed responses with all ref types
+    // 9. Route metadata present on streamed responses with all ref types
     // =========================================================================
 
     @Test
