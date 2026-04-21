@@ -63,6 +63,8 @@ data class RouteEvent(
     @SerialName("variant_id") val variantId: String? = null,
     /** Artifact ID of the model artifact used. */
     @SerialName("artifact_id") val artifactId: String? = null,
+    /** Cache status for the route decision: "hit", "miss", or "not_applicable". */
+    @SerialName("cache_status") val cacheStatus: String? = null,
 ) {
     companion object {
         /** Generate a unique route ID. */
@@ -99,6 +101,7 @@ data class RouteEvent(
                 experimentId = (parsedRef as? ParsedModelRef.ExperimentRef)?.experimentId,
                 variantId = meta.model.resolved?.variantId ?: (parsedRef as? ParsedModelRef.ExperimentRef)?.variantId,
                 artifactId = meta.artifact?.id,
+                cacheStatus = meta.artifact?.cache?.status,
             )
         }
     }
@@ -123,6 +126,10 @@ val FORBIDDEN_TELEMETRY_KEYS: Set<String> = setOf(
     "messages",
     "system_prompt",
     "documents",
+    "image",
+    "image_url",
+    "embedding",
+    "embeddings",
 )
 
 /**
@@ -232,5 +239,6 @@ fun buildRouteEvent(
         experimentId = experimentId,
         variantId = variantId,
         artifactId = selected?.artifact?.id,
+        cacheStatus = selected?.artifact?.cache?.status,
     )
 }

@@ -81,7 +81,7 @@ class RequestRouterTest {
         assertNotNull(meta.execution)
         assertNotNull(meta.model)
         assertEquals("gemma-2b", meta.model.requested.ref)
-        assertEquals("direct", meta.model.requested.kind)
+        assertEquals("model", meta.model.requested.kind)
         assertNotNull(meta.planner)
         assertNotNull(meta.fallback)
         assertNotNull(meta.reason)
@@ -113,7 +113,7 @@ class RequestRouterTest {
             RequestRoutingContext(model = "exp_v1/variant_a"),
         )
 
-        assertEquals("deployment", result.routeMetadata.model.requested.kind)
+        assertEquals("experiment", result.routeMetadata.model.requested.kind)
         assertEquals("exp_v1/variant_a", result.routeMetadata.model.requested.ref)
     }
 
@@ -125,6 +125,26 @@ class RequestRouterTest {
 
         assertEquals("capability", result.routeMetadata.model.requested.kind)
         assertEquals("@capability/embeddings", result.routeMetadata.model.requested.ref)
+    }
+
+    @Test
+    fun `model ref parser emits canonical kinds`() {
+        val cases = mapOf(
+            "gemma3-1b" to "model",
+            "@app/translator/chat" to "app",
+            "@capability/embeddings" to "capability",
+            "deploy_abc123" to "deployment",
+            "exp_v1/variant_a" to "experiment",
+            "alias:prod-chat" to "alias",
+            "" to "default",
+            "@bad/ref" to "unknown",
+            "https://example.com/model.gguf" to "unknown",
+        )
+
+        cases.forEach { (model, expectedKind) ->
+            assertEquals(expectedKind, ModelRefParser.parse(model).kind)
+        }
+        assertEquals("deploy_abc123", (ModelRefParser.parse("deploy_abc123") as ParsedModelRef.DeploymentRef).deploymentId)
     }
 
     // =========================================================================
