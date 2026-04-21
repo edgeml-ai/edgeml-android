@@ -3,6 +3,7 @@ package ai.octomil.wrapper
 import ai.octomil.generated.SpanAttribute
 import ai.octomil.generated.SpanName
 import ai.octomil.generated.TelemetryEvent as ContractTelemetryEvent
+import ai.octomil.runtime.routing.stripForbiddenKeys
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -148,9 +149,13 @@ class TelemetryQueue internal constructor(
      * Enqueue a generic v2 telemetry event. Non-blocking. Enables training,
      * experiment, deploy, and inference.started events to flow through the
      * same pipeline.
+     *
+     * Forbidden telemetry keys are stripped from attributes before buffering
+     * to prevent user content leakage into telemetry.
      */
     fun enqueueV2Event(event: TelemetryV2Event) {
-        v2Queue.add(event)
+        val sanitized = event.copy(attributes = stripForbiddenKeys(event.attributes))
+        v2Queue.add(sanitized)
         if (totalPendingCount >= batchSize) {
             scope.launch { flush() }
         }
