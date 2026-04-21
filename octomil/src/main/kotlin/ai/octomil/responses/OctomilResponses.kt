@@ -18,6 +18,7 @@ import ai.octomil.runtime.core.RuntimeToolDef
 import ai.octomil.runtime.core.RuntimeUsage
 import ai.octomil.runtime.planner.RuntimeCandidatePlan
 import ai.octomil.runtime.routing.CandidateAttemptRunner
+import ai.octomil.runtime.routing.buildRouteEvent
 import ai.octomil.sdk.DeviceContext
 import ai.octomil.wrapper.TelemetryQueue
 import kotlinx.coroutines.flow.Flow
@@ -35,6 +36,7 @@ class OctomilResponses(
         val runtime = resolveRuntime(request.model, request.modelRef)
         val effectiveRequest = applyConversationChaining(request)
         val runtimeRequest = buildRuntimeRequest(effectiveRequest)
+        val requestId = generateRequestId()
         val attemptResult = CandidateAttemptRunner(fallbackAllowed = false).runWithInference(
             candidates = listOf(attemptCandidate(request.model)),
         ) { _, _ ->
@@ -48,6 +50,7 @@ class OctomilResponses(
         )
         val response = buildResponse(request.model, runtimeResponse)
         responseCache[response.id] = response
+        emitRouteEvent(request, requestId, attemptResult)
         return response
     }
 
@@ -56,6 +59,7 @@ class OctomilResponses(
         val effectiveRequest = applyConversationChaining(request)
         val runtimeRequest = buildRuntimeRequest(effectiveRequest)
         val attemptRunner = CandidateAttemptRunner(fallbackAllowed = false, streaming = true)
+        val requestId = generateRequestId()
         val readiness = attemptRunner.run(listOf(attemptCandidate(request.model)))
         if (readiness.selectedAttempt == null) {
             throw OctomilException(
@@ -143,7 +147,33 @@ class OctomilResponses(
             usage = usage,
         )
         responseCache[response.id] = response
+        emitRouteEvent(request, requestId, readiness)
         emit(ResponseStreamEvent.Done(response))
+    }
+
+    private fun emitRouteEvent(
+        request: ResponseRequest,
+        requestId: String,
+        attemptResult: ai.octomil.runtime.routing.AttemptLoopResult<*>,
+    ) {
+        if (attemptResult.selectedAttempt == null) return
+        TelemetryQueue.shared?.reportRouteEvent(
+            buildRouteEvent(
+                requestId = requestId,
+                capability = "responses",
+                attemptResult = attemptResult,
+                policy = request.routing?.code,
+                plannerSource = "offline",
+                modelRef = request.model,
+                modelRefKind = modelRefKind(request.modelRef),
+            )
+        )
+    }
+
+    private fun modelRefKind(ref: ModelRef?): String? = when (ref) {
+        null -> null
+        is ModelRef.Id -> "id"
+        is ModelRef.Capability -> "capability"
     }
 
     private fun attemptCandidate(model: String): RuntimeCandidatePlan =
@@ -333,6 +363,9 @@ class OctomilResponses(
 
     private fun generateId(): String =
         "resp_${UUID.randomUUID().toString().replace("-", "").take(16)}"
+
+    private fun generateRequestId(): String =
+        "req_${UUID.randomUUID().toString().replace("-", "").take(12)}"
 
     private class ToolCallBuffer {
         var id: String? = null

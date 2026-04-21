@@ -8,6 +8,8 @@ import ai.octomil.runtime.core.RuntimeResponse
 import ai.octomil.runtime.core.RuntimeToolCall
 import ai.octomil.runtime.core.RuntimeToolCallDelta
 import ai.octomil.runtime.core.RuntimeUsage
+import ai.octomil.wrapper.TelemetryQueue
+import ai.octomil.wrapper.TelemetrySender
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.toList
@@ -129,6 +131,65 @@ class OctomilResponsesTest {
     fun `create throws when no runtime found`() = runTest {
         val responses = OctomilResponses(runtimeResolver = { null })
         responses.create(ResponseRequest(model = "unknown", input = listOf(InputItem.text("Hi"))))
+    }
+
+    @Test
+    fun `create emits route decision telemetry`() = runTest {
+        val queue = TelemetryQueue(
+            batchSize = 100,
+            flushIntervalMs = 0,
+            persistDir = null,
+            sender = TelemetrySender { },
+        )
+        queue.start()
+        try {
+            val runtime = mockRuntime(RuntimeResponse(text = "Hello world", finishReason = "stop"))
+            val responses = OctomilResponses(runtimeResolver = { runtime })
+
+            responses.create(
+                ResponseRequest(model = "test", input = listOf(InputItem.text("Hi")))
+            )
+
+            val routeEvents = queue.bufferedV2Events.filter { it.name == "route.decision" }
+            assertEquals(1, routeEvents.size)
+            val attrs = routeEvents[0].attributes
+            assertEquals("responses", attrs["route.capability"]?.content)
+            assertEquals("local", attrs["route.final_locality"]?.content)
+            assertEquals("1", attrs["route.candidate_attempts"]?.content)
+        } finally {
+            queue.close()
+        }
+    }
+
+    @Test
+    fun `stream emits route decision telemetry`() = runTest {
+        val queue = TelemetryQueue(
+            batchSize = 100,
+            flushIntervalMs = 0,
+            persistDir = null,
+            sender = TelemetrySender { },
+        )
+        queue.start()
+        try {
+            val runtime = streamingRuntime(listOf(
+                RuntimeChunk(text = "Hello"),
+                RuntimeChunk(text = " world"),
+            ))
+            val responses = OctomilResponses(runtimeResolver = { runtime })
+
+            responses.stream(
+                ResponseRequest(model = "test", input = listOf(InputItem.text("Hi")))
+            ).toList()
+
+            val routeEvents = queue.bufferedV2Events.filter { it.name == "route.decision" }
+            assertEquals(1, routeEvents.size)
+            val attrs = routeEvents[0].attributes
+            assertEquals("responses", attrs["route.capability"]?.content)
+            assertEquals("local", attrs["route.final_locality"]?.content)
+            assertEquals("1", attrs["route.candidate_attempts"]?.content)
+        } finally {
+            queue.close()
+        }
     }
 
     private fun mockRuntime(response: RuntimeResponse): ModelRuntime = object : ModelRuntime {

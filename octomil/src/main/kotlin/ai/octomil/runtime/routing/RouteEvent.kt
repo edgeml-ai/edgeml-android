@@ -108,7 +108,7 @@ fun stripForbiddenKeys(attributes: Map<String, JsonPrimitive>): Map<String, Json
  * Returns a new map with forbidden keys removed.
  */
 fun <V> stripForbiddenKeysGeneric(attributes: Map<String, V>): Map<String, V> =
-    attributes.filterKeys { it !in FORBIDDEN_TELEMETRY_KEYS }
+    scrubForbiddenTelemetryValue(attributes) as Map<String, V>
 
 /**
  * Validates that an attribute map does not contain any forbidden telemetry keys.
@@ -116,10 +116,44 @@ fun <V> stripForbiddenKeysGeneric(attributes: Map<String, V>): Map<String, V> =
  * @throws IllegalArgumentException if a forbidden key is found.
  */
 fun validateRouteEventAttributes(attributes: Map<String, *>) {
-    for (key in attributes.keys) {
-        require(key !in FORBIDDEN_TELEMETRY_KEYS) {
+    findForbiddenTelemetryKeys(attributes).firstOrNull()?.let { key ->
+        error(
             "RouteEvent contains forbidden telemetry key: \"$key\". Route events must never include user content."
+        )
+    }
+}
+
+private fun findForbiddenTelemetryKeys(value: Any?, path: String = ""): List<String> {
+    return when (value) {
+        is Map<*, *> -> value.entries.flatMap { entry ->
+            val key = entry.key as? String ?: return@flatMap emptyList<String>()
+            val fullPath = if (path.isEmpty()) key else "$path.$key"
+            if (key in FORBIDDEN_TELEMETRY_KEYS) {
+                listOf(fullPath)
+            } else {
+                findForbiddenTelemetryKeys(entry.value, fullPath)
+            }
         }
+        is List<*> -> value.flatMapIndexed { index, item ->
+            findForbiddenTelemetryKeys(item, "$path[$index]")
+        }
+        else -> emptyList()
+    }
+}
+
+private fun scrubForbiddenTelemetryValue(value: Any?): Any? {
+    return when (value) {
+        is Map<*, *> -> buildMap<String, Any?> {
+            for ((key, child) in value) {
+                val stringKey = key as? String ?: continue
+                if (stringKey in FORBIDDEN_TELEMETRY_KEYS) {
+                    continue
+                }
+                put(stringKey, scrubForbiddenTelemetryValue(child))
+            }
+        }
+        is List<*> -> value.map { scrubForbiddenTelemetryValue(it) }
+        else -> value
     }
 }
 
