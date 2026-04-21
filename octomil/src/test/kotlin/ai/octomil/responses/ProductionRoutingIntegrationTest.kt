@@ -47,7 +47,7 @@ class ProductionRoutingIntegrationTest {
         assertEquals("local", response.routeMetadata!!.execution!!.locality)
         assertEquals("sdk_runtime", response.routeMetadata!!.execution!!.mode)
         assertEquals("gemma-2b", response.routeMetadata!!.model.requested.ref)
-        assertEquals("direct", response.routeMetadata!!.model.requested.kind)
+        assertEquals("model", response.routeMetadata!!.model.requested.kind)
     }
 
     @Test
@@ -74,8 +74,7 @@ class ProductionRoutingIntegrationTest {
         )
 
         assertNotNull(response.routeMetadata)
-        // Experiments resolve like deployments per ModelRefParser
-        assertEquals("deployment", response.routeMetadata!!.model.requested.kind)
+        assertEquals("experiment", response.routeMetadata!!.model.requested.kind)
     }
 
     @Test
@@ -112,7 +111,7 @@ class ProductionRoutingIntegrationTest {
         assertEquals(1, events.size)
         val event = events.first()
         assertEquals("chat", event.capability)
-        assertEquals("direct", event.modelRefKind)
+        assertEquals("model", event.modelRefKind)
         assertFalse(event.fallbackUsed)
     }
 
@@ -255,10 +254,9 @@ class ProductionRoutingIntegrationTest {
     }
 
     @Test
-    fun `experiment ref kind is deployment`() {
-        // Per contract: experiments resolve like deployments
+    fun `experiment ref kind is experiment`() {
         val ref = ai.octomil.runtime.routing.ModelRefParser.parse("exp_v1/variant_a")
-        assertEquals("deployment", ref.kind)
+        assertEquals("experiment", ref.kind)
         assertEquals("exp_v1/variant_a", ref.ref)
     }
 
@@ -277,10 +275,150 @@ class ProductionRoutingIntegrationTest {
     }
 
     @Test
-    fun `plain model ref kind is direct`() {
+    fun `plain model ref kind is model`() {
         val ref = ai.octomil.runtime.routing.ModelRefParser.parse("gemma-2b")
-        assertEquals("direct", ref.kind)
+        assertEquals("model", ref.kind)
         assertEquals("gemma-2b", ref.ref)
+    }
+
+    // =========================================================================
+    // 6. Private policy enforcement
+    // =========================================================================
+
+    @Test
+    fun `private routing policy does not use cloud fallback`() = runTest {
+        val runner = ai.octomil.runtime.routing.CandidateAttemptRunner(
+            fallbackAllowed = false,
+        )
+        val result = runner.run(
+            candidates = listOf(
+                ai.octomil.runtime.planner.RuntimeCandidatePlan(
+                    locality = "local", priority = 0, confidence = 1.0,
+                    reason = "private policy", engine = "litert",
+                ),
+            ),
+        )
+        // With private policy, fallback should not be allowed
+        assertFalse(result.fallbackUsed)
+    }
+
+    @Test
+    fun `isFallbackAllowed returns false for private and local_only policies`() {
+        assertFalse(ai.octomil.runtime.routing.RequestRouter.isFallbackAllowed("private"))
+        assertFalse(ai.octomil.runtime.routing.RequestRouter.isFallbackAllowed("local_only"))
+        assertTrue(ai.octomil.runtime.routing.RequestRouter.isFallbackAllowed("local_first"))
+        assertTrue(ai.octomil.runtime.routing.RequestRouter.isFallbackAllowed("cloud_first"))
+        assertTrue(ai.octomil.runtime.routing.RequestRouter.isFallbackAllowed("cloud_only"))
+        assertTrue(ai.octomil.runtime.routing.RequestRouter.isFallbackAllowed(null))
+    }
+
+    // =========================================================================
+    // 7. local_first fallback: local fails then cloud
+    // =========================================================================
+
+    @Test
+    fun `local_first fallback - local fails then cloud succeeds`() = runTest {
+        val runner = ai.octomil.runtime.routing.CandidateAttemptRunner(
+            fallbackAllowed = true,
+        )
+        val result = runner.runWithInference(
+            candidates = listOf(
+                ai.octomil.runtime.planner.RuntimeCandidatePlan(
+                    locality = "local", priority = 0, confidence = 1.0,
+                    reason = "local", engine = "litert",
+                ),
+                ai.octomil.runtime.planner.RuntimeCandidatePlan(
+                    locality = "cloud", priority = 1, confidence = 0.9,
+                    reason = "cloud", engine = "cloud",
+                ),
+            ),
+        ) { candidate, _ ->
+            if (candidate.locality == "local") {
+                throw RuntimeException("model not loaded")
+            }
+            "cloud response"
+        }
+
+        assertTrue(result.fallbackUsed)
+        assertEquals("cloud response", result.value)
+        assertEquals("cloud", result.selectedAttempt?.locality)
+        assertEquals(2, result.attempts.size)
+    }
+
+    // =========================================================================
+    // 8. cloud_first behavior
+    // =========================================================================
+
+    @Test
+    fun `cloud_first policy selects cloud as primary`() {
+        val context = ai.octomil.runtime.routing.RequestRoutingContext(
+            model = "gemma-2b",
+            routingPolicy = "cloud_first",
+        )
+        val router = ai.octomil.runtime.routing.RequestRouter()
+        val decision = router.resolve(context)
+
+        // Without a plan, cloud_first falls through to hosted gateway
+        assertEquals("cloud", decision.locality)
+        assertEquals("hosted_gateway", decision.mode)
+    }
+
+    // =========================================================================
+    // 9. Capability ref via model parser
+    // =========================================================================
+
+    @Test
+    fun `capability ref kind is capability`() {
+        val ref = ai.octomil.runtime.routing.ModelRefParser.parse("@capability/embeddings")
+        assertEquals("capability", ref.kind)
+        assertEquals("@capability/embeddings", ref.ref)
+    }
+
+    // =========================================================================
+    // 10. Route metadata present on streamed responses with all ref types
+    // =========================================================================
+
+    @Test
+    fun `stream with deployment ref attaches correct model ref kind`() = runTest {
+        val runtime = streamingRuntime(listOf(RuntimeChunk(text = "result")))
+        val responses = OctomilResponses(runtimeResolver = { runtime })
+
+        val events = responses.stream(
+            ResponseRequest(model = "deploy_xyz789", input = listOf(InputItem.text("query")))
+        ).toList()
+
+        val done = events.filterIsInstance<ResponseStreamEvent.Done>().first()
+        assertNotNull(done.response.routeMetadata)
+        assertEquals("deployment", done.response.routeMetadata!!.model.requested.kind)
+        assertEquals("deploy_xyz789", done.response.routeMetadata!!.model.requested.ref)
+    }
+
+    @Test
+    fun `stream with app ref attaches correct model ref kind`() = runTest {
+        val runtime = streamingRuntime(listOf(RuntimeChunk(text = "result")))
+        val responses = OctomilResponses(runtimeResolver = { runtime })
+
+        val events = responses.stream(
+            ResponseRequest(model = "@app/my-app/chat", input = listOf(InputItem.text("query")))
+        ).toList()
+
+        val done = events.filterIsInstance<ResponseStreamEvent.Done>().first()
+        assertNotNull(done.response.routeMetadata)
+        assertEquals("app", done.response.routeMetadata!!.model.requested.kind)
+    }
+
+    @Test
+    fun `stream with experiment ref attaches correct model ref kind`() = runTest {
+        val runtime = streamingRuntime(listOf(RuntimeChunk(text = "result")))
+        val responses = OctomilResponses(runtimeResolver = { runtime })
+
+        val events = responses.stream(
+            ResponseRequest(model = "exp_abc/variant_b", input = listOf(InputItem.text("query")))
+        ).toList()
+
+        val done = events.filterIsInstance<ResponseStreamEvent.Done>().first()
+        assertNotNull(done.response.routeMetadata)
+        assertEquals("experiment", done.response.routeMetadata!!.model.requested.kind)
     }
 
     // =========================================================================
