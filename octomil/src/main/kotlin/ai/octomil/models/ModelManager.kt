@@ -374,6 +374,81 @@ class ModelManager(
             ?: throw ModelDownloadException("Empty download response")
     }
 
+    // =========================================================================
+    // Local Asset Status
+    // =========================================================================
+
+    /**
+     * Check the local asset status for a model without triggering a download.
+     *
+     * This is idempotent: calling it a second time after a successful download
+     * returns [LocalAssetStatus.Ready] immediately from the cache.
+     *
+     * Use this to build UI that shows whether a model is ready, needs to be
+     * downloaded, or is currently being prepared — without blocking the app
+     * or the main thread.
+     *
+     * @param modelId Model identifier.
+     * @return A [LocalAssetStatus] describing the current state.
+     */
+    suspend fun checkAssetStatus(
+        modelId: String = config.modelId ?: error("modelId required for status check"),
+    ): LocalAssetStatus = withContext(ioDispatcher) {
+        // 1. Check if a download is in progress
+        val currentState = _downloadState.value
+        if (currentState is DownloadState.Downloading ||
+            currentState is DownloadState.CheckingForUpdates ||
+            currentState is DownloadState.Verifying
+        ) {
+            val progress = (currentState as? DownloadState.Downloading)?.progress
+            return@withContext LocalAssetStatus.Preparing(
+                progress = progress?.let { it.bytesDownloaded.toFloat() / it.totalBytes.coerceAtLeast(1) }
+            )
+        }
+
+        // 2. Check cache — if found, it's ready (idempotent second-run path)
+        mutex.withLock {
+            val cached = cacheMetadata.values
+                .filter { it.modelId == modelId && it.isValid() }
+                .maxByOrNull { it.downloadedAt }
+
+            if (cached != null) {
+                return@withContext LocalAssetStatus.Ready(
+                    localFile = File(cached.filePath),
+                    model = cached,
+                )
+            }
+        }
+
+        // 3. Not cached — try to resolve the download URL from the server
+        try {
+            val version = resolveVersion(modelId)
+            val resolution = resolveModelFormat(modelId, version)
+            val downloadInfo = fetchDownloadUrl(modelId, resolution.version, resolution.format)
+
+            return@withContext LocalAssetStatus.DownloadRequired(
+                url = downloadInfo.downloadUrl,
+                sizeBytes = downloadInfo.sizeBytes,
+            )
+        } catch (e: ModelDownloadException) {
+            val reason = when (e.downloadErrorCode) {
+                ModelDownloadException.ErrorCode.NETWORK_ERROR ->
+                    "Network unavailable. Connect to the internet to download model '$modelId'."
+                ModelDownloadException.ErrorCode.NOT_FOUND ->
+                    "Model '$modelId' not found on the server."
+                ModelDownloadException.ErrorCode.UNAUTHORIZED ->
+                    "Authentication error. Check your API key or device registration."
+                else ->
+                    e.message ?: "Failed to check model status."
+            }
+            return@withContext LocalAssetStatus.Unavailable(reason = reason)
+        } catch (e: Exception) {
+            return@withContext LocalAssetStatus.Unavailable(
+                reason = "Failed to check model status: ${e.message}"
+            )
+        }
+    }
+
     /**
      * Get a cached model by ID and version.
      *

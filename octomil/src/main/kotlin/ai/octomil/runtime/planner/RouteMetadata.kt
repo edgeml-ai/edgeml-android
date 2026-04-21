@@ -144,6 +144,10 @@ data class RouteMetadata(
                     version = art.modelVersion,
                     format = art.format,
                     digest = art.digest,
+                    cache = ArtifactCache(
+                        status = if (art.uri != null) "miss" else "not_applicable",
+                        managedBy = "sdk",
+                    ),
                 )
             }
 
