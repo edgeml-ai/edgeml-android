@@ -17,11 +17,15 @@ import ai.octomil.runtime.core.RuntimeToolCall
 import ai.octomil.runtime.core.RuntimeToolDef
 import ai.octomil.runtime.core.RuntimeUsage
 import ai.octomil.runtime.planner.RouteMetadata
+import ai.octomil.runtime.planner.RuntimePlanner
 import ai.octomil.runtime.planner.RuntimeCandidatePlan
+import ai.octomil.runtime.planner.RuntimePlanResponse
 import ai.octomil.runtime.routing.CandidateAttemptRunner
+import ai.octomil.runtime.routing.FallbackTrigger
 import ai.octomil.runtime.routing.ModelRefParser
 import ai.octomil.runtime.routing.RequestRouter
 import ai.octomil.runtime.routing.RequestRoutingContext
+import ai.octomil.runtime.routing.RouteAttempt
 import ai.octomil.runtime.routing.RouteEvent
 import ai.octomil.runtime.routing.RoutingDecisionResult
 import ai.octomil.sdk.DeviceContext
@@ -45,29 +49,27 @@ class OctomilResponses(
     private val catalogProvider: (() -> ModelCatalogService?)? = null,
     private val deviceContext: DeviceContext? = null,
     private val routeEventListener: RouteEventListener? = null,
+    private val runtimePlanner: RuntimePlanner? = null,
 ) {
     private val responseCache = LinkedHashMap<String, Response>(100, 0.75f, true)
     private val requestRouter = RequestRouter()
 
     suspend fun create(request: ResponseRequest): Response {
-        val runtime = resolveRuntime(request.model, request.modelRef)
         val effectiveRequest = applyConversationChaining(request)
         val runtimeRequest = buildRuntimeRequest(effectiveRequest)
 
         // Resolve routing via RequestRouter for plan-backed requests,
         // or fall through to direct execution with attempt metadata.
-        val routingContext = RequestRoutingContext(
-            model = request.model,
-            capability = inferCapability(request),
-            streaming = false,
-            routingPolicy = request.routing?.code,
-        )
+        val routingContext = buildRoutingContext(request, streaming = false)
         val routingDecision = requestRouter.resolve(routingContext)
 
-        val attemptResult = CandidateAttemptRunner(fallbackAllowed = false).runWithInference(
-            candidates = listOf(attemptCandidate(request.model)),
-        ) { _, _ ->
-            runtime.run(runtimeRequest)
+        val attemptResult = CandidateAttemptRunner(
+            fallbackAllowed = RequestRouter.isFallbackAllowed(request.routing?.code),
+        ).runWithInference(
+            candidates = buildProductionCandidates(routingDecision, routingContext, request.model),
+        ) { _, attempt ->
+            val selectedRuntime = resolveRuntimeForAttempt(request, attempt)
+            selectedRuntime.run(runtimeRequest)
         }
         val runtimeResponse = attemptResult.value ?: throw (
             attemptResult.error ?: OctomilException(
@@ -76,32 +78,41 @@ class OctomilResponses(
             )
         )
 
-        val response = buildResponse(request.model, runtimeResponse, routingDecision.routeMetadata)
+        val routeMetadata = routingDecision.routeMetadata.copy(
+            execution = routingDecision.routeMetadata.execution?.copy(
+                locality = attemptResult.selectedAttempt?.locality ?: routingDecision.locality,
+                mode = attemptResult.selectedAttempt?.mode ?: routingDecision.mode,
+                engine = attemptResult.selectedAttempt?.engine ?: routingDecision.engine,
+            ),
+            fallback = routingDecision.routeMetadata.fallback.copy(
+                used = attemptResult.fallbackUsed,
+                trigger = attemptResult.fallbackTrigger,
+            ),
+            attempts = attemptResult.attempts,
+        )
+
+        val response = buildResponse(request.model, runtimeResponse, routeMetadata)
         responseCache[response.id] = response
 
-        // Emit route event telemetry (privacy-safe, never contains content)
-        emitRouteEvent(routingDecision, response.id, inferCapability(request))
+        emitRouteEvent(routingDecision.copy(routeMetadata = routeMetadata), response.id, inferCapability(request))
 
         return response
     }
 
     fun stream(request: ResponseRequest): Flow<ResponseStreamEvent> = flow {
-        val runtime = resolveRuntime(request.model, request.modelRef)
         val effectiveRequest = applyConversationChaining(request)
         val runtimeRequest = buildRuntimeRequest(effectiveRequest)
 
-        // Resolve routing via RequestRouter
-        val routingContext = RequestRoutingContext(
-            model = request.model,
-            capability = inferCapability(request),
-            streaming = true,
-            routingPolicy = request.routing?.code,
-        )
+        val routingContext = buildRoutingContext(request, streaming = true)
         val routingDecision = requestRouter.resolve(routingContext)
 
-        val attemptRunner = CandidateAttemptRunner(fallbackAllowed = false, streaming = true)
-        val readiness = attemptRunner.run(listOf(attemptCandidate(request.model)))
-        if (readiness.selectedAttempt == null) {
+        val candidates = buildProductionCandidates(routingDecision, routingContext, request.model)
+        val attemptRunner = CandidateAttemptRunner(
+            fallbackAllowed = RequestRouter.isFallbackAllowed(request.routing?.code),
+            streaming = true,
+        )
+        val readiness = attemptRunner.run(candidates)
+        val initialAttempt = readiness.selectedAttempt ?: run {
             throw OctomilException(
                 OctomilErrorCode.RUNTIME_UNAVAILABLE,
                 "No runtime for model: ${request.model}",
@@ -113,48 +124,53 @@ class OctomilResponses(
         var lastUsage: RuntimeUsage? = null
         var chunkIndex = 0
         var firstOutputEmitted = false
+        var fallbackUsed = false
+        var fallbackTrigger = readiness.fallbackTrigger
+        var selectedAttempt = initialAttempt
+        val routeAttempts = readiness.attempts.toMutableList()
 
         try {
-            runtime.stream(runtimeRequest).collect { chunk ->
-                chunk.text?.let { text ->
-                    firstOutputEmitted = true
-                    textParts.add(text)
-                    emit(ResponseStreamEvent.TextDelta(text))
-                }
-
-                chunk.toolCallDelta?.let { delta ->
-                    firstOutputEmitted = true
-                    val buffer = toolCallBuffers.getOrPut(delta.index) { ToolCallBuffer() }
-                    if (delta.id != null) buffer.id = delta.id
-                    if (delta.name != null) buffer.name = delta.name
-                    if (delta.argumentsDelta != null) buffer.arguments.append(delta.argumentsDelta)
-
-                    emit(
-                        ResponseStreamEvent.ToolCallDelta(
-                            index = delta.index,
-                            id = delta.id,
-                            name = delta.name,
-                            argumentsDelta = delta.argumentsDelta,
-                        )
-                    )
-                }
-
-                // Emit inference.chunk_produced telemetry for every chunk
-                try {
-                    TelemetryQueue.shared?.reportInferenceChunkProduced(
-                        modelId = request.model,
-                        chunkIndex = chunkIndex,
-                    )
-                } catch (_: Exception) {
-                    // Telemetry must never crash the streaming flow
-                }
-                chunkIndex++
-
-                if (chunk.usage != null) lastUsage = chunk.usage
-            }
+            collectRuntimeStream(
+                runtime = resolveRuntimeForAttempt(request, selectedAttempt),
+                runtimeRequest = runtimeRequest,
+                model = request.model,
+                textParts = textParts,
+                toolCallBuffers = toolCallBuffers,
+                chunkIndexProvider = { chunkIndex },
+                chunkIndexConsumer = { chunkIndex = it },
+                firstOutputConsumer = { firstOutputEmitted = true },
+                usageConsumer = { lastUsage = it },
+                emitEvent = { emit(it) },
+            )
         } catch (error: Throwable) {
-            attemptRunner.shouldFallbackAfterInferenceError(firstOutputEmitted)
-            throw error
+            if (!attemptRunner.shouldFallbackAfterInferenceError(firstOutputEmitted)) {
+                throw error
+            }
+            val selectedIndex = selectedAttempt.index
+            val fallbackCandidates = candidates.drop(selectedIndex + 1)
+            if (fallbackCandidates.isEmpty()) throw error
+            val fallbackReadiness = CandidateAttemptRunner(fallbackAllowed = false, streaming = true).run(fallbackCandidates)
+            val fallbackAttempt = fallbackReadiness.selectedAttempt ?: throw error
+            routeAttempts += fallbackReadiness.attempts
+            fallbackUsed = true
+            fallbackTrigger = fallbackTrigger ?: FallbackTrigger(
+                code = "inference_error_before_first_output",
+                stage = "inference",
+                message = error.message ?: "stream failed before first output",
+            )
+            selectedAttempt = fallbackAttempt
+            collectRuntimeStream(
+                runtime = resolveRuntimeForAttempt(request, fallbackAttempt),
+                runtimeRequest = runtimeRequest,
+                model = request.model,
+                textParts = textParts,
+                toolCallBuffers = toolCallBuffers,
+                chunkIndexProvider = { chunkIndex },
+                chunkIndexConsumer = { chunkIndex = it },
+                firstOutputConsumer = { firstOutputEmitted = true },
+                usageConsumer = { lastUsage = it },
+                emitEvent = { emit(it) },
+            )
         }
 
         val output = mutableListOf<OutputItem>()
@@ -179,30 +195,152 @@ class OctomilResponses(
             ResponseUsage(it.promptTokens, it.completionTokens, it.totalTokens)
         }
 
+        val routeMetadata = routingDecision.routeMetadata.copy(
+            execution = routingDecision.routeMetadata.execution?.copy(
+                locality = selectedAttempt.locality,
+                mode = selectedAttempt.mode,
+                engine = selectedAttempt.engine,
+            ),
+            fallback = routingDecision.routeMetadata.fallback.copy(
+                used = fallbackUsed || readiness.fallbackUsed,
+                trigger = fallbackTrigger,
+            ),
+            attempts = routeAttempts,
+        )
+
         val response = Response(
             id = responseId,
             model = request.model,
             output = output,
             finishReason = finishReason,
             usage = usage,
-            routeMetadata = routingDecision.routeMetadata,
+            routeMetadata = routeMetadata,
         )
         responseCache[response.id] = response
 
-        // Emit route event telemetry (privacy-safe, never contains content)
-        emitRouteEvent(routingDecision, response.id, inferCapability(request))
+        emitRouteEvent(routingDecision.copy(routeMetadata = routeMetadata), response.id, inferCapability(request))
 
         emit(ResponseStreamEvent.Done(response))
     }
 
-    private fun attemptCandidate(model: String): RuntimeCandidatePlan =
+    private fun buildRoutingContext(request: ResponseRequest, streaming: Boolean): RequestRoutingContext {
+        val policy = request.routing?.code ?: "local_first"
+        val selection = runtimePlanner?.resolve(
+            model = request.model,
+            capability = inferCapability(request),
+            routingPolicy = policy,
+            allowNetwork = request.routing?.code != "private",
+        )
+        val plan = selection?.let {
+            RuntimePlanResponse(
+                model = request.model,
+                capability = inferCapability(request),
+                policy = policy,
+                candidates = listOf(
+                    RuntimeCandidatePlan(
+                        locality = it.locality,
+                        priority = 0,
+                        confidence = 1.0,
+                        reason = it.reason.ifEmpty { "runtime planner selection" },
+                        engine = it.engine,
+                        artifact = it.artifact,
+                    )
+                ),
+                fallbackCandidates = it.fallbackCandidates,
+                fallbackAllowed = RequestRouter.isFallbackAllowed(request.routing?.code),
+                serverGeneratedAt = it.source,
+            )
+        }
+
+        return RequestRoutingContext(
+            model = request.model,
+            capability = inferCapability(request),
+            streaming = streaming,
+            routingPolicy = request.routing?.code,
+            cachedPlan = plan,
+        )
+    }
+
+    private fun buildProductionCandidates(
+        decision: RoutingDecisionResult,
+        context: RequestRoutingContext,
+        model: String,
+    ): List<RuntimeCandidatePlan> =
+        if (context.cachedPlan != null) {
+            RequestRouter.candidatesFromPlan(context.cachedPlan)
+        } else if (decision.attemptResult.attempts.isNotEmpty()) {
+            decision.attemptResult.attempts.map {
+                RuntimeCandidatePlan(
+                    locality = it.locality,
+                    priority = it.index,
+                    confidence = 1.0,
+                    reason = it.reason.message,
+                    engine = it.engine,
+                )
+            }
+        } else {
+            listOf(attemptCandidate(model, decision.locality, decision.engine))
+        }
+
+    private fun attemptCandidate(model: String, locality: String = "local", engine: String? = "registered"): RuntimeCandidatePlan =
         RuntimeCandidatePlan(
-            locality = "local",
+            locality = locality,
             priority = 0,
             confidence = 1.0,
             reason = "registered model runtime",
-            engine = "registered",
+            engine = engine,
         )
+
+    private fun resolveRuntimeForAttempt(request: ResponseRequest, attempt: RouteAttempt): ModelRuntime =
+        resolveRuntime(request.model, request.modelRef)
+
+    private suspend fun kotlinx.coroutines.flow.FlowCollector<ResponseStreamEvent>.collectRuntimeStream(
+        runtime: ModelRuntime,
+        runtimeRequest: RuntimeRequest,
+        model: String,
+        textParts: MutableList<String>,
+        toolCallBuffers: MutableMap<Int, ToolCallBuffer>,
+        chunkIndexProvider: () -> Int,
+        chunkIndexConsumer: (Int) -> Unit,
+        firstOutputConsumer: () -> Unit,
+        usageConsumer: (RuntimeUsage) -> Unit,
+        emitEvent: suspend (ResponseStreamEvent) -> Unit,
+    ) {
+        runtime.stream(runtimeRequest).collect { chunk ->
+            chunk.text?.let { text ->
+                firstOutputConsumer()
+                textParts.add(text)
+                emitEvent(ResponseStreamEvent.TextDelta(text))
+            }
+
+            chunk.toolCallDelta?.let { delta ->
+                firstOutputConsumer()
+                val buffer = toolCallBuffers.getOrPut(delta.index) { ToolCallBuffer() }
+                if (delta.id != null) buffer.id = delta.id
+                if (delta.name != null) buffer.name = delta.name
+                if (delta.argumentsDelta != null) buffer.arguments.append(delta.argumentsDelta)
+                emitEvent(
+                    ResponseStreamEvent.ToolCallDelta(
+                        index = delta.index,
+                        id = delta.id,
+                        name = delta.name,
+                        argumentsDelta = delta.argumentsDelta,
+                    )
+                )
+            }
+
+            try {
+                TelemetryQueue.shared?.reportInferenceChunkProduced(
+                    modelId = model,
+                    chunkIndex = chunkIndexProvider(),
+                )
+            } catch (_: Exception) {
+                // Telemetry must never crash the streaming flow
+            }
+            chunkIndexConsumer(chunkIndexProvider() + 1)
+            if (chunk.usage != null) usageConsumer(chunk.usage)
+        }
+    }
 
     private fun resolveRuntime(model: String, ref: ModelRef? = null): ModelRuntime {
         // 1. ModelRef via catalog (capability-based or ID-based)
