@@ -153,8 +153,9 @@ class OctomilResponsesTest {
             val routeEvents = queue.bufferedV2Events.filter { it.name == "route.decision" }
             assertEquals(1, routeEvents.size)
             val attrs = routeEvents[0].attributes
-            assertEquals("responses", attrs["route.capability"]?.content)
+            assertEquals("chat", attrs["route.capability"]?.content)
             assertEquals("local", attrs["route.final_locality"]?.content)
+            assertEquals("local", attrs["route.selected_locality"]?.content)
             assertEquals("1", attrs["route.candidate_attempts"]?.content)
         } finally {
             queue.close()
@@ -184,8 +185,9 @@ class OctomilResponsesTest {
             val routeEvents = queue.bufferedV2Events.filter { it.name == "route.decision" }
             assertEquals(1, routeEvents.size)
             val attrs = routeEvents[0].attributes
-            assertEquals("responses", attrs["route.capability"]?.content)
+            assertEquals("chat", attrs["route.capability"]?.content)
             assertEquals("local", attrs["route.final_locality"]?.content)
+            assertEquals("local", attrs["route.selected_locality"]?.content)
             assertEquals("1", attrs["route.candidate_attempts"]?.content)
         } finally {
             queue.close()

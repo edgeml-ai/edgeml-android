@@ -33,6 +33,8 @@ data class RouteEvent(
     @SerialName("planner_source") val plannerSource: String? = null,
     /** The locality where inference was ultimately executed. */
     @SerialName("selected_locality") val selectedLocality: String,
+    /** Backward-compatible route metadata locality alias. */
+    @SerialName("final_locality") val finalLocality: String = selectedLocality,
     /** The execution mode used (sdk_runtime, hosted_gateway, external_endpoint). */
     @SerialName("final_mode") val finalMode: String,
     /** Engine used for inference (e.g. litert, llamacpp, cloud). */
@@ -68,6 +70,36 @@ data class RouteEvent(
             val timestamp = System.currentTimeMillis().toString(36)
             val random = (Math.random() * 1e10).toLong().toString(36)
             return "route_${timestamp}${random}"
+        }
+
+        /** Build a [RouteEvent] from a production routing decision. */
+        fun from(
+            decision: RoutingDecisionResult,
+            requestId: String,
+            capability: String,
+        ): RouteEvent {
+            val meta = decision.routeMetadata
+            val execution = meta.execution
+            val parsedRef = ModelRefParser.parse(meta.model.requested.ref)
+            return RouteEvent(
+                requestId = requestId,
+                capability = capability,
+                plannerSource = meta.planner.source,
+                selectedLocality = execution?.locality ?: decision.locality,
+                finalMode = execution?.mode ?: decision.mode,
+                engine = execution?.engine ?: decision.engine,
+                fallbackUsed = meta.fallback.used,
+                fallbackTriggerCode = meta.fallback.trigger?.code,
+                fallbackTriggerStage = meta.fallback.trigger?.stage,
+                candidateAttempts = meta.attempts.size,
+                modelRef = meta.model.requested.ref,
+                modelRefKind = meta.model.requested.kind,
+                appSlug = (parsedRef as? ParsedModelRef.AppRef)?.slug,
+                deploymentId = (parsedRef as? ParsedModelRef.DeploymentRef)?.deploymentId,
+                experimentId = (parsedRef as? ParsedModelRef.ExperimentRef)?.experimentId,
+                variantId = meta.model.resolved?.variantId ?: (parsedRef as? ParsedModelRef.ExperimentRef)?.variantId,
+                artifactId = meta.artifact?.id,
+            )
         }
     }
 }
