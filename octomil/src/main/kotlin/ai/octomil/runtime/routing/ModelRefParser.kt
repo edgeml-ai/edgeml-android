@@ -7,46 +7,50 @@ package ai.octomil.runtime.routing
  * - `@app/slug/capability` -> AppRef(slug, capability)
  * - `@capability/cap`      -> CapabilityRef(cap)
  * - `deploy_xxx`           -> DeploymentRef(id)
- * - `exp/variant`          -> ExperimentRef(experimentId, variantId)
- * - bare string            -> DirectRef(model)
+ * - `exp_id/variant`       -> ExperimentRef(experimentId, variantId)
+ * - `alias:name`           -> AliasRef(name)
+ * - bare string            -> ModelRef(model)
  *
- * The parser is deterministic and offline -- no network calls. Parsing failures
- * fall through to [ParsedModelRef.DirectRef] so unknown formats are treated
- * as opaque model identifiers.
+ * The parser is deterministic and offline -- no network calls. Malformed scoped
+ * references return [ParsedModelRef.UnknownRef]; plain strings are treated as
+ * model IDs.
  */
 object ModelRefParser {
 
     fun parse(model: String): ParsedModelRef {
-        if (model.isBlank()) return ParsedModelRef.DirectRef(model)
+        val trimmed = model.trim()
+        if (trimmed.isBlank()) return ParsedModelRef.DefaultRef
 
         // @app/slug/capability
-        if (model.startsWith("@app/")) {
-            val parts = model.removePrefix("@app/").split("/", limit = 2)
+        if (trimmed.startsWith("@app/")) {
+            val parts = trimmed.removePrefix("@app/").split("/", limit = 2)
             if (parts.size == 2 && parts[0].isNotEmpty() && parts[1].isNotEmpty()) {
                 return ParsedModelRef.AppRef(slug = parts[0], capability = parts[1])
             }
+            return ParsedModelRef.UnknownRef(trimmed)
         }
 
         // @capability/cap
-        if (model.startsWith("@capability/")) {
-            val cap = model.removePrefix("@capability/")
+        if (trimmed.startsWith("@capability/")) {
+            val cap = trimmed.removePrefix("@capability/")
             if (cap.isNotEmpty()) {
                 return ParsedModelRef.CapabilityRef(capability = cap)
             }
+            return ParsedModelRef.UnknownRef(trimmed)
         }
 
         // deploy_xxx
-        if (model.startsWith("deploy_")) {
-            return ParsedModelRef.DeploymentRef(deploymentId = model)
+        if (trimmed.startsWith("deploy_") && trimmed.length > "deploy_".length) {
+            return ParsedModelRef.DeploymentRef(deploymentId = trimmed)
         }
 
         // exp/variant (must contain exactly one slash, and the prefix before slash
         // must start with "exp" or "experiment")
-        val slashIdx = model.indexOf('/')
-        if (slashIdx > 0 && slashIdx < model.length - 1) {
-            val prefix = model.substring(0, slashIdx)
-            val variant = model.substring(slashIdx + 1)
-            if (prefix.startsWith("exp")) {
+        val slashIdx = trimmed.indexOf('/')
+        if (slashIdx > 0 && slashIdx < trimmed.length - 1) {
+            val prefix = trimmed.substring(0, slashIdx)
+            val variant = trimmed.substring(slashIdx + 1)
+            if (prefix.startsWith("exp_")) {
                 return ParsedModelRef.ExperimentRef(
                     experimentId = prefix,
                     variantId = variant,
@@ -54,7 +58,15 @@ object ModelRefParser {
             }
         }
 
-        return ParsedModelRef.DirectRef(model)
+        if (trimmed.startsWith("alias:") && trimmed.length > "alias:".length) {
+            return ParsedModelRef.AliasRef(trimmed)
+        }
+
+        if (trimmed.startsWith("@") || trimmed.contains("://")) {
+            return ParsedModelRef.UnknownRef(trimmed)
+        }
+
+        return ParsedModelRef.ModelRef(trimmed)
     }
 }
 
@@ -84,12 +96,27 @@ sealed class ParsedModelRef {
     }
 
     data class ExperimentRef(val experimentId: String, val variantId: String) : ParsedModelRef() {
-        override val kind = "deployment"  // experiments resolve like deployments
+        override val kind = "experiment"
         override val ref = "$experimentId/$variantId"
     }
 
-    data class DirectRef(val model: String) : ParsedModelRef() {
-        override val kind = "direct"
+    data class AliasRef(val alias: String) : ParsedModelRef() {
+        override val kind = "alias"
+        override val ref = alias
+    }
+
+    object DefaultRef : ParsedModelRef() {
+        override val kind = "default"
+        override val ref = ""
+    }
+
+    data class UnknownRef(val raw: String) : ParsedModelRef() {
+        override val kind = "unknown"
+        override val ref = raw
+    }
+
+    data class ModelRef(val model: String) : ParsedModelRef() {
+        override val kind = "model"
         override val ref = model
     }
 }

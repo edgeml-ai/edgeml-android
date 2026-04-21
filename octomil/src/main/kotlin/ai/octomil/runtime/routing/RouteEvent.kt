@@ -101,6 +101,7 @@ data class RouteEvent(
                 experimentId = (parsedRef as? ParsedModelRef.ExperimentRef)?.experimentId,
                 variantId = meta.model.resolved?.variantId ?: (parsedRef as? ParsedModelRef.ExperimentRef)?.variantId,
                 artifactId = meta.artifact?.id,
+                cacheStatus = meta.artifact?.cache?.status,
             )
         }
     }
@@ -238,5 +239,6 @@ fun buildRouteEvent(
         experimentId = experimentId,
         variantId = variantId,
         artifactId = selected?.artifact?.id,
+        cacheStatus = selected?.artifact?.cache?.status,
     )
 }

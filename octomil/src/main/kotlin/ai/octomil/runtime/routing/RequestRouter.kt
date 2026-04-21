@@ -215,6 +215,16 @@ class RequestRouter {
                     kind = parsedRef.kind,
                 ),
             ),
+            artifact = selected?.artifact?.let {
+                ai.octomil.runtime.planner.RouteArtifact(
+                    id = it.id,
+                    digest = it.digest,
+                    cache = ai.octomil.runtime.planner.ArtifactCache(
+                        status = it.cache.status,
+                        managedBy = it.cache.managedBy,
+                    ),
+                )
+            },
             planner = PlannerInfo(source = plannerSource),
             fallback = FallbackInfo(
                 used = loopResult.fallbackUsed,
