@@ -199,8 +199,8 @@ afterEvaluate {
         publications {
             create<MavenPublication>("release") {
                 from(components["release"])
-                groupId = "ai.octomil"
-                artifactId = "octomil-client"
+                groupId = project.property("OCTOMIL_GROUP").toString()
+                artifactId = "octomil-android"
                 version = project.property("OCTOMIL_VERSION").toString()
 
                 pom {
@@ -230,8 +230,8 @@ afterEvaluate {
         repositories {
             maven {
                 name = "SonatypeOSSRH"
-                val releasesUrl = uri("https://s01.oss.sonatype.org/service/local/staging/deploy/maven2/")
-                val snapshotsUrl = uri("https://s01.oss.sonatype.org/content/repositories/snapshots/")
+                val releasesUrl = uri("https://ossrh-staging-api.central.sonatype.com/service/local/staging/deploy/maven2/")
+                val snapshotsUrl = uri("https://central.sonatype.com/repository/maven-snapshots/")
                 url = if (project.property("OCTOMIL_VERSION").toString().endsWith("SNAPSHOT")) snapshotsUrl else releasesUrl
                 credentials {
                     username = System.getenv("OSSRH_USERNAME") ?: ""
@@ -241,10 +241,22 @@ afterEvaluate {
         }
     }
 
-    // Only sign when publishing to remote repos (GPG must be configured)
+    // Only sign when publishing to remote repos. CI can provide an in-memory
+    // key; local release machines may use the configured gpg command.
     if (System.getenv("OSSRH_USERNAME")?.isNotBlank() == true) {
         signing {
-            useGpgCmd()
+            val inMemoryKey =
+                providers.gradleProperty("signingInMemoryKey").orNull
+                    ?: System.getenv("SIGNING_IN_MEMORY_KEY")
+            val inMemoryKeyPassword =
+                providers.gradleProperty("signingInMemoryKeyPassword").orNull
+                    ?: System.getenv("SIGNING_IN_MEMORY_KEY_PASSWORD")
+
+            if (!inMemoryKey.isNullOrBlank()) {
+                useInMemoryPgpKeys(inMemoryKey, inMemoryKeyPassword)
+            } else {
+                useGpgCmd()
+            }
             sign(publishing.publications["release"])
         }
     }

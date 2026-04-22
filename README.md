@@ -19,7 +19,7 @@ repositories {
 }
 
 dependencies {
-    implementation("ai.octomil:octomil:1.2.0")
+    implementation("com.octomil:octomil-android:1.4.0")
 }
 ```
 
