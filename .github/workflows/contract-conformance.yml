@@ -10,10 +10,10 @@ permissions:
 
 jobs:
   conformance:
-    uses: octomil/octomil-contracts/.github/workflows/sdk-conformance.yml@v1.16.1
+    uses: octomil/octomil-contracts/.github/workflows/sdk-conformance.yml@v1.17.0
     with:
       sdk: android
-      contract-version: "1.16.1"
+      contract-version: "1.17.0"
       setup-command: "java -version && ./gradlew --version"
       codegen-command: "python3 .contract/scripts/sync_generated.py --sdk android --check --target-dir octomil/src/main/kotlin/ai/octomil/generated"
       test-command: "./gradlew :octomil:testDebugUnitTest --tests 'ai.octomil.conformance.*' && python3 .contract/ci/audit-sdks.py --sdk android --sdk-path . --out parity_report.json"
