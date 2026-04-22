@@ -259,6 +259,69 @@ class RuntimePlannerSchemasTest {
         assertTrue(plan.fallbackCandidates.isEmpty())
         assertEquals(604800, plan.planTtlSeconds)
         assertEquals("", plan.serverGeneratedAt)
+        assertNull(plan.resolution)
+    }
+
+    @Test
+    fun `RuntimePlanResponse deserializes deployment resolution from server`() {
+        val jsonStr = """{
+            "model": "gemma3-1b",
+            "capability": "chat",
+            "policy": "local_first",
+            "candidates": [],
+            "resolution": {
+                "ref_kind": "deployment",
+                "original_ref": "deploy_ios-chat-prod",
+                "resolved_model": "gemma3-1b",
+                "deployment_id": "dep-uuid-001",
+                "deployment_key": "ios-chat-prod"
+            }
+        }"""
+        val plan = json.decodeFromString(RuntimePlanResponse.serializer(), jsonStr)
+        assertNotNull(plan.resolution)
+        assertEquals("deployment", plan.resolution!!.refKind)
+        assertEquals("deploy_ios-chat-prod", plan.resolution!!.originalRef)
+        assertEquals("gemma3-1b", plan.resolution!!.resolvedModel)
+        assertEquals("dep-uuid-001", plan.resolution!!.deploymentId)
+        assertEquals("ios-chat-prod", plan.resolution!!.deploymentKey)
+        assertNull(plan.resolution!!.experimentId)
+    }
+
+    @Test
+    fun `RuntimePlanResponse deserializes experiment resolution from server`() {
+        val jsonStr = """{
+            "model": "gemma3-4b-q4",
+            "capability": "chat",
+            "policy": "local_first",
+            "candidates": [],
+            "resolution": {
+                "ref_kind": "experiment",
+                "original_ref": "chat-quality-test/treatment_a",
+                "resolved_model": "gemma3-4b-q4",
+                "experiment_id": "exp-uuid-001",
+                "variant_id": "var-uuid-001",
+                "variant_name": "treatment_a"
+            }
+        }"""
+        val plan = json.decodeFromString(RuntimePlanResponse.serializer(), jsonStr)
+        assertNotNull(plan.resolution)
+        assertEquals("experiment", plan.resolution!!.refKind)
+        assertEquals("exp-uuid-001", plan.resolution!!.experimentId)
+        assertEquals("var-uuid-001", plan.resolution!!.variantId)
+        assertEquals("treatment_a", plan.resolution!!.variantName)
+        assertNull(plan.resolution!!.deploymentId)
+    }
+
+    @Test
+    fun `RuntimePlanResponse without resolution field deserializes correctly`() {
+        val jsonStr = """{
+            "model": "gemma-2b",
+            "capability": "text",
+            "policy": "local_first",
+            "candidates": []
+        }"""
+        val plan = json.decodeFromString(RuntimePlanResponse.serializer(), jsonStr)
+        assertNull(plan.resolution)
     }
 
     // =========================================================================

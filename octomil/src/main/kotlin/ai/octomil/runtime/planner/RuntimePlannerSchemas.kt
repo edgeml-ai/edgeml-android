@@ -157,6 +157,28 @@ data class AppResolution(
 )
 
 /**
+ * Generalized resolution metadata for non-app model ref types.
+ *
+ * Returned by the server when the model ref resolves through a deployment,
+ * experiment, capability default, or plain model lookup. Carries the
+ * deployment_id, experiment_id, and variant_id needed for SDK route
+ * telemetry correlation.
+ */
+@Serializable
+data class ModelResolution(
+    @SerialName("ref_kind") val refKind: String,
+    @SerialName("original_ref") val originalRef: String,
+    @SerialName("resolved_model") val resolvedModel: String,
+    @SerialName("deployment_id") val deploymentId: String? = null,
+    @SerialName("deployment_key") val deploymentKey: String? = null,
+    @SerialName("experiment_id") val experimentId: String? = null,
+    @SerialName("variant_id") val variantId: String? = null,
+    @SerialName("variant_name") val variantName: String? = null,
+    @SerialName("capability") val capability: String? = null,
+    @SerialName("routing_policy") val routingPolicy: String? = null,
+)
+
+/**
  * Full plan response from `POST /api/v2/runtime/plan`.
  */
 @Serializable
@@ -170,6 +192,7 @@ data class RuntimePlanResponse(
     @SerialName("fallback_allowed") val fallbackAllowed: Boolean = true,
     @SerialName("server_generated_at") val serverGeneratedAt: String = "",
     @SerialName("app_resolution") val appResolution: AppResolution? = null,
+    @SerialName("resolution") val resolution: ModelResolution? = null,
 )
 
 // =========================================================================
