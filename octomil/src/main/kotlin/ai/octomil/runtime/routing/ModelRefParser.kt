@@ -39,9 +39,10 @@ object ModelRefParser {
             return ParsedModelRef.UnknownRef(trimmed)
         }
 
-        // deploy_xxx
-        if (trimmed.startsWith("deploy_") && trimmed.length > "deploy_".length) {
-            return ParsedModelRef.DeploymentRef(deploymentId = trimmed)
+        // deploy_xxx — always classify as deployment if prefix matches
+        if (trimmed.startsWith("deploy_")) {
+            val id = trimmed.removePrefix("deploy_")
+            return ParsedModelRef.DeploymentRef(deploymentId = id)
         }
 
         // exp/variant (must contain exactly one slash, and the prefix before slash
@@ -52,7 +53,7 @@ object ModelRefParser {
             val variant = trimmed.substring(slashIdx + 1)
             if (prefix.startsWith("exp_")) {
                 return ParsedModelRef.ExperimentRef(
-                    experimentId = prefix,
+                    experimentId = prefix.removePrefix("exp_"),
                     variantId = variant,
                 )
             }
@@ -92,12 +93,12 @@ sealed class ParsedModelRef {
 
     data class DeploymentRef(val deploymentId: String) : ParsedModelRef() {
         override val kind = "deployment"
-        override val ref = deploymentId
+        override val ref = "deploy_$deploymentId"
     }
 
     data class ExperimentRef(val experimentId: String, val variantId: String) : ParsedModelRef() {
         override val kind = "experiment"
-        override val ref = "$experimentId/$variantId"
+        override val ref = "exp_$experimentId/$variantId"
     }
 
     data class AliasRef(val alias: String) : ParsedModelRef() {
