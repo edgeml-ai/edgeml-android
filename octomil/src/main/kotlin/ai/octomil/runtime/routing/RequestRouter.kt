@@ -180,7 +180,7 @@ class RequestRouter {
             routeId = routeId,
             parsedRef = parsedRef,
             policy = policyString,
-            plannerSource = "none",
+            plannerSource = "offline",
         )
     }
 

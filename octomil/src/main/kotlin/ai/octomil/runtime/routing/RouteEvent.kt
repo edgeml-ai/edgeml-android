@@ -1,5 +1,6 @@
 package ai.octomil.runtime.routing
 
+import ai.octomil.runtime.planner.PlannerSourceNormalizer
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonPrimitive
@@ -29,7 +30,7 @@ data class RouteEvent(
     @SerialName("capability") val capability: String,
     /** Routing policy applied (auto, local_only, cloud_only, private). */
     @SerialName("policy") val policy: String? = null,
-    /** Source of the routing plan (server, local, none). */
+    /** Source of the routing plan — canonical: "server", "cache", "offline". */
     @SerialName("planner_source") val plannerSource: String? = null,
     /** The locality where inference was ultimately executed. */
     @SerialName("selected_locality") val selectedLocality: String,
@@ -86,7 +87,7 @@ data class RouteEvent(
             return RouteEvent(
                 requestId = requestId,
                 capability = capability,
-                plannerSource = meta.planner.source,
+                plannerSource = PlannerSourceNormalizer.normalize(meta.planner.source),
                 selectedLocality = execution?.locality ?: decision.locality,
                 finalMode = execution?.mode ?: decision.mode,
                 engine = execution?.engine ?: decision.engine,
@@ -223,7 +224,7 @@ fun buildRouteEvent(
         planId = planId,
         capability = capability,
         policy = policy,
-        plannerSource = plannerSource,
+        plannerSource = plannerSource?.let { PlannerSourceNormalizer.normalize(it) },
         selectedLocality = selected?.locality ?: "unknown",
         finalMode = selected?.mode ?: "unknown",
         engine = selected?.engine,
