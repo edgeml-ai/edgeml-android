@@ -6,6 +6,40 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 /**
+ * Normalizes planner source strings to the canonical contract enum.
+ *
+ * Canonical values: "server", "cache", "offline".
+ *
+ * Aliases:
+ * - "server_plan" -> "server"
+ * - "cached" -> "cache"
+ * - "local_default", "fallback", "none", "local_benchmark", "" -> "offline"
+ *
+ * Unknown values collapse to "offline" so SDK output boundaries never emit a
+ * contract-invalid planner source.
+ */
+object PlannerSourceNormalizer {
+    /** Canonical planner source values. */
+    val canonicalSources: Set<String> = setOf("server", "cache", "offline")
+
+    private val aliases: Map<String, String> = mapOf(
+        "local_default" to "offline",
+        "server_plan" to "server",
+        "cached" to "cache",
+        "fallback" to "offline",
+        "none" to "offline",
+        "local_benchmark" to "offline",
+    )
+
+    /** Normalize a planner source string to its canonical value. */
+    fun normalize(source: String): String {
+        if (source.isEmpty()) return "offline"
+        if (canonicalSources.contains(source)) return source
+        return aliases[source] ?: "offline"
+    }
+}
+
+/**
  * Contract-backed route metadata shape for the Android SDK.
  *
  * Mirrors the canonical JSON wire format defined in octomil-contracts.
@@ -114,12 +148,7 @@ data class RouteMetadata(
                 else -> "sdk_runtime"
             }
 
-            val plannerSource = when (selection.source) {
-                "server_plan" -> "server"
-                "cache" -> "cache"
-                "local_default", "fallback" -> "offline"
-                else -> selection.source
-            }
+            val plannerSource = PlannerSourceNormalizer.normalize(selection.source)
 
             val fallbackUsed = selection.source == "fallback" ||
                 selection.reason.startsWith("fallback:")
