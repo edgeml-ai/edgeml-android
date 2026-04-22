@@ -43,3 +43,6 @@ build/
 
 # Android Studio captures
 captures/
+
+# Test output
+test-results/
