@@ -61,8 +61,8 @@ class PlannerSourceNormalizationTest {
     }
 
     @Test
-    fun `unknown value passes through as-is`() {
-        assertEquals("custom_source", PlannerSourceNormalizer.normalize("custom_source"))
+    fun `unknown value maps to offline`() {
+        assertEquals("offline", PlannerSourceNormalizer.normalize("custom_source"))
     }
 
     // -------------------------------------------------------------------------

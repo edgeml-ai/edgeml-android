@@ -15,7 +15,8 @@ import kotlinx.serialization.Serializable
  * - "cached" -> "cache"
  * - "local_default", "fallback", "none", "local_benchmark", "" -> "offline"
  *
- * Unknown values pass through as-is.
+ * Unknown values collapse to "offline" so SDK output boundaries never emit a
+ * contract-invalid planner source.
  */
 object PlannerSourceNormalizer {
     /** Canonical planner source values. */
@@ -33,7 +34,8 @@ object PlannerSourceNormalizer {
     /** Normalize a planner source string to its canonical value. */
     fun normalize(source: String): String {
         if (source.isEmpty()) return "offline"
-        return aliases[source] ?: source
+        if (canonicalSources.contains(source)) return source
+        return aliases[source] ?: "offline"
     }
 }
 
