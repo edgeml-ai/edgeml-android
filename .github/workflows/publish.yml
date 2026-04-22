@@ -24,6 +24,18 @@ jobs:
           distribution: 'temurin'
           cache: gradle
 
+      - name: Validate publishing secrets
+        env:
+          OSSRH_USERNAME: ${{ secrets.OSSRH_USERNAME }}
+          OSSRH_PASSWORD: ${{ secrets.OSSRH_PASSWORD }}
+          MAVEN_GPG_PRIVATE_KEY: ${{ secrets.MAVEN_GPG_PRIVATE_KEY }}
+          MAVEN_GPG_PASSPHRASE: ${{ secrets.MAVEN_GPG_PASSPHRASE }}
+        run: |
+          test -n "${OSSRH_USERNAME}" || { echo "Missing OSSRH_USERNAME"; exit 1; }
+          test -n "${OSSRH_PASSWORD}" || { echo "Missing OSSRH_PASSWORD"; exit 1; }
+          test -n "${MAVEN_GPG_PRIVATE_KEY}" || { echo "Missing MAVEN_GPG_PRIVATE_KEY"; exit 1; }
+          test -n "${MAVEN_GPG_PASSPHRASE}" || { echo "Missing MAVEN_GPG_PASSPHRASE"; exit 1; }
+
       - name: Publish to Maven Central
         env:
           OSSRH_USERNAME: ${{ secrets.OSSRH_USERNAME }}
