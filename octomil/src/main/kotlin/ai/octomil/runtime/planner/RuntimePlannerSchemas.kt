@@ -78,6 +78,7 @@ data class DeviceRuntimeProfile(
     @SerialName("gpu_core_count") val gpuCoreCount: Int? = null,
     @SerialName("accelerators") val accelerators: List<String> = emptyList(),
     @SerialName("installed_runtimes") val installedRuntimes: List<InstalledRuntime> = emptyList(),
+    @SerialName("supported_gate_codes") val supportedGateCodes: List<String>? = emptyList(),
 )
 
 /**
