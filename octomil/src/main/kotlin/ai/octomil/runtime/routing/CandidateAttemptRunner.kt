@@ -342,10 +342,24 @@ class CandidateAttemptRunner(
                 for (gate in postInferenceGates) {
                     val evaluator = outputQualityEvaluators.firstOrNull { it.name == gate.code }
                     if (evaluator == null) {
-                        postGateResults += enrichGateResult(
-                            GateResult(code = gate.code, status = "skipped", reasonCode = "no_evaluator"),
-                            gate,
-                        )
+                        if (gate.required) {
+                            // Fail closed: required gate with no evaluator
+                            val failResult = enrichGateResult(
+                                GateResult(code = gate.code, status = "failed", reasonCode = "evaluator_missing"),
+                                gate,
+                            )
+                            postGateResults += failResult
+                            if (qualityFailure == null) {
+                                qualityFailure = failResult
+                                qualityFailedGate = gate
+                            }
+                        } else {
+                            // Advisory gate with no evaluator — record unknown, continue
+                            postGateResults += enrichGateResult(
+                                GateResult(code = gate.code, status = "skipped", reasonCode = "no_evaluator"),
+                                gate,
+                            )
+                        }
                         continue
                     }
 

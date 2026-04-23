@@ -72,6 +72,10 @@ data class RouteEvent(
     @SerialName("quality_score") val qualityScore: Double? = null,
     /** Reason code from the output quality evaluator (if any). */
     @SerialName("quality_reason_code") val qualityReasonCode: String? = null,
+    /** Number of gate failures recorded across all attempts. */
+    @SerialName("gate_failure_count") val gateFailureCount: Int? = null,
+    /** Whether output was already visible to the user when a quality gate failed. */
+    @SerialName("output_visible_before_failure") val outputVisibleBeforeFailure: Boolean? = null,
 ) {
     companion object {
         /** Generate a unique route ID. */
@@ -225,6 +229,9 @@ fun buildRouteEvent(
     variantId: String? = null,
 ): RouteEvent {
     val selected = attemptResult.selectedAttempt
+    val gateFailures = attemptResult.attempts
+        .flatMap { it.gateResults }
+        .count { it.status == "failed" }
     return RouteEvent(
         requestId = requestId,
         planId = planId,
@@ -247,5 +254,7 @@ fun buildRouteEvent(
         variantId = variantId,
         artifactId = selected?.artifact?.id,
         cacheStatus = selected?.artifact?.cache?.status,
+        gateFailureCount = if (gateFailures > 0) gateFailures else null,
+        outputVisibleBeforeFailure = attemptResult.fallbackTrigger?.outputVisibleBeforeFailure,
     )
 }
