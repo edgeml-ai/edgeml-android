@@ -27,7 +27,7 @@ class RequestRouterTest {
         assertEquals("cloud", result.locality)
         assertEquals("hosted_gateway", result.mode)
         assertNotNull(result.routeMetadata)
-        assertEquals("none", result.routeMetadata.planner.source)
+        assertEquals("offline", result.routeMetadata.planner.source)
         assertEquals("cloud", result.routeMetadata.execution?.locality)
         assertEquals("hosted_gateway", result.routeMetadata.execution?.mode)
     }
