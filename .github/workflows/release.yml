@@ -10,6 +10,11 @@ on:
         description: 'Release version (e.g. v1.0.0)'
         required: true
         type: string
+      include_external_runtimes:
+        description: 'Build a runtime-bundled AAR. Requires optional runtime artifacts to be published.'
+        required: false
+        default: false
+        type: boolean
 
 permissions: {}
 
@@ -63,7 +68,18 @@ jobs:
           cache: gradle
 
       - name: Build release AAR
-        run: ./gradlew :octomil:assembleRelease -Poctomil.includeExternalRuntimes=true
+        env:
+          INCLUDE_EXTERNAL_RUNTIMES: ${{ github.event_name == 'workflow_dispatch' && inputs.include_external_runtimes || 'false' }}
+        run: |
+          # Release builds run in fresh checkouts; disabling config cache avoids stale optional-runtime dependency graphs.
+          GRADLE_ARGS=(":octomil:assembleRelease" "--no-configuration-cache")
+          if [ "${INCLUDE_EXTERNAL_RUNTIMES}" = "true" ]; then
+            echo "Building runtime-bundled AAR with optional external runtime artifacts."
+            GRADLE_ARGS+=("-Poctomil.includeExternalRuntimes=true")
+          else
+            echo "Building core SDK AAR without optional external runtime artifacts."
+          fi
+          ./gradlew "${GRADLE_ARGS[@]}"
 
       - name: Verify AAR exists
         run: |
