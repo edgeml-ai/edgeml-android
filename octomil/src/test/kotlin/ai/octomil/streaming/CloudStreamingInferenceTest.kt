@@ -28,13 +28,13 @@ class CloudStreamingInferenceTest {
         val token = StreamToken(
             token = "world",
             done = true,
-            provider = "ollama",
+            provider = "cloud",
             latencyMs = 42.5,
             sessionId = "abc-123",
         )
         assertEquals("world", token.token)
         assertTrue(token.done)
-        assertEquals("ollama", token.provider)
+        assertEquals("cloud", token.provider)
         assertEquals(42.5, token.latencyMs!!, 0.01)
         assertEquals("abc-123", token.sessionId)
     }
@@ -45,12 +45,12 @@ class CloudStreamingInferenceTest {
 
     @Test
     fun `parseSSELine normal token`() {
-        val line = """data: {"token": "The", "done": false, "provider": "ollama"}"""
+        val line = """data: {"token": "The", "done": false, "provider": "cloud"}"""
         val token = CloudStreamingClient.parseSSELine(line)
         assertNotNull(token)
         assertEquals("The", token!!.token)
         assertFalse(token.done)
-        assertEquals("ollama", token.provider)
+        assertEquals("cloud", token.provider)
     }
 
     @Test
