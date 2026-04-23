@@ -25,6 +25,11 @@ object GateClassification {
         "min_free_memory_bytes" to GateInfo("performance", "pre_inference", true),
         "min_free_storage_bytes" to GateInfo("performance", "pre_inference", true),
         "benchmark_fresh" to GateInfo("performance", "pre_inference", false),
+        // Device-environment gates
+        "min_battery_pct" to GateInfo("performance", "pre_inference", false),
+        "max_thermal_state" to GateInfo("performance", "pre_inference", false),
+        "require_charging" to GateInfo("performance", "pre_inference", false),
+        "require_wifi" to GateInfo("readiness", "pre_inference", true),
         "schema_valid" to GateInfo("output_quality", "post_inference", true),
         "tool_call_valid" to GateInfo("output_quality", "post_inference", true),
         "safety_passed" to GateInfo("output_quality", "post_inference", true),
