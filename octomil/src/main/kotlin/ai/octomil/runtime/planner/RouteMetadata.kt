@@ -1,5 +1,6 @@
 package ai.octomil.runtime.planner
 
+import ai.octomil.generated.PlannerSource
 import ai.octomil.runtime.routing.FallbackTrigger
 import ai.octomil.runtime.routing.RouteAttempt
 import kotlinx.serialization.SerialName
@@ -8,7 +9,8 @@ import kotlinx.serialization.Serializable
 /**
  * Normalizes planner source strings to the canonical contract enum.
  *
- * Canonical values: "server", "cache", "offline".
+ * Canonical values are backed by the contract-generated [PlannerSource] enum:
+ * "server", "cache", "offline".
  *
  * Aliases:
  * - "server_plan" -> "server"
@@ -19,23 +21,27 @@ import kotlinx.serialization.Serializable
  * contract-invalid planner source.
  */
 object PlannerSourceNormalizer {
-    /** Canonical planner source values. */
-    val canonicalSources: Set<String> = setOf("server", "cache", "offline")
+    /** Canonical planner source values (backed by generated [PlannerSource] enum). */
+    val canonicalSources: Set<String> = setOf(
+        PlannerSource.SERVER.code,
+        PlannerSource.CACHE.code,
+        PlannerSource.OFFLINE.code,
+    )
 
     private val aliases: Map<String, String> = mapOf(
-        "local_default" to "offline",
-        "server_plan" to "server",
-        "cached" to "cache",
-        "fallback" to "offline",
-        "none" to "offline",
-        "local_benchmark" to "offline",
+        "local_default" to PlannerSource.OFFLINE.code,
+        "server_plan" to PlannerSource.SERVER.code,
+        "cached" to PlannerSource.CACHE.code,
+        "fallback" to PlannerSource.OFFLINE.code,
+        "none" to PlannerSource.OFFLINE.code,
+        "local_benchmark" to PlannerSource.OFFLINE.code,
     )
 
     /** Normalize a planner source string to its canonical value. */
     fun normalize(source: String): String {
-        if (source.isEmpty()) return "offline"
+        if (source.isEmpty()) return PlannerSource.OFFLINE.code
         if (canonicalSources.contains(source)) return source
-        return aliases[source] ?: "offline"
+        return aliases[source] ?: PlannerSource.OFFLINE.code
     }
 }
 

@@ -228,10 +228,8 @@ data class RuntimeSelection(
 /**
  * Canonical routing policy name constants shared across SDKs.
  *
- * These match the Python SDK's `RoutingPolicy` enum values and the
- * contract-generated `ai.octomil.generated.RoutingPolicy` enum codes.
- * Use these constants when constructing [RuntimePlanRequest] or
- * interpreting server plan responses.
+ * Values are backed by the contract-generated [ai.octomil.generated.RoutingPolicy]
+ * enum codes.
  *
  * Policy semantics:
  * - [PRIVATE]: never send inference inputs to cloud; on-device only, no telemetry.
@@ -244,14 +242,14 @@ data class RuntimeSelection(
  * Note: `quality_first` is intentionally excluded — it is not a valid policy.
  */
 object RoutingPolicyNames {
-    const val PRIVATE = "private"
-    const val LOCAL_ONLY = "local_only"
-    const val LOCAL_FIRST = "local_first"
-    const val CLOUD_FIRST = "cloud_first"
-    const val CLOUD_ONLY = "cloud_only"
-    const val PERFORMANCE_FIRST = "performance_first"
+    val PRIVATE = ai.octomil.generated.RoutingPolicy.PRIVATE.code
+    val LOCAL_ONLY = ai.octomil.generated.RoutingPolicy.LOCAL_ONLY.code
+    val LOCAL_FIRST = ai.octomil.generated.RoutingPolicy.LOCAL_FIRST.code
+    val CLOUD_FIRST = ai.octomil.generated.RoutingPolicy.CLOUD_FIRST.code
+    val CLOUD_ONLY = ai.octomil.generated.RoutingPolicy.CLOUD_ONLY.code
+    val PERFORMANCE_FIRST = ai.octomil.generated.RoutingPolicy.PERFORMANCE_FIRST.code
 
-    /** All valid policy names as a set, for validation. */
+    /** All valid policy names as a set, for validation (auto excluded). */
     val ALL: Set<String> = setOf(
         PRIVATE, LOCAL_ONLY, LOCAL_FIRST,
         CLOUD_FIRST, CLOUD_ONLY, PERFORMANCE_FIRST,
