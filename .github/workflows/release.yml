@@ -71,6 +71,7 @@ jobs:
         env:
           INCLUDE_EXTERNAL_RUNTIMES: ${{ github.event_name == 'workflow_dispatch' && inputs.include_external_runtimes || 'false' }}
         run: |
+          # Release builds run in fresh checkouts; disabling config cache avoids stale optional-runtime dependency graphs.
           GRADLE_ARGS=(":octomil:assembleRelease" "--no-configuration-cache")
           if [ "${INCLUDE_EXTERNAL_RUNTIMES}" = "true" ]; then
             echo "Building runtime-bundled AAR with optional external runtime artifacts."
