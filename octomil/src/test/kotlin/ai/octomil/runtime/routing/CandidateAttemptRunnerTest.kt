@@ -166,17 +166,17 @@ class CandidateAttemptRunnerTest {
             },
         )
 
-        assertNotNull(result.selectedAttempt)
-        for (gr in result.selectedAttempt!!.gateResults) {
+        val selected = assertNotNull(result.selectedAttempt)
+        for (gr in selected.gateResults) {
             assertNotNull(gr.gateClass, "gateClass should be set for ${gr.code}")
             assertNotNull(gr.evaluationPhase, "evaluationPhase should be set for ${gr.code}")
         }
 
-        val runtimeGate = result.selectedAttempt!!.gateResults.find { it.code == "runtime_available" }
+        val runtimeGate = selected.gateResults.find { it.code == "runtime_available" }
         assertEquals("readiness", runtimeGate?.gateClass)
         assertEquals("pre_inference", runtimeGate?.evaluationPhase)
 
-        val perfGate = result.selectedAttempt!!.gateResults.find { it.code == "min_tokens_per_second" }
+        val perfGate = selected.gateResults.find { it.code == "min_tokens_per_second" }
         assertEquals("performance", perfGate?.gateClass)
         assertEquals("pre_inference", perfGate?.evaluationPhase)
     }
@@ -207,8 +207,8 @@ class CandidateAttemptRunnerTest {
         )
 
         // Should be selected (post_inference gates skipped)
-        assertNotNull(result.selectedAttempt)
-        assertEquals("selected", result.selectedAttempt?.status)
+        val selected = assertNotNull(result.selectedAttempt)
+        assertEquals("selected", selected.status)
         // schema_valid and json_parseable are both post_inference; neither should be evaluated
         assertFalse("schema_valid" in evaluatedGates)
         assertFalse("json_parseable" in evaluatedGates)
