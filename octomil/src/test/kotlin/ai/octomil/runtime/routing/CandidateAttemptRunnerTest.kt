@@ -144,6 +144,29 @@ class CandidateAttemptRunnerTest {
     }
 
     @Test
+    fun `required quality gate with no evaluator fails closed and triggers fallback`() = runTest {
+        // No evaluators registered — required gate should fail closed
+        val runner = CandidateAttemptRunner(fallbackAllowed = true)
+        val result = runner.runWithInference(
+            candidates = listOf(
+                localCandidateWithQualityGates(),
+                cloudCandidate(),
+            ),
+            outputQualityEvaluators = emptyList(),
+        ) { candidate, _ ->
+            if (candidate.locality == "local") "local-response" else "cloud-ok"
+        }
+
+        assertEquals("cloud-ok", result.value)
+        assertTrue(result.fallbackUsed)
+        assertEquals("quality_gate_failed", result.fallbackTrigger?.code)
+        val failedGateResult = result.attempts.first().gateResults.find { it.code == "schema_valid" }
+        assertNotNull(failedGateResult)
+        assertEquals("failed", failedGateResult.status)
+        assertEquals("evaluator_missing", failedGateResult.reasonCode)
+    }
+
+    @Test
     fun `all gate results include gateClass and evaluationPhase`() {
         val candidate = RuntimeCandidatePlan(
             locality = "local",
