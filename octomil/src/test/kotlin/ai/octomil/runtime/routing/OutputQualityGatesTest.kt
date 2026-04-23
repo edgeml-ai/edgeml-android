@@ -113,8 +113,8 @@ class OutputQualityGatesTest {
             },
         )
 
-        assertNotNull(result.selectedAttempt)
-        assertEquals("selected", result.selectedAttempt?.status)
+        val selected = assertNotNull(result.selectedAttempt)
+        assertEquals("selected", selected.status)
         // All three output_quality gates should be skipped (schema_valid, tool_call_valid, json_parseable)
         assertFalse("schema_valid" in evaluatedCodes, "schema_valid should be skipped")
         assertFalse("tool_call_valid" in evaluatedCodes, "tool_call_valid should be skipped")
@@ -316,22 +316,22 @@ class OutputQualityGatesTest {
             outputQualityEvaluators = listOf(evaluator),
         ) { _, _ -> "ok" }
 
-        assertNotNull(result.selectedAttempt)
-        for (gr in result.selectedAttempt!!.gateResults) {
+        val selectedAttempt = assertNotNull(result.selectedAttempt)
+        for (gr in selectedAttempt.gateResults) {
             assertNotNull(gr.gateClass, "gateClass should be set for ${gr.code}")
             assertNotNull(gr.evaluationPhase, "evaluationPhase should be set for ${gr.code}")
         }
 
         // Verify specific classifications
-        val runtimeGate = result.selectedAttempt!!.gateResults.find { it.code == "runtime_available" }
+        val runtimeGate = selectedAttempt.gateResults.find { it.code == "runtime_available" }
         assertEquals("readiness", runtimeGate?.gateClass)
         assertEquals("pre_inference", runtimeGate?.evaluationPhase)
 
-        val perfGate = result.selectedAttempt!!.gateResults.find { it.code == "min_tokens_per_second" }
+        val perfGate = selectedAttempt.gateResults.find { it.code == "min_tokens_per_second" }
         assertEquals("performance", perfGate?.gateClass)
         assertEquals("pre_inference", perfGate?.evaluationPhase)
 
-        val qualityGate = result.selectedAttempt!!.gateResults.find { it.code == "schema_valid" }
+        val qualityGate = selectedAttempt.gateResults.find { it.code == "schema_valid" }
         assertEquals("output_quality", qualityGate?.gateClass)
         assertEquals("post_inference", qualityGate?.evaluationPhase)
     }
@@ -363,8 +363,8 @@ class OutputQualityGatesTest {
             attemptResult = result,
         )
 
-        assertNotNull(event.gateFailureCount)
-        assertTrue(event.gateFailureCount!! > 0)
+        val failCount = assertNotNull(event.gateFailureCount)
+        assertTrue(failCount > 0)
         assertEquals(false, event.outputVisibleBeforeFailure)
     }
 
