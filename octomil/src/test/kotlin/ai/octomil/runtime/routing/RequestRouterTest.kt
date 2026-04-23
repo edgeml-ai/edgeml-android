@@ -144,7 +144,7 @@ class RequestRouterTest {
         cases.forEach { (model, expectedKind) ->
             assertEquals(expectedKind, ModelRefParser.parse(model).kind)
         }
-        assertEquals("abc123", (ModelRefParser.parse("deploy_abc123") as ParsedModelRef.DeploymentRef).deploymentId)
+        assertEquals("deploy_abc123", (ModelRefParser.parse("deploy_abc123") as ParsedModelRef.DeploymentRef).deploymentId)
     }
 
     // =========================================================================

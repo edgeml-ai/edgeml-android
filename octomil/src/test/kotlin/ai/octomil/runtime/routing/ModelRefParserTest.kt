@@ -71,14 +71,14 @@ class ModelRefParserTest {
         val ref = ModelRefParser.parse("deploy_ios-chat-prod")
         assertIs<ParsedModelRef.DeploymentRef>(ref)
         assertEquals("deployment", ref.kind)
-        assertEquals("ios-chat-prod", ref.deploymentId)
+        assertEquals("deploy_ios-chat-prod", ref.deploymentId)
     }
 
     @Test
-    fun `deploy_ prefix extracts stripped id as deploymentId`() {
+    fun `deploy_ prefix extracts full ref as deploymentId`() {
         val ref = ModelRefParser.parse("deploy_staging-embed-v2")
         assertIs<ParsedModelRef.DeploymentRef>(ref)
-        assertEquals("staging-embed-v2", ref.deploymentId)
+        assertEquals("deploy_staging-embed-v2", ref.deploymentId)
     }
 
     // =========================================================================
@@ -90,7 +90,7 @@ class ModelRefParserTest {
         val ref = ModelRefParser.parse("exp_chat_test/treatment_a")
         assertIs<ParsedModelRef.ExperimentRef>(ref)
         assertEquals("experiment", ref.kind)
-        assertEquals("chat_test", ref.experimentId)
+        assertEquals("exp_chat_test", ref.experimentId)
         assertEquals("treatment_a", ref.variantId)
     }
 

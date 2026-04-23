@@ -39,10 +39,12 @@ object ModelRefParser {
             return ParsedModelRef.UnknownRef(trimmed)
         }
 
-        // deploy_xxx — always classify as deployment if prefix matches
-        if (trimmed.startsWith("deploy_")) {
-            val id = trimmed.removePrefix("deploy_")
-            return ParsedModelRef.DeploymentRef(deploymentId = id)
+        // deploy_xxx
+        if (trimmed.startsWith("deploy_") && trimmed.length > "deploy_".length) {
+            return ParsedModelRef.DeploymentRef(deploymentId = trimmed)
+        }
+        if (trimmed == "deploy_") {
+            return ParsedModelRef.UnknownRef(trimmed)
         }
 
         // exp/variant (must contain exactly one slash, and the prefix before slash
@@ -53,14 +55,20 @@ object ModelRefParser {
             val variant = trimmed.substring(slashIdx + 1)
             if (prefix.startsWith("exp_")) {
                 return ParsedModelRef.ExperimentRef(
-                    experimentId = prefix.removePrefix("exp_"),
+                    experimentId = prefix,
                     variantId = variant,
                 )
             }
         }
+        if (trimmed.startsWith("exp_") && trimmed.contains("/")) {
+            return ParsedModelRef.UnknownRef(trimmed)
+        }
 
         if (trimmed.startsWith("alias:") && trimmed.length > "alias:".length) {
             return ParsedModelRef.AliasRef(trimmed)
+        }
+        if (trimmed == "alias:") {
+            return ParsedModelRef.UnknownRef(trimmed)
         }
 
         if (trimmed.startsWith("@") || trimmed.contains("://")) {
@@ -93,12 +101,12 @@ sealed class ParsedModelRef {
 
     data class DeploymentRef(val deploymentId: String) : ParsedModelRef() {
         override val kind = "deployment"
-        override val ref = "deploy_$deploymentId"
+        override val ref = deploymentId
     }
 
     data class ExperimentRef(val experimentId: String, val variantId: String) : ParsedModelRef() {
         override val kind = "experiment"
-        override val ref = "exp_$experimentId/$variantId"
+        override val ref = "$experimentId/$variantId"
     }
 
     data class AliasRef(val alias: String) : ParsedModelRef() {
