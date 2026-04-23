@@ -28,6 +28,7 @@ import ai.octomil.runtime.routing.RequestRoutingContext
 import ai.octomil.runtime.routing.RouteAttempt
 import ai.octomil.runtime.routing.RouteEvent
 import ai.octomil.runtime.routing.RoutingDecisionResult
+import ai.octomil.runtime.routing.defaultOutputQualityEvaluators
 import ai.octomil.sdk.DeviceContext
 import ai.octomil.wrapper.TelemetryQueue
 import kotlinx.coroutines.flow.Flow
@@ -58,19 +59,20 @@ class OctomilResponses(
         val effectiveRequest = applyConversationChaining(request)
         val runtimeRequest = buildRuntimeRequest(effectiveRequest)
 
-        // Resolve routing via RequestRouter for plan-backed requests,
-        // or fall through to direct execution with attempt metadata.
         val routingContext = buildRoutingContext(request, streaming = false)
-        val routingDecision = requestRouter.resolve(routingContext)
-
-        val attemptResult = CandidateAttemptRunner(
-            fallbackAllowed = RequestRouter.isFallbackAllowed(request.routing?.code),
-        ).runWithInference(
-            candidates = buildProductionCandidates(routingDecision, routingContext, request.model),
+        val routed = requestRouter.resolveWithInference(
+            context = routingContext,
+            outputQualityEvaluators = defaultOutputQualityEvaluators(),
+            candidatesForDecision = { decision ->
+                buildProductionCandidates(decision, routingContext, request.model)
+            },
         ) { _, attempt ->
             val selectedRuntime = resolveRuntimeForAttempt(request, attempt)
             selectedRuntime.run(runtimeRequest)
         }
+        val routingDecision = routed.decision
+        val attemptResult = routed.attemptResult
+
         val runtimeResponse = attemptResult.value ?: throw (
             attemptResult.error ?: OctomilException(
                 OctomilErrorCode.RUNTIME_UNAVAILABLE,

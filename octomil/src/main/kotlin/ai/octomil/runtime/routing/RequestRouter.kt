@@ -57,6 +57,17 @@ data class RoutingDecisionResult(
     val attemptResult: AttemptLoopResult<Unit>,
 )
 
+/**
+ * Routing decision plus the inference attempt result produced by the router.
+ *
+ * This is the production-path variant used when output-quality gates need the
+ * actual response value before a candidate can be selected.
+ */
+data class RoutedInferenceResult<T>(
+    val decision: RoutingDecisionResult,
+    val attemptResult: AttemptLoopResult<T>,
+)
+
 // =============================================================================
 // RequestRouter
 // =============================================================================
@@ -182,6 +193,40 @@ class RequestRouter {
             policy = policyString,
             plannerSource = "offline",
         )
+    }
+
+    /**
+     * Resolve a routing decision and execute inference inside the attempt loop.
+     *
+     * Use this for product request paths that need post-inference output-quality
+     * gates to participate in fallback. [resolve] remains a preflight-only
+     * helper for status/explain flows.
+     */
+    suspend fun <T> resolveWithInference(
+        context: RequestRoutingContext,
+        runtimeChecker: AttemptRuntimeChecker = AttemptRuntimeChecker { _, _ -> RuntimeCheck(true) },
+        gateEvaluator: AttemptGateEvaluator = AttemptGateEvaluator { gate, _, _ ->
+            if (gate.required) GateResult(code = gate.code, status = "unknown")
+            else GateResult(code = gate.code, status = "not_required")
+        },
+        outputQualityEvaluators: List<OutputQualityGateEvaluator> = emptyList(),
+        firstOutputEmitted: () -> Boolean = { false },
+        candidatesForDecision: (RoutingDecisionResult) -> List<RuntimeCandidatePlan>,
+        executeCandidate: suspend (RuntimeCandidatePlan, RouteAttempt) -> T,
+    ): RoutedInferenceResult<T> {
+        val decision = resolve(context, runtimeChecker, gateEvaluator)
+        val attemptResult = CandidateAttemptRunner(
+            fallbackAllowed = isFallbackAllowed(context.routingPolicy),
+            streaming = context.streaming,
+        ).runWithInference(
+            candidates = candidatesForDecision(decision),
+            runtimeChecker = runtimeChecker,
+            gateEvaluator = gateEvaluator,
+            outputQualityEvaluators = outputQualityEvaluators,
+            firstOutputEmitted = firstOutputEmitted,
+            executeCandidate = executeCandidate,
+        )
+        return RoutedInferenceResult(decision = decision, attemptResult = attemptResult)
     }
 
     // =========================================================================
