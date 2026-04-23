@@ -122,6 +122,7 @@ object DeviceRuntimeProfileCollector {
             gpuCoreCount = null, // Not reliably detectable on Android
             accelerators = detectAccelerators(),
             installedRuntimes = merged,
+            supportedGateCodes = emptyList(),
         )
     }
 
