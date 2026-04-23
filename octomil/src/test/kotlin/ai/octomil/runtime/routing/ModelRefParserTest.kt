@@ -75,7 +75,7 @@ class ModelRefParserTest {
     }
 
     @Test
-    fun `deploy_ prefix extracts full string as deploymentId`() {
+    fun `deploy_ prefix extracts full ref as deploymentId`() {
         val ref = ModelRefParser.parse("deploy_staging-embed-v2")
         assertIs<ParsedModelRef.DeploymentRef>(ref)
         assertEquals("deploy_staging-embed-v2", ref.deploymentId)

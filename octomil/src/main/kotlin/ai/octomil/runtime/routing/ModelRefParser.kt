@@ -43,6 +43,9 @@ object ModelRefParser {
         if (trimmed.startsWith("deploy_") && trimmed.length > "deploy_".length) {
             return ParsedModelRef.DeploymentRef(deploymentId = trimmed)
         }
+        if (trimmed == "deploy_") {
+            return ParsedModelRef.UnknownRef(trimmed)
+        }
 
         // exp/variant (must contain exactly one slash, and the prefix before slash
         // must start with "exp" or "experiment")
@@ -57,9 +60,15 @@ object ModelRefParser {
                 )
             }
         }
+        if (trimmed.startsWith("exp_") && trimmed.contains("/")) {
+            return ParsedModelRef.UnknownRef(trimmed)
+        }
 
         if (trimmed.startsWith("alias:") && trimmed.length > "alias:".length) {
             return ParsedModelRef.AliasRef(trimmed)
+        }
+        if (trimmed == "alias:") {
+            return ParsedModelRef.UnknownRef(trimmed)
         }
 
         if (trimmed.startsWith("@") || trimmed.contains("://")) {
