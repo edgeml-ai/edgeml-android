@@ -46,6 +46,27 @@ class CandidateAttemptRunnerTest {
         assertEquals("inference_error_after_first_output", result.attempts.first().reason.code)
     }
 
+    @Test
+    fun `required device gate fails closed and falls back`() {
+        val runner = CandidateAttemptRunner(fallbackAllowed = true)
+        val result = runner.run(
+            candidates = listOf(
+                localCandidate(
+                    gates = listOf(CandidateGate(code = "require_wifi", required = true)),
+                ),
+                cloudCandidate(),
+            ),
+            runtimeChecker = AttemptRuntimeChecker { _, _ -> RuntimeCheck(true) },
+        )
+
+        assertEquals("failed", result.attempts.first().status)
+        assertEquals("gate", result.attempts.first().stage)
+        val wifiGate = result.attempts.first().gateResults.find { it.code == "require_wifi" }
+        assertNotNull(wifiGate)
+        assertEquals("network_state_unavailable", wifiGate.reasonCode)
+        assertEquals("cloud", result.selectedAttempt?.locality)
+    }
+
     // -- Output Quality Gate Tests --
 
     @Test
@@ -272,6 +293,18 @@ class CandidateAttemptRunnerTest {
             confidence = 1.0,
             reason = "local",
             engine = "registered",
+        )
+
+    private fun localCandidate(
+        gates: List<CandidateGate>,
+    ): RuntimeCandidatePlan =
+        RuntimeCandidatePlan(
+            locality = "local",
+            priority = 0,
+            confidence = 1.0,
+            reason = "local",
+            engine = "registered",
+            gates = gates,
         )
 
     private fun localCandidateWithQualityGates(): RuntimeCandidatePlan =
