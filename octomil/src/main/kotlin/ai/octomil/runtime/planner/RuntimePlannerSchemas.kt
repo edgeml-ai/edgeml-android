@@ -120,6 +120,10 @@ data class CandidateGate(
     @SerialName("threshold_string") val thresholdString: String? = null,
     @SerialName("window_seconds") val windowSeconds: Int? = null,
     @SerialName("source") val source: String = "server",
+    @SerialName("gate_class") val gateClass: String? = null,
+    @SerialName("evaluation_phase") val evaluationPhase: String? = null,
+    @SerialName("fallback_eligible") val fallbackEligible: Boolean? = null,
+    @SerialName("blocking_default") val blockingDefault: Boolean? = null,
 )
 
 /**

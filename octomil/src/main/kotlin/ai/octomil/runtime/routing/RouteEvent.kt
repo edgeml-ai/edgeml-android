@@ -66,6 +66,12 @@ data class RouteEvent(
     @SerialName("artifact_id") val artifactId: String? = null,
     /** Cache status for the route decision: "hit", "miss", or "not_applicable". */
     @SerialName("cache_status") val cacheStatus: String? = null,
+    /** Name of the output quality evaluator that produced a score (if any). */
+    @SerialName("quality_evaluator_name") val qualityEvaluatorName: String? = null,
+    /** Score produced by the output quality evaluator (if any). */
+    @SerialName("quality_score") val qualityScore: Double? = null,
+    /** Reason code from the output quality evaluator (if any). */
+    @SerialName("quality_reason_code") val qualityReasonCode: String? = null,
 ) {
     companion object {
         /** Generate a unique route ID. */
