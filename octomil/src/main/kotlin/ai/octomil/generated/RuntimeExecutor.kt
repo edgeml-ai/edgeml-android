@@ -11,7 +11,6 @@ enum class RuntimeExecutor(val code: String) {
     MNN("mnn"),
     TRANSFORMERSJS("transformersjs"),
     CLOUD("cloud"),
-    OLLAMA("ollama"),
     WHISPER("whisper"),
     MLC("mlc"),
     CACTUS("cactus"),

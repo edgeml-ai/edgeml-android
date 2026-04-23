@@ -14,6 +14,7 @@ import ai.octomil.runtime.planner.RoutingPolicyNames
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -173,8 +174,12 @@ class GeneratedTypeAdoptionTest {
         assertNotNull(RuntimeExecutor.fromCode("mlx"))
         assertNotNull(RuntimeExecutor.fromCode("onnxruntime"))
         assertNotNull(RuntimeExecutor.fromCode("cloud"))
-        assertNotNull(RuntimeExecutor.fromCode("ollama"))
         assertNotNull(RuntimeExecutor.fromCode("whisper"))
+    }
+
+    @Test
+    fun `RuntimeExecutor excludes Ollama`() {
+        assertNull(RuntimeExecutor.fromCode("ollama"))
     }
 
     @Test
