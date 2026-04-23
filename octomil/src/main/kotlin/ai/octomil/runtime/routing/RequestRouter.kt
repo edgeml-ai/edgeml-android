@@ -101,10 +101,7 @@ class RequestRouter {
     fun resolve(
         context: RequestRoutingContext,
         runtimeChecker: AttemptRuntimeChecker = AttemptRuntimeChecker { _, _ -> RuntimeCheck(true) },
-        gateEvaluator: AttemptGateEvaluator = AttemptGateEvaluator { gate, _, _ ->
-            if (gate.required) GateResult(code = gate.code, status = "unknown")
-            else GateResult(code = gate.code, status = "not_required")
-        },
+        gateEvaluator: AttemptGateEvaluator = DefaultAttemptGateEvaluator,
     ): RoutingDecisionResult {
         val routeId = UUID.randomUUID().toString()
         val parsedRef = ModelRefParser.parse(context.model)
@@ -205,10 +202,7 @@ class RequestRouter {
     suspend fun <T> resolveWithInference(
         context: RequestRoutingContext,
         runtimeChecker: AttemptRuntimeChecker = AttemptRuntimeChecker { _, _ -> RuntimeCheck(true) },
-        gateEvaluator: AttemptGateEvaluator = AttemptGateEvaluator { gate, _, _ ->
-            if (gate.required) GateResult(code = gate.code, status = "unknown")
-            else GateResult(code = gate.code, status = "not_required")
-        },
+        gateEvaluator: AttemptGateEvaluator = DefaultAttemptGateEvaluator,
         outputQualityEvaluators: List<OutputQualityGateEvaluator> = emptyList(),
         firstOutputEmitted: () -> Boolean = { false },
         candidatesForDecision: (RoutingDecisionResult) -> List<RuntimeCandidatePlan>,

@@ -12,6 +12,13 @@ import kotlinx.serialization.Serializable
 object GateClassification {
     data class GateInfo(val gateClass: String, val evaluationPhase: String, val blockingDefault: Boolean)
 
+    val DEVICE_ENVIRONMENT_CODES: Set<String> = setOf(
+        "min_battery_pct",
+        "max_thermal_state",
+        "require_charging",
+        "require_wifi",
+    )
+
     val TABLE: Map<String, GateInfo> = mapOf(
         "artifact_verified" to GateInfo("readiness", "pre_inference", true),
         "runtime_available" to GateInfo("readiness", "pre_inference", true),
@@ -124,6 +131,46 @@ fun interface AttemptGateEvaluator {
     fun evaluate(gate: CandidateGate, engine: String?, locality: String): GateResult
 }
 
+/**
+ * Safe default gate evaluator.
+ *
+ * Android runtime paths may inject a context-aware evaluator that reads
+ * BatteryManager, PowerManager, and NetworkCapabilities. Without that evaluator,
+ * required device-environment gates fail closed so local execution is not
+ * selected on unverifiable conditions.
+ */
+object DefaultAttemptGateEvaluator : AttemptGateEvaluator {
+    override fun evaluate(gate: CandidateGate, engine: String?, locality: String): GateResult {
+        val info = GateClassification.classify(gate.code)
+        if (gate.code !in GateClassification.DEVICE_ENVIRONMENT_CODES) {
+            return if (gate.required) {
+                GateResult(code = gate.code, status = "unknown")
+            } else {
+                GateResult(code = gate.code, status = "not_required")
+            }
+        }
+
+        return GateResult(
+            code = gate.code,
+            status = when {
+                locality != "local" -> "not_required"
+                gate.required -> "failed"
+                else -> "unknown"
+            },
+            thresholdNumber = gate.thresholdNumber,
+            reasonCode = if (locality == "local" && gate.required) {
+                if (gate.code == "require_wifi") "network_state_unavailable" else "device_metric_unavailable"
+            } else {
+                null
+            },
+            gateClass = gate.gateClass ?: info.gateClass,
+            evaluationPhase = gate.evaluationPhase ?: info.evaluationPhase,
+            required = gate.required,
+            fallbackEligible = gate.fallbackEligible,
+        )
+    }
+}
+
 data class GateEvaluationResult(
     val passed: Boolean,
     val score: Double? = null,
@@ -169,13 +216,7 @@ class CandidateAttemptRunner(
     fun run(
         candidates: List<RuntimeCandidatePlan>,
         runtimeChecker: AttemptRuntimeChecker = AttemptRuntimeChecker { _, _ -> RuntimeCheck(true) },
-        gateEvaluator: AttemptGateEvaluator = AttemptGateEvaluator { gate, _, _ ->
-            if (gate.required) {
-                GateResult(code = gate.code, status = "unknown")
-            } else {
-                GateResult(code = gate.code, status = "not_required")
-            }
-        },
+        gateEvaluator: AttemptGateEvaluator = DefaultAttemptGateEvaluator,
     ): AttemptLoopResult<Unit> {
         val attempts = mutableListOf<RouteAttempt>()
         var fallbackTrigger: FallbackTrigger? = null
@@ -239,7 +280,12 @@ class CandidateAttemptRunner(
                 .firstNotNullOfOrNull { gate ->
                     val result = enrichGateResult(gateEvaluator.evaluate(gate, engine, locality), gate)
                     gateResults += result
-                    result.takeIf { gate.required && it.status == "failed" }
+                    result.takeIf {
+                        gate.required && (
+                            it.status == "failed" ||
+                                (it.status == "unknown" && gate.code in GateClassification.DEVICE_ENVIRONMENT_CODES)
+                            )
+                    }
                 }
 
             if (failedGate != null) {
@@ -301,13 +347,7 @@ class CandidateAttemptRunner(
     suspend fun <T> runWithInference(
         candidates: List<RuntimeCandidatePlan>,
         runtimeChecker: AttemptRuntimeChecker = AttemptRuntimeChecker { _, _ -> RuntimeCheck(true) },
-        gateEvaluator: AttemptGateEvaluator = AttemptGateEvaluator { gate, _, _ ->
-            if (gate.required) {
-                GateResult(code = gate.code, status = "unknown")
-            } else {
-                GateResult(code = gate.code, status = "not_required")
-            }
-        },
+        gateEvaluator: AttemptGateEvaluator = DefaultAttemptGateEvaluator,
         outputQualityEvaluators: List<OutputQualityGateEvaluator> = emptyList(),
         firstOutputEmitted: () -> Boolean = { false },
         executeCandidate: suspend (RuntimeCandidatePlan, RouteAttempt) -> T,
