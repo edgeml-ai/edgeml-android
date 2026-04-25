@@ -23,12 +23,28 @@ import org.json.JSONObject
  */
 class OctomilHosted(
     private val apiKey: String,
-    private val baseUrl: String = DEFAULT_BASE_URL,
+    baseUrl: String = DEFAULT_BASE_URL,
 ) {
-    val audio: HostedAudio = HostedAudio(baseUrl, apiKey)
+    private val validatedBaseUrl: String = validateHostedBaseUrl(baseUrl)
+    val audio: HostedAudio = HostedAudio(validatedBaseUrl, apiKey)
 
     companion object {
         const val DEFAULT_BASE_URL = "https://api.octomil.com/v1"
+
+        /**
+         * v0.10.0 hosted API cutover policy: reject legacy control-plane
+         * bases. No silent normalization.
+         */
+        internal fun validateHostedBaseUrl(raw: String): String {
+            val trimmed = raw.trimEnd('/')
+            if (trimmed.endsWith("/api/v1") || trimmed.endsWith("/api")) {
+                throw HostedSpeechException(
+                    "Legacy control-plane base URLs are not supported by hosted " +
+                        "clients; got '$raw'. Use https://api.octomil.com/v1.",
+                )
+            }
+            return trimmed
+        }
     }
 }
 
@@ -95,8 +111,13 @@ class HostedSpeech internal constructor(
 
             val status = connection.responseCode
             if (status >= 400) {
-                val body = (connection.errorStream ?: connection.inputStream)?.use { it.readBytes() }
-                    ?: ByteArray(0)
+                // For HTTP errors prefer errorStream; if it's null (some
+                // 4xx/5xx responses return no body) fall back to an empty
+                // byte array. Avoid touching inputStream here -- on an HTTP
+                // error response getInputStream() throws, which the generic
+                // catch below would reclassify as a transport error and lose
+                // the HTTP status.
+                val body = connection.errorStream?.use { it.readBytes() } ?: ByteArray(0)
                 val preview = String(body.take(500).toByteArray(), Charsets.UTF_8)
                 throw HostedSpeechException("Hosted speech request failed: HTTP $status: $preview")
             }
