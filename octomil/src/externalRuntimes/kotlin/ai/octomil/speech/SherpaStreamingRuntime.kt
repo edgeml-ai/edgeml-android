@@ -94,7 +94,7 @@ internal class SherpaStreamingRuntime(
      *
      * Called once during init after successful recognizer creation.
      * Only privacy-safe metadata: model ID (from directory name),
-     * engine="whisper.cpp", capability="audio_transcription", format="onnx".
+     * engine="sherpa-onnx", capability="audio_transcription", format="onnx".
      * No file paths, audio data, or user data.
      */
     private fun registerModelEvidence() {
@@ -102,13 +102,13 @@ internal class SherpaStreamingRuntime(
             val modelId = modelDir.name
             DeviceRuntimeProfileCollector.registerEvidence(
                 InstalledRuntime.modelCapable(
-                    engine = "whisper.cpp",
+                    engine = "sherpa-onnx",
                     model = modelId,
                     capability = "audio_transcription",
                     artifactFormat = "onnx",
                 ),
             )
-            Log.d(TAG, "Registered model evidence: whisper.cpp/$modelId")
+            Log.d(TAG, "Registered model evidence: sherpa-onnx/$modelId")
         } catch (e: Exception) {
             Log.d(TAG, "Failed to register model evidence (non-fatal): ${e.message}")
         }

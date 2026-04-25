@@ -45,6 +45,9 @@ internal object RuntimeEngineIds {
         "whispercpp" to "whisper.cpp",
         "whisper_cpp" to "whisper.cpp",
         "whisper-cpp" to "whisper.cpp",
+        "sherpa" to "sherpa-onnx",
+        "sherpa_onnx" to "sherpa-onnx",
+        "sherpaonnx" to "sherpa-onnx",
     )
 
     fun canonical(engine: String): String {

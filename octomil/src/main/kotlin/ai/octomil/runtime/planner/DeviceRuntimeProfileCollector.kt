@@ -308,11 +308,11 @@ object DeviceRuntimeProfileCollector {
             )
         }
 
-        // Whisper (via octomil-runtime-sherpa-android)
+        // sherpa-onnx (via octomil-runtime-sherpa-android)
         if (isClassAvailable("ai.octomil.runtime.sherpa.SherpaOnnxEngine")) {
             runtimes.add(
                 InstalledRuntime(
-                    engine = "whisper.cpp",
+                    engine = "sherpa-onnx",
                     available = true,
                     accelerator = "cpu",
                 )
