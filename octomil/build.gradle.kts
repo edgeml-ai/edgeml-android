@@ -177,6 +177,12 @@ dependencies {
         implementation("ai.octomil:octomil-runtime-llama-android:1.0.0")
     }
 
+    // Archive extraction for prepare-lifecycle Materializer.
+    // Apache Commons Compress provides tar / bzip2 / gzip / zip
+    // input streams without shelling out (Android has no
+    // ``/usr/bin/tar``). 2025 release; Apache 2.0.
+    implementation("org.apache.commons:commons-compress:1.27.1")
+
     // Logging
     implementation("com.jakewharton.timber:timber:5.0.1")
 
