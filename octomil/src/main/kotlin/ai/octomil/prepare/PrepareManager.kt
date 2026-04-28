@@ -27,7 +27,7 @@ class PrepareManager(
      * succeed. Synthetic / malformed candidates return `false`.
      */
     fun canPrepare(candidate: PrepareCandidate): Boolean = try {
-        validateForPrepare(candidate)
+        validateForPrepare(candidate, expandedRecipe = null)
         true
     } catch (_: PrepareException) {
         false
@@ -58,10 +58,14 @@ class PrepareManager(
         candidate: PrepareCandidate,
         mode: PrepareMode = PrepareMode.LAZY,
     ): PrepareOutcome {
-        validateForPrepare(candidate)
+        // Mode gate runs first because it depends only on the
+        // candidate's policy, not its artifact contents.
         checkExplicitOnlyVsMode(candidate, mode)
 
         if (!candidate.prepareRequired) {
+            // No artifact materialization needed — engine manages its
+            // own bytes (e.g. an external endpoint).
+            validateForPrepare(candidate, expandedRecipe = null)
             return PrepareOutcome(
                 artifactId = candidate.artifact?.artifactId
                     ?: candidate.artifact?.modelId.orEmpty(),
@@ -78,11 +82,29 @@ class PrepareManager(
                 "Candidate marks prepareRequired=true but carries no artifact plan. " +
                     "This is a server contract violation; refusing to prepare."
             )
-        val expanded = expandStaticRecipeSource(artifact)
+        // Reviewer P1: expand the static-recipe source BEFORE
+        // structural validation. A planner candidate carrying only
+        // ``source='static_recipe', recipeId='kokoro-82m'`` and no
+        // download_urls / digest is the new contract — the SDK fills
+        // canonical metadata from the registry. Validating first
+        // would reject "missing downloadUrls" before expansion runs.
+        val (expanded, usedRecipe) = expandStaticRecipeSource(artifact)
+        val expandedCandidate = candidate.copy(artifact = expanded)
+        validateForPrepare(expandedCandidate, expandedRecipe = usedRecipe)
+
         val descriptor = buildDescriptor(expanded)
         val dir = artifactDirFor(descriptor.artifactId).also { it.mkdirs() }
         val cached = alreadyVerified(descriptor, dir)
         if (cached != null) {
+            // Reviewer P1 (#2): even on a cache hit, run the recipe's
+            // MaterializationPlan idempotently. The marker check
+            // makes a complete layout a no-op; a partial extraction
+            // (interrupted before required_outputs all landed) gets
+            // re-extracted from the on-disk archive. Without this,
+            // the cache hit would return ``files`` pointing only at
+            // the archive instead of the unpacked layout the engine
+            // reads at inference time.
+            usedRecipe?.let { Materializer.materialize(it.materialization, dir) }
             return PrepareOutcome(
                 artifactId = descriptor.artifactId,
                 artifactDir = dir,
@@ -94,6 +116,12 @@ class PrepareManager(
             )
         }
         val result = downloader.download(descriptor, dir)
+        // Reviewer P1 (#2): post-download materialization. Without
+        // this the artifact_dir contains only the recipe's archive
+        // (e.g. ``kokoro-en-v0_19.tar.bz2``) instead of the unpacked
+        // layout the Sherpa TTS engine expects (model.onnx /
+        // voices.bin / tokens.txt / espeak-ng-data/).
+        usedRecipe?.let { Materializer.materialize(it.materialization, dir) }
         return PrepareOutcome(
             artifactId = descriptor.artifactId,
             artifactDir = dir,
@@ -109,7 +137,16 @@ class PrepareManager(
     // Validation
     // ---------------------------------------------------------------------
 
-    private fun validateForPrepare(candidate: PrepareCandidate) {
+    /**
+     * Reviewer P1: when the caller has already expanded a
+     * `source="static_recipe"` candidate via the recipe registry,
+     * the artifact carries canonical digest / downloadUrls /
+     * requiredFiles and the structural rules below apply normally.
+     * Otherwise, an unexpanded `source="static_recipe"` candidate
+     * is admitted iff the recipe is registered (so callers can
+     * dry-run via [canPrepare] without performing expansion).
+     */
+    private fun validateForPrepare(candidate: PrepareCandidate, expandedRecipe: StaticRecipe?) {
         if (candidate.locality != "local") {
             throw PrepareException(
                 "Candidate locality is \"${candidate.locality}\"; only \"local\" candidates are preparable."
@@ -126,13 +163,35 @@ class PrepareManager(
         if (!candidate.prepareRequired) return
         val artifact = candidate.artifact
             ?: throw PrepareException("Candidate has prepareRequired=true but no artifact plan.")
+        // Unexpanded static-recipe candidate: defer to the recipe
+        // table for digest / downloadUrls / requiredFiles. Validate
+        // by checking the recipe is registered (so unknown ids fail
+        // fast); the rest of the structural checks apply post-
+        // expansion in the prepare() flow.
+        if (expandedRecipe == null && artifact.source == "static_recipe") {
+            val recipeId = artifact.recipeId
+            if (recipeId.isNullOrEmpty()) {
+                throw PrepareException("Artifact has source='static_recipe' but no recipeId.")
+            }
+            if (StaticRecipeRegistry.recipe(recipeId) == null) {
+                throw PrepareException(
+                    "Artifact source='static_recipe' but recipeId \"$recipeId\" is not in this SDK's registered recipe table."
+                )
+            }
+            return
+        }
+        if (artifact.source != null && artifact.source != "static_recipe") {
+            throw PrepareException(
+                "Artifact source \"${artifact.source}\" is not recognized by this SDK release. Known: 'static_recipe'."
+            )
+        }
         if (artifact.digest.isNullOrEmpty()) {
             throw PrepareException(
                 "Artifact '${artifact.artifactId ?: artifact.modelId}' is missing 'digest'; " +
                     "refusing to prepare without integrity."
             )
         }
-        if (artifact.downloadUrls.isEmpty() && artifact.source != "static_recipe") {
+        if (artifact.downloadUrls.isEmpty()) {
             throw PrepareException(
                 "Artifact '${artifact.artifactId ?: artifact.modelId}' has no downloadUrls. " +
                     "Cannot prepare; the planner must emit at least one endpoint."
@@ -169,8 +228,8 @@ class PrepareManager(
     // Static recipe expansion (PR C-followup option 2)
     // ---------------------------------------------------------------------
 
-    private fun expandStaticRecipeSource(artifact: PrepareArtifactPlan): PrepareArtifactPlan {
-        val source = artifact.source ?: return artifact
+    private fun expandStaticRecipeSource(artifact: PrepareArtifactPlan): Pair<PrepareArtifactPlan, StaticRecipe?> {
+        val source = artifact.source ?: return artifact to null
         if (source != "static_recipe") {
             throw PrepareException(
                 "Artifact source \"$source\" is not recognized by this SDK release. Known: 'static_recipe'."
@@ -194,7 +253,7 @@ class PrepareManager(
                     "planner-declared requiredFiles ${artifact.requiredFiles} does not match."
             )
         }
-        return artifact.copy(
+        val expanded = artifact.copy(
             artifactId = artifact.artifactId ?: recipe.modelId,
             digest = recipe.file.digest,
             sizeBytes = artifact.sizeBytes ?: recipe.file.sizeBytes,
@@ -209,6 +268,7 @@ class PrepareManager(
             source = null,
             recipeId = null,
         )
+        return expanded to recipe
     }
 
     // ---------------------------------------------------------------------
@@ -336,9 +396,45 @@ data class StaticRecipeFile(
     val sizeBytes: Long? = null,
 )
 
+/**
+ * Reviewer P1 (#2): a static recipe carries both download metadata
+ * AND a [MaterializationPlan] so the post-download archive can be
+ * unpacked into the layout the runtime engine expects (e.g. Sherpa
+ * Kokoro: ``model.onnx`` / ``voices.bin`` / ``tokens.txt`` /
+ * ``espeak-ng-data/``). Mirrors Python `StaticRecipe.materialization`
+ * and Swift `StaticRecipe.materialization`.
+ */
+data class MaterializationPlan(
+    val kind: Kind = Kind.NONE,
+    /** Relative path of the downloaded archive within `artifactDir`. Required when `kind=ARCHIVE`. */
+    val source: String? = null,
+    val archiveFormat: ArchiveFormat? = null,
+    /**
+     * Path prefix to strip from each archive member's destination
+     * (matches `tar --strip-components` semantics). Acts as an
+     * allowlist boundary: members outside the prefix are skipped.
+     */
+    val stripPrefix: String? = null,
+    /**
+     * Paths the runtime engine reads at inference time. The
+     * idempotency check + completeness assertion both key off this
+     * list.
+     */
+    val requiredOutputs: List<String> = emptyList(),
+) {
+    enum class Kind { NONE, ARCHIVE }
+    enum class ArchiveFormat(val wireValue: String) {
+        TAR_BZ2("tar.bz2"),
+        TAR_GZ("tar.gz"),
+        TAR("tar"),
+        ZIP("zip"),
+    }
+}
+
 data class StaticRecipe(
     val modelId: String,
     val file: StaticRecipeFile,
+    val materialization: MaterializationPlan = MaterializationPlan(),
 )
 
 /**
@@ -356,6 +452,13 @@ object StaticRecipeRegistry {
                 relativePath = "kokoro-en-v0_19.tar.bz2",
                 url = "https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models",
                 digest = "sha256:912804855a04745fa77a30be545b3f9a5d15c4d66db00b88cbcd4921df605ac7",
+            ),
+            materialization = MaterializationPlan(
+                kind = MaterializationPlan.Kind.ARCHIVE,
+                source = "kokoro-en-v0_19.tar.bz2",
+                archiveFormat = MaterializationPlan.ArchiveFormat.TAR_BZ2,
+                stripPrefix = "kokoro-en-v0_19/",
+                requiredOutputs = listOf("model.onnx", "voices.bin", "tokens.txt", "espeak-ng-data/phontab"),
             ),
         )
         recipes = HashMap<String, StaticRecipe>().apply {

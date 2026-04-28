@@ -256,6 +256,29 @@ class DurableDownloader(
             return rel
         }
 
+        /**
+         * Reviewer P1: lexical containment alone is insufficient.
+         * If `destDir` already contains `linkdir → /tmp/outside`
+         * (planted by an earlier extraction, hostile sibling
+         * artifact, or misconfigured cache), a member like
+         * `linkdir/escaped.txt` passes the canonical-path check
+         * AFTER the symlink is followed, but the resolved path is
+         * outside `destDir`. This implementation:
+         *
+         *  1. Canonicalizes `destDir` once (resolves any
+         *     pre-existing symlinks above it).
+         *  2. Canonicalizes the candidate path and verifies it is
+         *     contained.
+         *  3. Walks every existing ancestor of the candidate under
+         *     `destDir` and refuses if any of them is itself a
+         *     symbolic link whose target leaves `destDir`. Defense
+         *     in depth: even if step 2 lands inside (because the
+         *     symlink target also lives in tree), a subsequent
+         *     `renameTo` still follows the link.
+         *
+         * Mirrors Python `_safe_join_under` and Swift / Node
+         * `safeJoin` post-PR-12-fix.
+         */
         fun safeJoin(destDir: File, rel: String): File {
             val safe = validateRelativePath(rel)
             val base = destDir.canonicalFile
@@ -264,6 +287,26 @@ class DurableDownloader(
             val basePath = base.path + File.separator
             if (candidate.path != base.path && !candidate.path.startsWith(basePath)) {
                 throw InvalidPathException(rel, "resolves outside the artifact directory")
+            }
+            // Defense in depth: walk every existing ancestor under
+            // ``base``; refuse if any is a symlink whose target
+            // escapes the base. Without this, an in-tree symlink
+            // whose target ALSO lives in tree but redirects file
+            // writes to a sensitive existing path could slip through
+            // the canonical check above.
+            val rawCandidate = File(base, safe)
+            var cursor: File? = rawCandidate.parentFile
+            while (cursor != null && cursor.path != base.path) {
+                if (cursor.exists() && java.nio.file.Files.isSymbolicLink(cursor.toPath())) {
+                    val resolved = cursor.canonicalPath
+                    if (resolved != base.path && !resolved.startsWith(basePath)) {
+                        throw InvalidPathException(
+                            rel,
+                            "crosses a symlink that escapes the artifact directory"
+                        )
+                    }
+                }
+                cursor = cursor.parentFile
             }
             return candidate
         }
