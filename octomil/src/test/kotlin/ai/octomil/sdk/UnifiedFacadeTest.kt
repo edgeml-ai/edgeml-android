@@ -335,6 +335,27 @@ class UnifiedFacadeTest {
     }
 
     // =========================================================================
+    // audio namespace before / after initialize
+    // =========================================================================
+
+    @Test
+    fun `audio before initialize throws OctomilNotInitializedError`() {
+        val client = Octomil(context, apiKey = "sk_test_abc", orgId = "org_123")
+        assertFailsWith<OctomilNotInitializedError> {
+            client.audio
+        }
+    }
+
+    @Test
+    fun `audio namespace exists after initialize`() = runTest {
+        val client = Octomil(context, apiKey = "sk_test_abc", orgId = "org_123")
+        client.initialize()
+        assertNotNull(client.audio)
+        assertNotNull(client.audio.speech)
+        assertNotNull(client.audio.transcriptions)
+    }
+
+    // =========================================================================
     // Helpers
     // =========================================================================
 

@@ -3,9 +3,22 @@ package ai.octomil.audio
 import ai.octomil.ModelResolver
 import ai.octomil.errors.OctomilErrorCode
 import ai.octomil.errors.OctomilException
+import ai.octomil.generated.RoutingPolicy
+import ai.octomil.prepare.PrepareArtifactPlan
+import ai.octomil.prepare.PrepareCandidate
+import ai.octomil.prepare.PrepareManager
+import ai.octomil.prepare.PrepareMode
+import ai.octomil.prepare.PrepareOutcome
+import ai.octomil.runtime.routing.ModelRefParser
+import ai.octomil.runtime.routing.ParsedModelRef
+import ai.octomil.speech.SpeechRuntime
 import ai.octomil.speech.SpeechRuntimeRegistry
 import android.content.Context
 import java.io.File
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 
 /**
  * Response format for audio transcription, matching contract v1.5.0.
@@ -50,6 +63,21 @@ data class TranscriptionSegment(
     val confidence: Float? = null,
 )
 
+/** Outcome of [AudioTranscriptions.warmup]. */
+data class TranscriptionWarmupOutcome(
+    val artifactDir: File,
+    val cached: Boolean,
+    val runtimeReused: Boolean,
+    val model: String,
+)
+
+/** Internal resolution view for transcription prepare/warmup. */
+internal data class TranscriptionResolution(
+    val canonicalModelId: String,
+    val warmupKey: String,
+    val candidate: PrepareCandidate,
+)
+
 /**
  * Options for audio transcription — contract fields only.
  */
@@ -73,7 +101,169 @@ data class TranscriptionOptions(
 class AudioTranscriptions internal constructor(
     private val contextProvider: () -> Context?,
     private val resolver: ModelResolver,
+    private val prepareManager: PrepareManager = PrepareManager(),
 ) {
+    private val warmedMutex = Mutex()
+    private var warmedRuntimeKey: String? = null
+    private var warmedRuntime: SpeechRuntime? = null
+
+    /**
+     * Materialize the STT model's on-disk artifact via
+     * [PrepareManager]. The candidate is built from the planner-
+     * supplied download metadata; an `app=` argument or `@app/`
+     * model ref scopes the artifact directory under that app's
+     * identity so private models cannot fall back to public
+     * artifacts. Identity is gated up front: a mismatch between
+     * `@app/` and `app=` is a hard error, never silent.
+     */
+    suspend fun prepare(
+        model: String,
+        digest: String,
+        downloadUrl: String,
+        relativePath: String? = null,
+        sizeBytes: Long? = null,
+        app: String? = null,
+        policy: RoutingPolicy? = null,
+    ): PrepareOutcome = withContext(Dispatchers.IO) {
+        val resolution = resolveTranscriptionCandidate(
+            model = model,
+            app = app,
+            policy = policy,
+            digest = digest,
+            downloadUrl = downloadUrl,
+            relativePath = relativePath,
+            sizeBytes = sizeBytes,
+        )
+        prepareManager.prepare(resolution.candidate, mode = PrepareMode.EXPLICIT)
+    }
+
+    /**
+     * Prepare AND load the [SpeechRuntime] backend so the next
+     * [create] call reuses the warmed handle. Mirrors
+     * [ai.octomil.audio.AudioSpeech.warmup].
+     */
+    suspend fun warmup(
+        model: String,
+        digest: String,
+        downloadUrl: String,
+        relativePath: String? = null,
+        sizeBytes: Long? = null,
+        app: String? = null,
+        policy: RoutingPolicy? = null,
+    ): TranscriptionWarmupOutcome = withContext(Dispatchers.IO) {
+        val resolution = resolveTranscriptionCandidate(
+            model = model,
+            app = app,
+            policy = policy,
+            digest = digest,
+            downloadUrl = downloadUrl,
+            relativePath = relativePath,
+            sizeBytes = sizeBytes,
+        )
+        val outcome = prepareManager.prepare(resolution.candidate, mode = PrepareMode.EXPLICIT)
+        val factory = SpeechRuntimeRegistry.factory
+            ?: throw OctomilException(
+                OctomilErrorCode.RUNTIME_UNAVAILABLE,
+                "No speech runtime factory registered.",
+            )
+        warmedMutex.withLock {
+            val key = resolution.warmupKey
+            if (warmedRuntime != null && warmedRuntimeKey == key) {
+                return@withLock TranscriptionWarmupOutcome(
+                    artifactDir = outcome.artifactDir,
+                    cached = outcome.cached,
+                    runtimeReused = true,
+                    model = resolution.canonicalModelId,
+                )
+            }
+            warmedRuntime?.runCatching { release() }
+            val runtime = factory(outcome.artifactDir)
+            warmedRuntime = runtime
+            warmedRuntimeKey = key
+            TranscriptionWarmupOutcome(
+                artifactDir = outcome.artifactDir,
+                cached = outcome.cached,
+                runtimeReused = false,
+                model = resolution.canonicalModelId,
+            )
+        }
+    }
+
+    /** Drop any warmed runtime handle. Idempotent. */
+    suspend fun release() {
+        warmedMutex.withLock {
+            warmedRuntime?.runCatching { release() }
+            warmedRuntime = null
+            warmedRuntimeKey = null
+        }
+    }
+
+    internal fun resolveTranscriptionCandidate(
+        model: String,
+        app: String?,
+        policy: RoutingPolicy?,
+        digest: String,
+        downloadUrl: String,
+        relativePath: String?,
+        sizeBytes: Long?,
+    ): TranscriptionResolution {
+        require(model.isNotBlank()) { "model must be a non-empty string." }
+        val parsed = ModelRefParser.parse(model)
+        val (canonicalModelId, parsedAppSlug) = when (parsed) {
+            is ParsedModelRef.AppRef -> parsed.capability to parsed.slug
+            is ParsedModelRef.ModelRef -> parsed.model to null
+            is ParsedModelRef.UnknownRef -> parsed.raw to null
+            is ParsedModelRef.AliasRef -> parsed.alias to null
+            is ParsedModelRef.CapabilityRef -> parsed.capability to null
+            is ParsedModelRef.DeploymentRef -> parsed.deploymentId to null
+            is ParsedModelRef.ExperimentRef -> parsed.experimentId to null
+            is ParsedModelRef.DefaultRef -> "" to null
+        }
+        if (canonicalModelId.isBlank()) {
+            throw OctomilException(
+                OctomilErrorCode.INVALID_INPUT,
+                "Could not resolve transcription model id from \"$model\".",
+            )
+        }
+        if (parsedAppSlug != null && app != null && parsedAppSlug != app) {
+            throw OctomilException(
+                OctomilErrorCode.INVALID_INPUT,
+                "@app/ ref \"$parsedAppSlug\" does not match app= argument \"$app\".",
+            )
+        }
+        val effectiveApp = parsedAppSlug ?: app
+        if (policy == RoutingPolicy.CLOUD_ONLY) {
+            throw OctomilException(
+                OctomilErrorCode.UNSUPPORTED_MODALITY,
+                "policy=cloud_only is not supported by client.audio.transcriptions; " +
+                    "use OctomilHosted for hosted STT.",
+            )
+        }
+        val artifactId = if (effectiveApp != null) {
+            "@app/$effectiveApp/$canonicalModelId"
+        } else {
+            canonicalModelId
+        }
+        val candidate = PrepareCandidate(
+            locality = "local",
+            engine = "sherpa-onnx",
+            artifact = PrepareArtifactPlan(
+                modelId = canonicalModelId,
+                artifactId = artifactId,
+                digest = digest,
+                sizeBytes = sizeBytes,
+                requiredFiles = relativePath?.let { listOf(it) } ?: emptyList(),
+                downloadUrls = listOf(
+                    ai.octomil.prepare.DownloadEndpoint(url = downloadUrl),
+                ),
+            ),
+        )
+        return TranscriptionResolution(
+            canonicalModelId = canonicalModelId,
+            warmupKey = artifactId,
+            candidate = candidate,
+        )
+    }
     /**
      * Transcribe an audio file using the specified model.
      *

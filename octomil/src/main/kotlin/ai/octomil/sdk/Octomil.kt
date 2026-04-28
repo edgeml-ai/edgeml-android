@@ -1,7 +1,9 @@
 package ai.octomil.sdk
 
+import ai.octomil.audio.AudioSpeech
 import ai.octomil.client.EmbeddingClient
 import ai.octomil.config.OctomilConfig
+import ai.octomil.generated.RoutingPolicy
 import ai.octomil.responses.InputItem
 import ai.octomil.responses.OctomilResponses
 import ai.octomil.responses.Response
@@ -36,6 +38,7 @@ class Octomil(
     internal val plannerEnabled: Boolean
     private var _responses: OctomilResponses? = null
     private var _embeddings: FacadeEmbeddings? = null
+    private var _audio: FacadeAudio? = null
 
     init {
         authConfig = when {
@@ -124,6 +127,11 @@ class Octomil(
         }
         _embeddings = FacadeEmbeddings(EmbeddingClient(serverUrl, embeddingApiKey))
 
+        _audio = FacadeAudio(
+            speechProvider = { ai.octomil.Octomil.audio.speech },
+            transcriptionsProvider = { ai.octomil.Octomil.audio.transcriptions },
+        )
+
         initialized = true
     }
 
@@ -138,6 +146,34 @@ class Octomil(
             if (!initialized) throw OctomilNotInitializedError()
             return _embeddings!!
         }
+
+    /**
+     * Public audio surface. Mirrors the iOS `client.audio` namespace
+     * with `audio.speech` and `audio.transcriptions` sub-resources.
+     * Each sub-resource owns its own prepare / warmup / create
+     * lifecycle and honors `app=` / `policy=` identity gates.
+     */
+    val audio: FacadeAudio
+        get() {
+            if (!initialized) throw OctomilNotInitializedError()
+            return _audio!!
+        }
+
+    /**
+     * Top-level warmup convenience. Walks the audio sub-resources
+     * that need on-disk artifacts and warms each in turn so the
+     * caller doesn't have to thread per-capability warmup itself.
+     */
+    suspend fun warmup(
+        speechModel: String? = null,
+        speechApp: String? = null,
+        speechPolicy: RoutingPolicy? = null,
+    ) {
+        if (!initialized) throw OctomilNotInitializedError()
+        if (speechModel != null) {
+            _audio!!.speech.warmup(model = speechModel, app = speechApp, policy = speechPolicy)
+        }
+    }
 }
 
 class FacadeResponses(private val underlying: OctomilResponses) {
@@ -161,4 +197,17 @@ class FacadeResponses(private val underlying: OctomilResponses) {
     suspend fun create(request: ResponseRequest): Response = underlying.create(request)
 
     fun stream(request: ResponseRequest): Flow<ResponseStreamEvent> = underlying.stream(request)
+}
+
+/**
+ * Public audio facade. Holds the active [AudioSpeech] (delegating to
+ * [TtsRuntimeRegistry]) and the existing [ai.octomil.audio.AudioTranscriptions]
+ * resource. Both sub-resources own their own prepare/warmup state.
+ */
+class FacadeAudio internal constructor(
+    speechProvider: () -> AudioSpeech,
+    transcriptionsProvider: () -> ai.octomil.audio.AudioTranscriptions,
+) {
+    val speech: AudioSpeech by lazy { speechProvider() }
+    val transcriptions: ai.octomil.audio.AudioTranscriptions by lazy { transcriptionsProvider() }
 }
