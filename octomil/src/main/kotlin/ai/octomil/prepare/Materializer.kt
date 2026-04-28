@@ -132,8 +132,14 @@ object Materializer {
                 while (true) {
                     val entry = stream.nextEntry ?: break
                     if (!stream.canReadEntryData(entry)) continue
+                    // Reviewer P1: route DIRECTORY entries through
+                    // safeExtractPath too. Without this, a malicious
+                    // archive with a ``../../outside/`` directory
+                    // entry could mkdirs outside the staging root
+                    // before any FILE entry's safety check runs.
                     if (entry.isDirectory) {
-                        File(into, entry.name).mkdirs()
+                        val candidate = safeExtractPath(into, entry.name)
+                        candidate.mkdirs()
                         continue
                     }
                     // Symlinks in the archive are dropped — we don't
@@ -196,7 +202,14 @@ object Materializer {
             val entryPath = entry.path
             if (!entryPath.startsWith(sourceRootPath + File.separator)) return@forEach
             val rel = entryPath.removePrefix(sourceRootPath + File.separator)
-            val destination = File(artifactDir, rel)
+            // Reviewer P1: route every destination path through
+            // DurableDownloader.safeJoin so a pre-existing symlink
+            // ancestor in the artifact cache (e.g.
+            // ``artifactDir/linkdir -> /tmp/outside`` planted by an
+            // earlier hostile artifact) can't redirect copyTo
+            // outside the artifact dir. Mirrors the iOS / Python
+            // post-fix Materializer.
+            val destination = DurableDownloader.safeJoin(artifactDir, rel)
             if (entry.isDirectory) {
                 destination.mkdirs()
             } else {
