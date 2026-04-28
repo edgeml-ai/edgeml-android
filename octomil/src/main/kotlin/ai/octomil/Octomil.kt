@@ -220,6 +220,11 @@ object Octomil {
         // octomil-runtime-sherpa-android artifact.
         wireSherpaRuntime(context.applicationContext)
 
+        // Wire TTS runtime — sherpa-onnx Kokoro / VITS. Same reflection
+        // shape as the recognizer side; absent when the optional
+        // octomil-runtime-sherpa-android artifact is not on the classpath.
+        wireSherpaTtsRuntime()
+
         // Prediction runtime: no longer wired here. OctomilTextPredictions uses
         // LLMRuntime.supportsPrediction() + handle-based API via LLMRuntimeRegistry.
     }
@@ -282,6 +287,79 @@ object Octomil {
             Timber.d("SherpaStreamingRuntime not available — sherpa speech engine disabled")
         } catch (e: Exception) {
             Timber.w(e, "Failed to wire SherpaStreamingRuntime")
+        }
+    }
+
+    /**
+     * Wire SherpaTtsRuntime via reflection.
+     *
+     * When ``octomil-runtime-sherpa-android`` is on the classpath
+     * (the same artifact that ships [ai.octomil.speech.SherpaStreamingRuntime]
+     * for STT) the [ai.octomil.tts.SherpaTtsRuntime] class is present
+     * and we register a factory wrapping its `(File, String?)` constructor.
+     * When absent, [ai.octomil.tts.TtsRuntimeRegistry.factory] stays null
+     * and ``client.audio.speech.create`` surfaces RUNTIME_UNAVAILABLE.
+     */
+    private fun wireSherpaTtsRuntime() {
+        try {
+            val clazz = Class.forName("ai.octomil.tts.SherpaTtsRuntime")
+            val ctor = clazz.getDeclaredConstructor(
+                File::class.java,
+                String::class.java,
+            )
+            ctor.isAccessible = true
+            val synthesizeMethod = clazz.getMethod(
+                "synthesize",
+                String::class.java,
+                String::class.java,
+                java.lang.Float.TYPE,
+            )
+            val releaseMethod = clazz.getMethod("release")
+            val resultClass = Class.forName("ai.octomil.tts.SherpaTtsResult")
+            val resultAccessors = resultClass.declaredFields.associateBy { it.name }
+            resultAccessors.values.forEach { it.isAccessible = true }
+
+            ai.octomil.tts.TtsRuntimeRegistry.register(
+                ai.octomil.tts.TtsRuntimeFactory { modelDir, modelName ->
+                    val instance = ctor.newInstance(modelDir, modelName)
+                    object : ai.octomil.tts.TtsRuntime {
+                        override val modelName: String = modelName
+
+                        override fun synthesize(
+                            text: String,
+                            voice: String?,
+                            speed: Float,
+                        ): ai.octomil.tts.TtsResult {
+                            val raw = synthesizeMethod.invoke(instance, text, voice, speed)
+                                ?: throw IllegalStateException(
+                                    "SherpaTtsRuntime.synthesize returned null",
+                                )
+                            return ai.octomil.tts.TtsResult(
+                                audioBytes = resultAccessors.getValue("audioBytes").get(raw) as ByteArray,
+                                contentType = resultAccessors.getValue("contentType").get(raw) as String,
+                                format = resultAccessors.getValue("format").get(raw) as String,
+                                sampleRate = resultAccessors.getValue("sampleRate").get(raw) as Int,
+                                durationMs = resultAccessors.getValue("durationMs").get(raw) as Int,
+                                voice = resultAccessors.getValue("voice").get(raw) as String?,
+                                model = resultAccessors.getValue("model").get(raw) as String,
+                            )
+                        }
+
+                        override fun release() {
+                            try {
+                                releaseMethod.invoke(instance)
+                            } catch (_: Throwable) {
+                                // Idempotent — sherpa runtime swallows already-released.
+                            }
+                        }
+                    }
+                },
+            )
+            Timber.d("SherpaTtsRuntime wired via reflection")
+        } catch (_: ClassNotFoundException) {
+            Timber.d("SherpaTtsRuntime not available — sherpa TTS engine disabled")
+        } catch (e: Exception) {
+            Timber.w(e, "Failed to wire SherpaTtsRuntime")
         }
     }
 

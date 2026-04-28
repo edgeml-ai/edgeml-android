@@ -1,6 +1,7 @@
 package ai.octomil.speech
 
 import ai.octomil.ModelResolver
+import ai.octomil.audio.AudioSpeech
 import ai.octomil.audio.AudioTranscriptions
 import android.content.Context
 import android.util.Log
@@ -36,6 +37,15 @@ class OctomilAudio internal constructor(
     val transcriptions: AudioTranscriptions by lazy {
         AudioTranscriptions(contextProvider, resolver)
     }
+
+    /**
+     * On-device text-to-speech — `audio.speech.create()` /
+     * `audio.speech.prepare()` / `audio.speech.warmup()`. Honors the
+     * static-recipe table for known TTS models and surfaces a
+     * deterministic [ai.octomil.errors.OctomilException] when the
+     * optional sherpa-onnx TTS runtime is not on the classpath.
+     */
+    val speech: AudioSpeech by lazy { AudioSpeech() }
 
     /**
      * Create a streaming transcription session for the given model.
