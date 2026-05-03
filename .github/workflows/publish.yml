@@ -9,7 +9,7 @@ permissions: {}
 
 jobs:
   publish:
-    timeout-minutes: 15
+    timeout-minutes: 30
     name: Publish Android SDK
     runs-on: ubuntu-latest
     permissions:
