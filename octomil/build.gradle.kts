@@ -181,7 +181,7 @@ dependencies {
     // Apache Commons Compress provides tar / bzip2 / gzip / zip
     // input streams without shelling out (Android has no
     // ``/usr/bin/tar``). 2025 release; Apache 2.0.
-    implementation("org.apache.commons:commons-compress:1.27.1")
+    implementation("org.apache.commons:commons-compress:1.28.0")
 
     // Logging
     implementation("com.jakewharton.timber:timber:5.0.1")
