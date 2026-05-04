@@ -115,7 +115,7 @@ dependencies {
     implementation("androidx.core:core-ktx:1.17.0")
     implementation("androidx.appcompat:appcompat:1.7.1")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.10.0")
-    implementation("androidx.work:work-runtime-ktx:2.11.1")
+    implementation("androidx.work:work-runtime-ktx:2.11.2")
 
     // Jetpack Compose
     implementation(platform("androidx.compose:compose-bom:2025.05.00"))
@@ -196,7 +196,7 @@ dependencies {
 
     androidTestImplementation("androidx.test.ext:junit:1.3.0")
     androidTestImplementation("androidx.test.espresso:espresso-core:3.7.0")
-    androidTestImplementation("androidx.work:work-testing:2.11.1")
+    androidTestImplementation("androidx.work:work-testing:2.11.2")
 }
 
 // Maven publish to Maven Central (Sonatype OSSRH)
