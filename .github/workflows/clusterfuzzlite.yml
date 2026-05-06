@@ -1,11 +1,25 @@
 name: ClusterFuzzLite
 
+# WHY THIS DOESN'T RUN ON PULL REQUESTS:
+# The current fuzz target (.clusterfuzzlite/build.sh) only exercises JDK
+# stdlib — URI.create, UUID.fromString, Base64.decode — and does NOT touch
+# any Octomil code paths. Running it on every PR was burning ~5 min of
+# Actions budget per push for zero signal about Octomil itself.
+#
+# We keep the weekly cron + manual dispatch so the corpus continues to
+# grow and infrastructure doesn't bitrot. Re-enable the `pull_request:`
+# trigger once the harness actually exercises something we own — good
+# candidates: contract-type JSON deserialization, PlannerSourceNormalizer,
+# RoutingPolicyNames parsing, the API base-URL config parser.
+
 on:
-  pull_request:
-    branches: [main, develop]
   schedule:
     - cron: "0 8 * * 1"
   workflow_dispatch:
+
+concurrency:
+  group: clusterfuzzlite-${{ github.ref }}
+  cancel-in-progress: true
 
 permissions: {}
 
@@ -40,5 +54,8 @@ jobs:
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           fuzz-seconds: 300
-          mode: code-change
+          # `mode: batch` (not `code-change`) — without PR triggers,
+          # `code-change` mode has no diff to scope to. Batch fuzzes the
+          # full corpus, which is what you want for the weekly schedule.
+          mode: batch
           sanitizer: ${{ matrix.sanitizer }}
