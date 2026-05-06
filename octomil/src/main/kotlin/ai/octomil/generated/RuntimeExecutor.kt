@@ -16,7 +16,8 @@ enum class RuntimeExecutor(val code: String) {
     CACTUS("cactus"),
     SAMSUNG_ONE("samsung_one"),
     EXECUTORCH("executorch"),
-    ECHO("echo");
+    ECHO("echo"),
+    SHERPA_ONNX("sherpa-onnx");
 
     companion object {
         fun fromCode(code: String): RuntimeExecutor? =
