@@ -11,6 +11,7 @@ enum class FallbackTriggerStage(val code: String) {
     BENCHMARK("benchmark"),
     GATE("gate"),
     INFERENCE("inference"),
+    OUTPUT_QUALITY("output_quality"),
     TIMEOUT("timeout"),
     NOT_APPLICABLE("not_applicable");
 

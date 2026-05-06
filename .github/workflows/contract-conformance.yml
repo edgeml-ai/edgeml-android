@@ -1,8 +1,21 @@
 name: Contract Conformance
 
+# Version pin policy:
+#   The two version strings below MUST track each other and must match the
+#   contract version under octomil/src/main/kotlin/ai/octomil/generated/.
+#   When you sync contracts (see the OCT-NN sync workflow), bump:
+#     - the `@vX.Y.Z` ref on the reusable workflow
+#     - the `contract-version` input
+#   Forgetting either one means the conformance gate validates against a
+#   stale spec while the SDK has already moved on (silent false confidence).
+
 on:
   pull_request:
     branches: [main]
+
+concurrency:
+  group: contract-conformance-${{ github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
@@ -10,10 +23,10 @@ permissions:
 
 jobs:
   conformance:
-    uses: octomil/octomil-contracts/.github/workflows/sdk-conformance.yml@v1.22.0
+    uses: octomil/octomil-contracts/.github/workflows/sdk-conformance.yml@v1.23.0
     with:
       sdk: android
-      contract-version: "1.22.0"
+      contract-version: "1.23.0"
       setup-command: "java -version && ./gradlew --version"
       codegen-command: "python3 .contract/scripts/sync_generated.py --sdk android --check --target-dir octomil/src/main/kotlin/ai/octomil/generated"
       test-command: "./gradlew :octomil:testDebugUnitTest --tests 'ai.octomil.conformance.*' && python3 .contract/ci/audit-sdks.py --sdk android --sdk-path . --out parity_report.json"

@@ -10,7 +10,8 @@ enum class ModelCapability(val code: String) {
     EMBEDDING("embedding"),
     CLASSIFICATION("classification"),
     REASONING("reasoning"),
-    VISION("vision");
+    VISION("vision"),
+    TTS("tts");
 
     companion object {
         fun fromCode(code: String): ModelCapability? =
