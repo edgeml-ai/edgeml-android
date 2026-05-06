@@ -1,12 +1,22 @@
 name: CodeQL
 
+# Trigger policy:
+#   - `pull_request` to main only — covers all incoming changes.
+#   - Weekly cron — catches advisories that drop on already-merged code.
+#   - `workflow_dispatch` — manual spot-runs once the Kotlin extractor catches up.
+# Intentionally NO `push:` trigger: pushes to main were running CodeQL a
+# second time on the same SHA already covered by the PR run, doubling the
+# Gradle compile load for zero additional signal.
 on:
-  push:
-    branches: [main, develop]
   pull_request:
-    branches: [main, develop]
+    branches: [main]
   schedule:
     - cron: "0 6 * * 1"
+  workflow_dispatch:
+
+concurrency:
+  group: codeql-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   analyze:
@@ -14,10 +24,13 @@ jobs:
     name: Analyze
     runs-on: ubuntu-latest
     # CodeQL extractor is incompatible with Kotlin 2.3.10 (github/codeql#20661).
-    # Allow failures until a compatible CodeQL version is released.
+    # Allow failures until a compatible CodeQL version is released. The
+    # `if:` guard on the analyze step below means we don't upload empty
+    # SARIF when the build fails.
     continue-on-error: true
     permissions:
       security-events: write
+      contents: read
 
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -27,6 +40,17 @@ jobs:
         with:
           java-version: "17"
           distribution: "temurin"
+
+      - name: Setup Gradle
+        # Same setup-gradle action + version as ci.yml on purpose: the build
+        # cache is keyed by the action+JDK+wrapper combo, so matching them
+        # lets `assembleDebug` here hit cache entries populated by ci.yml's
+        # `test` job on the same SHA. If you bump the version here, bump it
+        # in ci.yml too or you'll silently lose cross-workflow cache reuse.
+        uses: gradle/actions/setup-gradle@748248ddd2a24f49513d8f472f81c3a07d4d50e1 # v4.4.4
+        with:
+          # PR/cron CodeQL runs never write the cache — only ci.yml on main does.
+          cache-read-only: true
 
       - name: Initialize CodeQL
         uses: github/codeql-action/init@9da17a5aa4abec2340d6e6c8d8efb0770b1c9cb8 # v4.32.3
@@ -39,7 +63,10 @@ jobs:
         # Kotlin 2.3.10 is unsupported by CodeQL extractor (github/codeql#20661).
         # Allow the build to fail without blocking the workflow.
         continue-on-error: true
-        run: ./gradlew assembleDebug --no-daemon
+        # No `--no-daemon`: the Gradle daemon is what makes the build cache
+        # actually useful within this job, and setup-gradle@v4 manages the
+        # daemon lifecycle for us.
+        run: ./gradlew :octomil:assembleDebug --build-cache
 
       - name: Perform CodeQL Analysis
         # Only run analysis if the build actually succeeded, otherwise the
