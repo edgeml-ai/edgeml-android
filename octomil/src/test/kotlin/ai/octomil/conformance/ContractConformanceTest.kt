@@ -28,12 +28,17 @@ import org.junit.Test
 class ContractConformanceTest {
 
     // =========================================================================
-    // ErrorCode enum — 36 canonical codes
+    // ErrorCode enum — 39 canonical codes
+    //
+    // Counts and ordering must track octomil-contracts/enums/error_code.yaml
+    // at the version pinned in `_generated/.contract-version.json`. When
+    // contracts add codes, regenerate `generated/ErrorCode.kt` first, then
+    // mirror the new entries here in canonical (YAML) order.
     // =========================================================================
 
     @Test
-    fun `generated ErrorCode has exactly 36 entries`() {
-        assertEquals(36, ContractErrorCode.entries.size)
+    fun `generated ErrorCode has exactly 39 entries`() {
+        assertEquals(39, ContractErrorCode.entries.size)
     }
 
     @Test
@@ -66,6 +71,10 @@ class ContractConformanceTest {
             "stream_interrupted",
             "policy_denied",
             "cloud_fallback_disallowed",
+            // Added in contracts 1.23.0 (cloud-credentials taxonomy).
+            "cloud_credentials_missing",
+            "cloud_credentials_revoked",
+            "cloud_provider_auth_failed",
             "max_tool_rounds_exceeded",
             "training_failed",
             "training_not_supported",
@@ -82,9 +91,10 @@ class ContractConformanceTest {
 
     @Test
     fun `every generated ErrorCode maps to a valid OctomilErrorCode`() {
-        // 34 SDK codes map to 36 contract codes: TOKEN_EXPIRED -> AUTHENTICATION_FAILED,
+        // 37 SDK codes map to 39 contract codes: TOKEN_EXPIRED -> AUTHENTICATION_FAILED,
         // DEVICE_REVOKED -> FORBIDDEN. Verify every contract code resolves to a non-UNKNOWN
-        // SDK code (or to an expected alias).
+        // SDK code (or to an expected alias). The cloud_* codes added in
+        // contracts 1.23.0 have direct SDK equivalents so they don't need aliasing.
         val aliasMap = mapOf(
             "TOKEN_EXPIRED" to "AUTHENTICATION_FAILED",
             "DEVICE_REVOKED" to "FORBIDDEN",
@@ -102,10 +112,12 @@ class ContractConformanceTest {
 
     @Test
     fun `OctomilErrorCode covers all contract codes`() {
-        // SDK has 34 entries; contract has 36 (TOKEN_EXPIRED and DEVICE_REVOKED
+        // SDK has 37 entries; contract has 39 (TOKEN_EXPIRED and DEVICE_REVOKED
         // are aliased to AUTHENTICATION_FAILED and FORBIDDEN respectively).
-        assertEquals(34, OctomilErrorCode.entries.size)
-        assertEquals(36, ContractErrorCode.entries.size)
+        // Counts moved from 34/36 -> 37/39 with contracts 1.23.0 (added
+        // CLOUD_CREDENTIALS_MISSING/REVOKED + CLOUD_PROVIDER_AUTH_FAILED).
+        assertEquals(37, OctomilErrorCode.entries.size)
+        assertEquals(39, ContractErrorCode.entries.size)
         // Every contract code must resolve to a non-UNKNOWN SDK code
         for (contractCode in ContractErrorCode.entries) {
             if (contractCode == ContractErrorCode.UNKNOWN) continue
@@ -205,17 +217,20 @@ class ContractConformanceTest {
     }
 
     // =========================================================================
-    // ModelStatus — 5 canonical statuses
+    // ModelStatus — 4 canonical statuses
+    //
+    // Contracts 1.23.0 dropped the `queued` lifecycle state and renamed
+    // `failed` -> `error` to align with octomil-contracts/enums/model_status.yaml.
     // =========================================================================
 
     @Test
-    fun `generated ModelStatus has exactly 5 entries`() {
-        assertEquals(5, ContractModelStatus.entries.size)
+    fun `generated ModelStatus has exactly 4 entries`() {
+        assertEquals(4, ContractModelStatus.entries.size)
     }
 
     @Test
     fun `generated ModelStatus contains all canonical codes`() {
-        val expected = listOf("not_cached", "queued", "downloading", "ready", "failed")
+        val expected = listOf("not_cached", "downloading", "ready", "error")
         val actual = ContractModelStatus.entries.map { it.code }
         assertEquals(expected, actual)
     }
