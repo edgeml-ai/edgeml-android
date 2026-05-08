@@ -19,7 +19,7 @@ class Octomil(
     apiKey: String? = null,
     orgId: String? = null,
     auth: AuthConfig? = null,
-    private val serverUrl: String = OctomilConfig.DEFAULT_SERVER_URL,
+    private val serverUrl: String = OctomilConfig.resolvedDefaultServerUrl(),
     /**
      * Explicit planner routing override.
      *
