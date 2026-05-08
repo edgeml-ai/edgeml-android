@@ -312,4 +312,63 @@ class ProfileTest {
         val urls = OctomilProfile.values().map { OctomilProfileResolver.hostUrl(it) }.toSet()
         assertEquals(OctomilProfile.values().size, urls.size)
     }
+
+    // ── Hostile-URL inference safety (codex post-debate B1) ────────
+
+    @Test
+    fun `marker in query string does not spoof profile`() {
+        val res = OctomilProfileResolver.resolveProfile(
+            environment = mapOf("OCTOMIL_API_BASE" to "https://evil.test/?next=api.staging.octomil.com"),
+        )
+        assertEquals(OctomilProfile.Production, res.profile)
+        assertEquals(OctomilProfileResolution.Source.Default, res.source)
+    }
+
+    @Test
+    fun `marker in path does not spoof profile`() {
+        val res = OctomilProfileResolver.resolveProfile(
+            environment = mapOf("OCTOMIL_API_BASE" to "https://evil.test/api.octomil.com/v1"),
+        )
+        assertEquals(OctomilProfile.Production, res.profile)
+    }
+
+    @Test
+    fun `marker in userinfo does not spoof profile`() {
+        val res = OctomilProfileResolver.resolveProfile(
+            environment = mapOf("OCTOMIL_API_BASE" to "https://api.staging.octomil.com@evil.test/v1"),
+        )
+        // URI.host is evil.test, not api.staging.octomil.com.
+        assertEquals(OctomilProfile.Production, res.profile)
+    }
+
+    @Test
+    fun `superdomain does not spoof production`() {
+        val res = OctomilProfileResolver.resolveProfile(
+            environment = mapOf("OCTOMIL_API_BASE" to "https://api.octomil.com.evil.test/v1"),
+        )
+        assertEquals(OctomilProfile.Production, res.profile)
+        assertEquals(OctomilProfileResolution.Source.Default, res.source)
+    }
+
+    @Test
+    fun `unparseable URL falls through safely`() {
+        val res = OctomilProfileResolver.resolveProfile(
+            environment = mapOf("OCTOMIL_API_BASE" to "not a url"),
+        )
+        assertEquals(OctomilProfile.Production, res.profile)
+    }
+
+    // ── Whitespace fallback (codex post-debate N1) ─────────────────
+
+    @Test
+    fun `whitespace API_BASE falls back to API_URL`() {
+        val res = OctomilProfileResolver.resolveProfile(
+            environment = mapOf(
+                "OCTOMIL_API_BASE" to "   ",
+                "OCTOMIL_API_URL" to "https://api.staging.octomil.com",
+            ),
+        )
+        assertEquals(OctomilProfile.Staging, res.profile)
+        assertEquals(OctomilProfileResolution.Source.UrlInferred, res.source)
+    }
 }

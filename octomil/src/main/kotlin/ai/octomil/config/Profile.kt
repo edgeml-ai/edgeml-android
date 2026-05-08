@@ -38,6 +38,9 @@
 
 package ai.octomil.config
 
+import java.net.URI
+import java.net.URISyntaxException
+
 /** Named SDK environment profiles. */
 enum class OctomilProfile(val rawValue: String) {
     Production("production"),
@@ -113,12 +116,14 @@ object OctomilProfileResolver {
         OctomilProfile.Dev to "octomil-models-dev",
     )
 
-    // Heuristic host substrings, ordered: staging FIRST (more specific)
-    // so api.staging.octomil.com matches before api.octomil.com.
-    private val HOST_INFERENCE_MARKERS: List<Pair<OctomilProfile, List<String>>> = listOf(
-        OctomilProfile.Staging to listOf("api.staging.octomil.com"),
-        OctomilProfile.Production to listOf("api.octomil.com"),
-        OctomilProfile.Dev to listOf("localhost", "127.0.0.1", "0.0.0.0"),
+    // Exact-host markers used for URL inference. Match is against the
+    // *parsed hostname*, never a substring of the raw URL — a hostile
+    // URL like https://evil.test/?next=api.staging.octomil.com or
+    // api.octomil.com.evil.test MUST NOT spoof a profile.
+    private val HOST_INFERENCE_MARKERS: List<Pair<OctomilProfile, Set<String>>> = listOf(
+        OctomilProfile.Staging to setOf("api.staging.octomil.com"),
+        OctomilProfile.Production to setOf("api.octomil.com"),
+        OctomilProfile.Dev to setOf("localhost", "127.0.0.1", "0.0.0.0"),
     )
 
     /** Canonical SDK host URL for the given profile (no /v1 suffix). */
@@ -177,9 +182,12 @@ object OctomilProfileResolver {
             )
         }
 
-        // 3. URL inference.
-        val explicitUrl = (env["OCTOMIL_API_BASE"] ?: "")
-            .ifEmpty { env["OCTOMIL_API_URL"] ?: "" }
+        // 3. URL inference. Trim BEFORE selecting so a whitespace
+        //    OCTOMIL_API_BASE doesn't mask a valid OCTOMIL_API_URL
+        //    (codex post-debate N1).
+        val baseTrimmed = (env["OCTOMIL_API_BASE"] ?: "").trim()
+        val urlTrimmed = (env["OCTOMIL_API_URL"] ?: "").trim()
+        val explicitUrl = baseTrimmed.ifEmpty { urlTrimmed }
         inferFromUrl(explicitUrl)?.let {
             return OctomilProfileResolution(
                 it,
@@ -224,12 +232,22 @@ object OctomilProfileResolver {
     }
 
     private fun inferFromUrl(raw: String): OctomilProfile? {
-        if (raw.isEmpty()) return null
-        val lowered = raw.trim().lowercase()
+        val trimmed = raw.trim()
+        if (trimmed.isEmpty()) return null
+        // Use URI to parse; substring matching the raw URL would let
+        // evil.test/?next=api.staging.octomil.com or
+        // api.octomil.com.evil.test spoof a profile (codex post-
+        // debate B1).
+        val host = try {
+            URI(trimmed).host?.lowercase()
+        } catch (_: URISyntaxException) {
+            null
+        } catch (_: IllegalArgumentException) {
+            null
+        }
+        if (host.isNullOrEmpty()) return null
         for ((profile, markers) in HOST_INFERENCE_MARKERS) {
-            for (marker in markers) {
-                if (lowered.contains(marker)) return profile
-            }
+            if (host in markers) return profile
         }
         return null
     }
