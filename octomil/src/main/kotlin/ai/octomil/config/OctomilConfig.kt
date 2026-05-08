@@ -465,5 +465,16 @@ data class OctomilConfig(
          * - On-prem example: `https://octomil.local:8443`
          */
         const val DEFAULT_SERVER_URL = "https://api.octomil.com"
+
+        /**
+         * Profile-aware default server URL. Honors `OCTOMIL_PROFILE`
+         * env (production/staging/dev) so an SDK consumer that
+         * doesn't pass an explicit `serverUrl` to the builder picks
+         * up the right endpoint per environment (codex post-debate
+         * B2). Falls back to `DEFAULT_SERVER_URL` (the prod literal).
+         */
+        @JvmStatic
+        fun resolvedDefaultServerUrl(): String =
+            OctomilProfileResolver.resolveHostUrl()
     }
 }

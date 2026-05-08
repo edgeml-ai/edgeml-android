@@ -71,7 +71,7 @@ object Octomil {
     private var _deviceContext: DeviceContext? = null
     private var _manifest: AppManifest? = null
     private var _monitoring: MonitoringConfig = MonitoringConfig()
-    private var _serverUrl: String = "https://api.octomil.com"
+    private var _serverUrl: String = ai.octomil.config.OctomilConfig.resolvedDefaultServerUrl()
     private var heartbeatJob: Job? = null
     private var _control: ControlPlaneClient? = null
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -134,7 +134,7 @@ object Octomil {
     suspend fun configure(
         context: Context,
         manifest: AppManifest,
-        serverUrl: String = "https://api.octomil.com",
+        serverUrl: String = ai.octomil.config.OctomilConfig.resolvedDefaultServerUrl(),
         apiKey: String? = null,
         auth: ai.octomil.sdk.AuthConfig? = null,
         monitoring: MonitoringConfig = MonitoringConfig(),
