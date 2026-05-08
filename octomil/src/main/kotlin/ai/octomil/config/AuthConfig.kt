@@ -52,7 +52,7 @@ sealed class AuthConfig {
     data class OrgApiKey(
         val apiKey: String,
         override val orgId: String,
-        override val serverUrl: String = OctomilConfig.DEFAULT_SERVER_URL,
+        override val serverUrl: String = OctomilConfig.resolvedDefaultServerUrl(),
     ) : AuthConfig() {
         override val token: String get() = apiKey
         override val authType: AuthType get() = AuthType.ORG_API_KEY
@@ -70,7 +70,7 @@ sealed class AuthConfig {
     data class DeviceToken(
         val deviceId: String,
         val bootstrapToken: String,
-        override val serverUrl: String = OctomilConfig.DEFAULT_SERVER_URL,
+        override val serverUrl: String = OctomilConfig.resolvedDefaultServerUrl(),
     ) : AuthConfig() {
         override val token: String get() = bootstrapToken
         override val orgId: String get() = ""
