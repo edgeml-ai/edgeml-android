@@ -3,6 +3,8 @@ package ai.octomil.conformance
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
+import org.junit.Assert.fail
+import org.junit.Ignore
 import org.junit.Test
 
 /**
@@ -395,40 +397,59 @@ class CapabilityLifecycleConformanceTest {
     }
 
     // =========================================================================
-    // SKIP_WITH_EXPLICIT_REASON: Native path tests
+    // SKIP_WITH_EXPLICIT_REASON: Native path lifecycle tests — 7 capabilities
     //
-    // All native invocation tests (open → ready → invoke → close against the
-    // ABI) are intentionally absent from this file. They MUST be added when
-    // the JNI bridge to liboctomil_runtime lands in octomil-android.
+    // Each test is @Ignore with an explicit reason string.
+    // The fail() body ensures that if @Ignore is ever removed without
+    // implementing the FFI bridge, the test fails loudly rather than silently.
     //
-    // Reason: JNI binding to liboctomil_runtime not yet wired in
-    //         octomil-android — oct_runtime_open / oct_session_open /
-    //         oct_session_send / oct_session_poll / oct_session_close JNI
-    //         stubs do not exist. Adding fake-pass tests here would violate
-    //         the hard rule: no cloud fallback hiding native skip.
+    // NativePathSkip.CLOUD_FALLBACK_ACTIVE = false is retained as documentation
+    // (cloud transport must NOT mask a native skip) but is NOT used in the
+    // test body — its only role is intent documentation.
     //
-    // TODO: octomil-android native runtime JNI bridge (track in issue)
+    // TODO: octomil-android native runtime JNI bridge
     // =========================================================================
 
     @Test
-    fun `native_path_all_capabilities_SKIP_JNI_not_wired`() {
-        // This is the explicit skip sentinel. When the JNI bridge lands, replace
-        // with live open→ready→invoke→close assertions against the native runtime.
-        val skipReason = NativePathSkip.REASON
-        assertTrue(
-            "Skip reason must document JNI status",
-            skipReason.contains("JNI"),
-        )
-        assertTrue(
-            "Skip reason must name liboctomil_runtime",
-            skipReason.contains("liboctomil_runtime"),
-        )
-        // Sentinel: this test must NOT pass via cloud transport.
-        // Cloud fallback is disallowed for native conformance assertions.
-        assertFalse(
-            "Cloud fallback must not mask a native skip",
-            NativePathSkip.CLOUD_FALLBACK_ACTIVE,
-        )
+    @Ignore("SKIP_WITH_EXPLICIT_REASON: native runtime FFI not yet wired in octomil-android — oct_runtime_open / oct_session_open / oct_session_send / oct_session_poll / oct_session_close JNI stubs do not exist. NativePathSkip.CLOUD_FALLBACK_ACTIVE = false (cloud transport explicitly disallowed from masking native skip). See TODO: native-ffi-binding")
+    fun chat_completion_native_lifecycle() {
+        fail("FFI bridge not implemented — this test should not be running")
+    }
+
+    @Test
+    @Ignore("SKIP_WITH_EXPLICIT_REASON: native runtime FFI not yet wired in octomil-android — oct_runtime_open / oct_session_open / oct_session_send / oct_session_poll / oct_session_close JNI stubs do not exist. NativePathSkip.CLOUD_FALLBACK_ACTIVE = false (cloud transport explicitly disallowed from masking native skip). See TODO: native-ffi-binding")
+    fun embeddings_text_native_lifecycle() {
+        fail("FFI bridge not implemented — this test should not be running")
+    }
+
+    @Test
+    @Ignore("SKIP_WITH_EXPLICIT_REASON: native runtime FFI not yet wired in octomil-android — oct_runtime_open / oct_session_open / oct_session_send / oct_session_poll / oct_session_close JNI stubs do not exist. NativePathSkip.CLOUD_FALLBACK_ACTIVE = false (cloud transport explicitly disallowed from masking native skip). See TODO: native-ffi-binding")
+    fun audio_transcription_native_lifecycle() {
+        fail("FFI bridge not implemented — this test should not be running")
+    }
+
+    @Test
+    @Ignore("SKIP_WITH_EXPLICIT_REASON: native runtime FFI not yet wired in octomil-android — oct_runtime_open / oct_session_open / oct_session_send / oct_session_poll / oct_session_close JNI stubs do not exist. NativePathSkip.CLOUD_FALLBACK_ACTIVE = false (cloud transport explicitly disallowed from masking native skip). See TODO: native-ffi-binding")
+    fun audio_vad_native_lifecycle() {
+        fail("FFI bridge not implemented — this test should not be running")
+    }
+
+    @Test
+    @Ignore("SKIP_WITH_EXPLICIT_REASON: native runtime FFI not yet wired in octomil-android — oct_runtime_open / oct_session_open / oct_session_send / oct_session_poll / oct_session_close JNI stubs do not exist. NativePathSkip.CLOUD_FALLBACK_ACTIVE = false (cloud transport explicitly disallowed from masking native skip). See TODO: native-ffi-binding")
+    fun audio_speaker_embedding_native_lifecycle() {
+        fail("FFI bridge not implemented — this test should not be running")
+    }
+
+    @Test
+    @Ignore("SKIP_WITH_EXPLICIT_REASON: native runtime FFI not yet wired in octomil-android — oct_runtime_open / oct_session_open / oct_session_send / oct_session_poll / oct_session_close JNI stubs do not exist. NativePathSkip.CLOUD_FALLBACK_ACTIVE = false (cloud transport explicitly disallowed from masking native skip). See TODO: native-ffi-binding")
+    fun audio_tts_batch_native_lifecycle() {
+        fail("FFI bridge not implemented — this test should not be running")
+    }
+
+    @Test
+    @Ignore("SKIP_WITH_EXPLICIT_REASON: native runtime FFI not yet wired in octomil-android — oct_runtime_open / oct_session_open / oct_session_send / oct_session_poll / oct_session_close JNI stubs do not exist. NativePathSkip.CLOUD_FALLBACK_ACTIVE = false (cloud transport explicitly disallowed from masking native skip). See TODO: native-ffi-binding")
+    fun audio_tts_stream_native_lifecycle() {
+        fail("FFI bridge not implemented — this test should not be running")
     }
 
     // =========================================================================
@@ -676,8 +697,11 @@ object PrivacyConstraints {
 }
 
 /**
- * Native path skip sentinel.
- * All native-invocation tests SKIP until the JNI bridge lands.
+ * Native path skip documentation.
+ * CLOUD_FALLBACK_ACTIVE is intentionally false and must remain so.
+ * It documents that cloud transport must NOT substitute for native
+ * conformance assertions. It is NOT used in the @Ignore test bodies
+ * (those use fail() directly). Its sole role is intent documentation.
  */
 object NativePathSkip {
     const val REASON = """
@@ -690,7 +714,8 @@ object NativePathSkip {
     """
 
     // Must remain false until JNI lands. A cloud transport must NEVER
-    // substitute for a native conformance assertion.
+    // substitute for a native conformance assertion. This constant is
+    // documentation only — it is not referenced from @Ignore test bodies.
     const val CLOUD_FALLBACK_ACTIVE = false
 }
 
