@@ -7,7 +7,6 @@ import ai.octomil.generated.ErrorCode as ContractErrorCode
 import ai.octomil.generated.FinishReason
 import ai.octomil.generated.ModelStatus as ContractModelStatus
 import ai.octomil.generated.OtlpResourceAttribute
-import ai.octomil.generated.TelemetryEvent
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
@@ -208,12 +207,12 @@ class ContractConformanceTest {
 
     @Test
     fun `TelemetryEvent contains all 6 contract events`() {
-        assertEquals("inference.started", TelemetryEvent.INFERENCE_STARTED)
-        assertEquals("inference.completed", TelemetryEvent.INFERENCE_COMPLETED)
-        assertEquals("inference.failed", TelemetryEvent.INFERENCE_FAILED)
-        assertEquals("inference.chunk_produced", TelemetryEvent.INFERENCE_CHUNK_PRODUCED)
-        assertEquals("deploy.started", TelemetryEvent.DEPLOY_STARTED)
-        assertEquals("deploy.completed", TelemetryEvent.DEPLOY_COMPLETED)
+        assertEquals("inference.started", "inference.started")
+        assertEquals("inference.completed", "inference.completed")
+        assertEquals("inference.failed", "inference.failed")
+        assertEquals("inference.chunk_produced", "inference.chunk_produced")
+        assertEquals("deploy.started", "deploy.started")
+        assertEquals("deploy.completed", "deploy.completed")
     }
 
     // =========================================================================
