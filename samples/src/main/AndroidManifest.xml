@@ -3,7 +3,7 @@
 
     <application
         android:label="Octomil Samples"
-        android:theme="@style/Theme.Material3.DynamicColors.DayNight">
+        android:theme="@style/Theme.OctomilSamples">
 
         <activity
             android:name=".MainActivity"

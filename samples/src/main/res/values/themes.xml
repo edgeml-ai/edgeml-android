@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Minimal Activity theme for the Compose-only samples module.
+
+    Theme.Material3.DynamicColors.DayNight (from com.google.android.material) is NOT
+    available in this module's dependency closure — samples only pulls in
+    androidx.compose.material3 which handles theming at the Compose layer, not the
+    Android resource layer.
+
+    Theme.OctomilSamples inherits from the platform's Material Light NoActionBar
+    theme, which is always available without extra library dependencies.  All visual
+    styling is applied inside each Activity via MaterialTheme { … } in Compose.
+-->
+<resources>
+    <style name="Theme.OctomilSamples" parent="@android:style/Theme.Material.Light.NoActionBar" />
+</resources>
