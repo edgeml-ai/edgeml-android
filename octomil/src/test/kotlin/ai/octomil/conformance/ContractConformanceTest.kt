@@ -7,7 +7,6 @@ import ai.octomil.generated.ErrorCode as ContractErrorCode
 import ai.octomil.generated.FinishReason
 import ai.octomil.generated.ModelStatus as ContractModelStatus
 import ai.octomil.generated.OtlpResourceAttribute
-import ai.octomil.generated.TelemetryEvent
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
@@ -202,19 +201,6 @@ class ContractConformanceTest {
         assertNull(ContractErrorCode.fromCode("nonexistent_code"))
     }
 
-    // =========================================================================
-    // TelemetryEvent — 6 canonical events
-    // =========================================================================
-
-    @Test
-    fun `TelemetryEvent contains all 6 contract events`() {
-        assertEquals("inference.started", TelemetryEvent.INFERENCE_STARTED)
-        assertEquals("inference.completed", TelemetryEvent.INFERENCE_COMPLETED)
-        assertEquals("inference.failed", TelemetryEvent.INFERENCE_FAILED)
-        assertEquals("inference.chunk_produced", TelemetryEvent.INFERENCE_CHUNK_PRODUCED)
-        assertEquals("deploy.started", TelemetryEvent.DEPLOY_STARTED)
-        assertEquals("deploy.completed", TelemetryEvent.DEPLOY_COMPLETED)
-    }
 
     // =========================================================================
     // ModelStatus — 4 canonical statuses

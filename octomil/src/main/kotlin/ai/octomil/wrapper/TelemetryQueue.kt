@@ -2,7 +2,6 @@ package ai.octomil.wrapper
 
 import ai.octomil.generated.SpanAttribute
 import ai.octomil.generated.SpanName
-import ai.octomil.generated.TelemetryEvent as ContractTelemetryEvent
 import ai.octomil.runtime.routing.RouteEvent
 import ai.octomil.runtime.routing.stripForbiddenKeys
 import kotlinx.coroutines.CoroutineDispatcher
@@ -363,7 +362,7 @@ class TelemetryQueue internal constructor(
         genericEvents: List<TelemetryV2Event>,
     ): List<TelemetryV2Event> {
         val converted = inferenceEvents.map { event ->
-            val name = if (event.success) ContractTelemetryEvent.INFERENCE_COMPLETED else ContractTelemetryEvent.INFERENCE_FAILED
+            val name = if (event.success) "inference.completed" else "inference.failed"
             val attrs = mutableMapOf<String, JsonPrimitive>(
                 "model.id" to JsonPrimitive(event.modelId),
                 "inference.duration_ms" to JsonPrimitive(event.latencyMs),
@@ -549,7 +548,7 @@ class TelemetryQueue internal constructor(
     fun reportDeployStarted(modelId: String, version: String) {
         enqueueV2Event(
             TelemetryV2Event(
-                name = ContractTelemetryEvent.DEPLOY_STARTED,
+                name = "deploy.started",
                 timestamp = formatTimestamp(),
                 attributes = TelemetryAttributes.of(
                     "model.id" to modelId,
@@ -565,7 +564,7 @@ class TelemetryQueue internal constructor(
     fun reportDeployCompleted(modelId: String, version: String, durationMs: Double) {
         enqueueV2Event(
             TelemetryV2Event(
-                name = ContractTelemetryEvent.DEPLOY_COMPLETED,
+                name = "deploy.completed",
                 timestamp = formatTimestamp(),
                 attributes = TelemetryAttributes.of(
                     "model.id" to modelId,
@@ -724,7 +723,7 @@ class TelemetryQueue internal constructor(
     fun reportInferenceStarted(modelId: String, locality: String = "on_device") {
         enqueueV2Event(
             TelemetryV2Event(
-                name = ContractTelemetryEvent.INFERENCE_STARTED,
+                name = "inference.started",
                 timestamp = formatTimestamp(),
                 attributes = TelemetryAttributes.of(
                     "model.id" to modelId,
@@ -745,7 +744,7 @@ class TelemetryQueue internal constructor(
     fun reportInferenceChunkProduced(modelId: String, chunkIndex: Int) {
         enqueueV2Event(
             TelemetryV2Event(
-                name = ContractTelemetryEvent.INFERENCE_CHUNK_PRODUCED,
+                name = "inference.chunk_produced",
                 timestamp = formatTimestamp(),
                 attributes = TelemetryAttributes.of(
                     "model.id" to modelId,
