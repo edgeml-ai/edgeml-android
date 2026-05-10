@@ -201,19 +201,6 @@ class ContractConformanceTest {
         assertNull(ContractErrorCode.fromCode("nonexistent_code"))
     }
 
-    // =========================================================================
-    // TelemetryEvent — 6 canonical events
-    // =========================================================================
-
-    @Test
-    fun `TelemetryEvent contains all 6 contract events`() {
-        assertEquals("inference.started", "inference.started")
-        assertEquals("inference.completed", "inference.completed")
-        assertEquals("inference.failed", "inference.failed")
-        assertEquals("inference.chunk_produced", "inference.chunk_produced")
-        assertEquals("deploy.started", "deploy.started")
-        assertEquals("deploy.completed", "deploy.completed")
-    }
 
     // =========================================================================
     // ModelStatus — 4 canonical statuses
