@@ -7,7 +7,6 @@ import ai.octomil.generated.ErrorCode as ContractErrorCode
 import ai.octomil.generated.FinishReason
 import ai.octomil.generated.ModelStatus as ContractModelStatus
 import ai.octomil.generated.OtlpResourceAttribute
-import ai.octomil.generated.TelemetryEvent
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
@@ -15,25 +14,23 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * Conformance tests validating that the Android SDK matches the
- * octomil-contracts specification.
+ * AUTO-GENERATED — do not edit.
  *
- * These tests verify:
- * 1. Generated enums contain the expected values from the contract YAML
- * 2. SDK error codes are 1:1 with generated contract error codes
- * 3. Wire-format error code strings round-trip correctly
- * 4. Telemetry event constants match the contract
- * 5. Fixture-driven error deserialization behaves per contract rules
+ * Source contracts:
+ *   enums/error_code.yaml, enums/model_status.yaml, enums/device_class.yaml,
+ *   enums/finish_reason.yaml, enums/compatibility_level.yaml,
+ *   telemetry/resource_attributes.yaml, fixtures/errors/
+ * Conformance version: 0.1.5-rc1
+ * Generator: scripts/generate_conformance.py (target=kotlin)
+ *
+ * Regenerated from contracts YAML; expected values are injected at code-gen
+ * time from YAML source (fixes Codex B1-class finding: oracle reads
+ * contract-source, not SDK-self-reference).
  */
 class ContractConformanceTest {
 
     // =========================================================================
-    // ErrorCode enum — 39 canonical codes
-    //
-    // Counts and ordering must track octomil-contracts/enums/error_code.yaml
-    // at the version pinned in `_generated/.contract-version.json`. When
-    // contracts add codes, regenerate `generated/ErrorCode.kt` first, then
-    // mirror the new entries here in canonical (YAML) order.
+    // ErrorCode enum — 39 canonical codes (from enums/error_code.yaml)
     // =========================================================================
 
     @Test
@@ -71,7 +68,6 @@ class ContractConformanceTest {
             "stream_interrupted",
             "policy_denied",
             "cloud_fallback_disallowed",
-            // Added in contracts 1.23.0 (cloud-credentials taxonomy).
             "cloud_credentials_missing",
             "cloud_credentials_revoked",
             "cloud_provider_auth_failed",
@@ -91,10 +87,8 @@ class ContractConformanceTest {
 
     @Test
     fun `every generated ErrorCode maps to a valid OctomilErrorCode`() {
-        // 37 SDK codes map to 39 contract codes: TOKEN_EXPIRED -> AUTHENTICATION_FAILED,
-        // DEVICE_REVOKED -> FORBIDDEN. Verify every contract code resolves to a non-UNKNOWN
-        // SDK code (or to an expected alias). The cloud_* codes added in
-        // contracts 1.23.0 have direct SDK equivalents so they don't need aliasing.
+        // 37 direct mappings + 2 aliases:
+        //   TOKEN_EXPIRED -> AUTHENTICATION_FAILED, DEVICE_REVOKED -> FORBIDDEN
         val aliasMap = mapOf(
             "TOKEN_EXPIRED" to "AUTHENTICATION_FAILED",
             "DEVICE_REVOKED" to "FORBIDDEN",
@@ -103,7 +97,7 @@ class ContractConformanceTest {
             val sdkCode = OctomilErrorCode.fromContractCode(contractCode.code)
             val expectedName = aliasMap[contractCode.name] ?: contractCode.name
             assertEquals(
-                "Contract code '${contractCode.code}' should map to SDK code $expectedName",
+                "Contract code '${contractCode.code}' should map to SDK code ${expectedName}",
                 expectedName,
                 sdkCode.name,
             )
@@ -112,13 +106,9 @@ class ContractConformanceTest {
 
     @Test
     fun `OctomilErrorCode covers all contract codes`() {
-        // SDK has 37 entries; contract has 39 (TOKEN_EXPIRED and DEVICE_REVOKED
-        // are aliased to AUTHENTICATION_FAILED and FORBIDDEN respectively).
-        // Counts moved from 34/36 -> 37/39 with contracts 1.23.0 (added
-        // CLOUD_CREDENTIALS_MISSING/REVOKED + CLOUD_PROVIDER_AUTH_FAILED).
+        // SDK has 37 entries; contract has 39.
         assertEquals(37, OctomilErrorCode.entries.size)
         assertEquals(39, ContractErrorCode.entries.size)
-        // Every contract code must resolve to a non-UNKNOWN SDK code
         for (contractCode in ContractErrorCode.entries) {
             if (contractCode == ContractErrorCode.UNKNOWN) continue
             val sdkCode = OctomilErrorCode.fromContractCode(contractCode.code)
@@ -130,49 +120,36 @@ class ContractConformanceTest {
     }
 
     // =========================================================================
-    // Fixture: errors/model_not_found.json
+    // Fixture-driven error deserialization (from fixtures/errors/)
     // =========================================================================
 
     @Test
-    fun `fixture model_not_found — code parses to MODEL_NOT_FOUND`() {
-        // From fixtures/errors/model_not_found.json: code = "model_not_found"
+    fun `fixture model_not_found — code parses correctly`() {
+        // Source: fixtures/errors/model_not_found.json — input.code = "model_not_found"
         val code = OctomilErrorCode.fromContractCode("model_not_found")
         assertEquals(OctomilErrorCode.MODEL_NOT_FOUND, code)
         assertEquals(false, code.retryable)
     }
 
-    // =========================================================================
-    // Fixture: errors/rate_limited.json
-    // =========================================================================
-
     @Test
-    fun `fixture rate_limited — code parses to RATE_LIMITED and is retryable`() {
-        // From fixtures/errors/rate_limited.json: code = "rate_limited", retryable = true
+    fun `fixture rate_limited — code parses correctly`() {
+        // Source: fixtures/errors/rate_limited.json — input.code = "rate_limited"
         val code = OctomilErrorCode.fromContractCode("rate_limited")
         assertEquals(OctomilErrorCode.RATE_LIMITED, code)
         assertEquals(true, code.retryable)
     }
 
-    // =========================================================================
-    // Fixture: errors/inference_failed.json
-    // =========================================================================
-
     @Test
-    fun `fixture inference_failed — code parses to INFERENCE_FAILED and is retryable`() {
-        // From fixtures/errors/inference_failed.json: code = "inference_failed", retryable = true
+    fun `fixture inference_failed — code parses correctly`() {
+        // Source: fixtures/errors/inference_failed.json — input.code = "inference_failed"
         val code = OctomilErrorCode.fromContractCode("inference_failed")
         assertEquals(OctomilErrorCode.INFERENCE_FAILED, code)
         assertEquals(true, code.retryable)
     }
 
-    // =========================================================================
-    // Fixture: errors/unknown_error_fallback.json
-    // =========================================================================
-
     @Test
     fun `fixture unknown_error_fallback — unrecognised code falls back to UNKNOWN`() {
-        // From fixtures/errors/unknown_error_fallback.json:
-        // input.code = "some_future_error_code" -> expected.code = "unknown"
+        // Source: fixtures/errors/unknown_error_fallback.json — input.code = "some_future_error_code"
         val code = OctomilErrorCode.fromContractCode("some_future_error_code")
         assertEquals(OctomilErrorCode.UNKNOWN, code)
         assertEquals(false, code.retryable)
@@ -203,24 +180,7 @@ class ContractConformanceTest {
     }
 
     // =========================================================================
-    // TelemetryEvent — 6 canonical events
-    // =========================================================================
-
-    @Test
-    fun `TelemetryEvent contains all 6 contract events`() {
-        assertEquals("inference.started", TelemetryEvent.INFERENCE_STARTED)
-        assertEquals("inference.completed", TelemetryEvent.INFERENCE_COMPLETED)
-        assertEquals("inference.failed", TelemetryEvent.INFERENCE_FAILED)
-        assertEquals("inference.chunk_produced", TelemetryEvent.INFERENCE_CHUNK_PRODUCED)
-        assertEquals("deploy.started", TelemetryEvent.DEPLOY_STARTED)
-        assertEquals("deploy.completed", TelemetryEvent.DEPLOY_COMPLETED)
-    }
-
-    // =========================================================================
-    // ModelStatus — 4 canonical statuses
-    //
-    // Contracts 1.23.0 dropped the `queued` lifecycle state and renamed
-    // `failed` -> `error` to align with octomil-contracts/enums/model_status.yaml.
+    // ModelStatus — 4 canonical statuses (from enums/model_status.yaml)
     // =========================================================================
 
     @Test
@@ -230,7 +190,12 @@ class ContractConformanceTest {
 
     @Test
     fun `generated ModelStatus contains all canonical codes`() {
-        val expected = listOf("not_cached", "downloading", "ready", "error")
+        val expected = listOf(
+            "not_cached",
+            "downloading",
+            "ready",
+            "error",
+        )
         val actual = ContractModelStatus.entries.map { it.code }
         assertEquals(expected, actual)
     }
@@ -243,7 +208,7 @@ class ContractConformanceTest {
     }
 
     // =========================================================================
-    // DeviceClass — 4 canonical classes
+    // DeviceClass — 4 canonical classes (from enums/device_class.yaml)
     // =========================================================================
 
     @Test
@@ -253,13 +218,18 @@ class ContractConformanceTest {
 
     @Test
     fun `generated DeviceClass contains all canonical codes`() {
-        val expected = listOf("flagship", "high", "mid", "low")
+        val expected = listOf(
+            "flagship",
+            "high",
+            "mid",
+            "low",
+        )
         val actual = DeviceClass.entries.map { it.code }
         assertEquals(expected, actual)
     }
 
     // =========================================================================
-    // FinishReason — 4 canonical reasons
+    // FinishReason — 4 canonical reasons (from enums/finish_reason.yaml)
     // =========================================================================
 
     @Test
@@ -269,13 +239,18 @@ class ContractConformanceTest {
 
     @Test
     fun `generated FinishReason contains all canonical codes`() {
-        val expected = listOf("stop", "tool_calls", "length", "content_filter")
+        val expected = listOf(
+            "stop",
+            "tool_calls",
+            "length",
+            "content_filter",
+        )
         val actual = FinishReason.entries.map { it.code }
         assertEquals(expected, actual)
     }
 
     // =========================================================================
-    // CompatibilityLevel — 4 canonical levels
+    // CompatibilityLevel — 4 canonical levels (from enums/compatibility_level.yaml)
     // =========================================================================
 
     @Test
@@ -285,21 +260,34 @@ class ContractConformanceTest {
 
     @Test
     fun `generated CompatibilityLevel contains all canonical codes`() {
-        val expected = listOf("stable", "beta", "experimental", "compatibility")
+        val expected = listOf(
+            "stable",
+            "beta",
+            "experimental",
+            "compatibility",
+        )
         val actual = CompatibilityLevel.entries.map { it.code }
         assertEquals(expected, actual)
     }
 
     // =========================================================================
-    // OtlpResourceAttribute — 6 canonical keys
+    // OtlpResourceAttribute — from telemetry/resource_attributes.yaml
     // =========================================================================
 
     @Test
     fun `OtlpResourceAttribute contains all canonical keys`() {
         assertEquals("service.name", OtlpResourceAttribute.SERVICE_NAME)
         assertEquals("service.version", OtlpResourceAttribute.SERVICE_VERSION)
-        // OCTOMIL_SDK and OS_TYPE were removed from generated code — keys renamed
+        assertEquals("telemetry.sdk.name", OtlpResourceAttribute.TELEMETRY_SDK_NAME)
+        assertEquals("telemetry.sdk.language", OtlpResourceAttribute.TELEMETRY_SDK_LANGUAGE)
+        assertEquals("telemetry.sdk.version", OtlpResourceAttribute.TELEMETRY_SDK_VERSION)
         assertEquals("octomil.org.id", OtlpResourceAttribute.OCTOMIL_ORG_ID)
         assertEquals("octomil.device.id", OtlpResourceAttribute.OCTOMIL_DEVICE_ID)
+        assertEquals("octomil.platform", OtlpResourceAttribute.OCTOMIL_PLATFORM)
+        assertEquals("octomil.sdk.surface", OtlpResourceAttribute.OCTOMIL_SDK_SURFACE)
+        assertEquals("octomil.install.id", OtlpResourceAttribute.OCTOMIL_INSTALL_ID)
+        assertEquals("octomil.device.class", OtlpResourceAttribute.OCTOMIL_DEVICE_CLASS)
+        assertEquals("octomil.available_runtimes", OtlpResourceAttribute.OCTOMIL_AVAILABLE_RUNTIMES)
+        assertEquals("octomil.accelerators", OtlpResourceAttribute.OCTOMIL_ACCELERATORS)
     }
 }
