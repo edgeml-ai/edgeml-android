@@ -73,7 +73,8 @@ android {
             all {
                 it.maxHeapSize = "3g"
                 it.maxParallelForks = 1
-                it.forkEvery = 5
+                it.forkEvery = 1
+                it.setFailFast(true)
                 it.jvmArgs(
                     "--add-opens=java.base/java.lang=ALL-UNNAMED",
                     "--add-opens=java.base/java.lang.reflect=ALL-UNNAMED",
