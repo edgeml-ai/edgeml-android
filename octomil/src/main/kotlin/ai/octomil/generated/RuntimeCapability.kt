@@ -16,6 +16,7 @@ enum class RuntimeCapability(val code: String) {
     AUDIO_TTS_BATCH("audio.tts.batch"),
     AUDIO_TTS_STREAM("audio.tts.stream"),
     AUDIO_VAD("audio.vad"),
+    CACHE_INTROSPECT("cache.introspect"),
     CHAT_COMPLETION("chat.completion"),
     CHAT_STREAM("chat.stream"),
     EMBEDDINGS_IMAGE("embeddings.image"),
