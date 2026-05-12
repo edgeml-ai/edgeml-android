@@ -66,8 +66,10 @@ class OctomilClientTest {
     fun setUp() {
         Dispatchers.setMain(testDispatcher)
 
-        // Mock DeviceUtils to avoid NPE from null Build fields on CI JVM
+        // Mock platform probes to avoid NPE/ClassCastException from Android
+        // services and Build fields on CI JVM.
         mockkObject(DeviceUtils)
+        mockkObject(BatteryUtils)
         every { DeviceUtils.getManufacturer() } returns "TestManufacturer"
         every { DeviceUtils.getModel() } returns "TestModel"
         every { DeviceUtils.getOsVersion() } returns "Android 14 (API 34)"
@@ -80,6 +82,8 @@ class OctomilClientTest {
         )
         every { DeviceUtils.getAvailableStorageMb() } returns 2048L
         every { DeviceUtils.getAvailableMemoryMb(any()) } returns 1024L
+        every { BatteryUtils.getBatteryLevel(any()) } returns 80
+        every { BatteryUtils.isCharging(any()) } returns true
 
         context = mockk<Context>(relaxed = true)
         every { context.applicationContext } returns context
@@ -113,6 +117,7 @@ class OctomilClientTest {
     fun tearDown() {
         Dispatchers.resetMain()
         unmockkObject(DeviceUtils)
+        unmockkObject(BatteryUtils)
     }
 
     /**
