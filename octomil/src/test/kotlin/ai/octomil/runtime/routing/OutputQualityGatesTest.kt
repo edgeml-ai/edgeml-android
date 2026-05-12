@@ -14,7 +14,7 @@ import kotlin.test.assertTrue
  * Tests for the output quality gate taxonomy extension.
  *
  * Covers:
- * - GateClassification table correctness for all 18 gate codes
+ * - GateClassification table correctness for all known gate codes
  * - Default classification for unknown codes
  * - Post-inference gate skipping during run()
  * - Quality gate failure triggering fallback (pre-output)
@@ -28,7 +28,7 @@ class OutputQualityGatesTest {
     // -- GateClassification tests --
 
     @Test
-    fun `classifyGate returns correct values for all 18 known codes`() {
+    fun `classifyGate returns correct values for all known codes`() {
         // Readiness gates
         val readinessCodes = listOf(
             "artifact_verified", "runtime_available", "model_loads",
@@ -57,6 +57,20 @@ class OutputQualityGatesTest {
             assertEquals(expected.third, info.blockingDefault, "blockingDefault for $code")
         }
 
+        // Device-environment gates
+        val deviceGates = mapOf(
+            "min_battery_pct" to Triple("performance", "pre_inference", false),
+            "max_thermal_state" to Triple("performance", "pre_inference", false),
+            "require_charging" to Triple("performance", "pre_inference", false),
+            "require_wifi" to Triple("readiness", "pre_inference", true),
+        )
+        for ((code, expected) in deviceGates) {
+            val info = GateClassification.classify(code)
+            assertEquals(expected.first, info.gateClass, "gateClass for $code")
+            assertEquals(expected.second, info.evaluationPhase, "evaluationPhase for $code")
+            assertEquals(expected.third, info.blockingDefault, "blockingDefault for $code")
+        }
+
         // Output quality gates
         val qualityGates = mapOf(
             "schema_valid" to true,
@@ -73,8 +87,8 @@ class OutputQualityGatesTest {
             assertEquals(blocking, info.blockingDefault, "blockingDefault for $code")
         }
 
-        // Verify all 18 codes are in the table
-        assertEquals(18, GateClassification.TABLE.size)
+        val expectedTableSize = readinessCodes.size + perfGates.size + deviceGates.size + qualityGates.size
+        assertEquals(expectedTableSize, GateClassification.TABLE.size)
     }
 
     @Test
