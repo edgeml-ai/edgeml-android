@@ -1,5 +1,7 @@
 package ai.octomil.client
 
+import ai.octomil.errors.OctomilErrorCode
+import ai.octomil.errors.OctomilException
 import kotlinx.serialization.json.Json
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
@@ -168,9 +170,10 @@ class EmbeddingClientTest {
                 .setBody("Unauthorized")
         )
 
-        assertFailsWith<RuntimeException> {
+        val error = assertFailsWith<OctomilException> {
             client.embed("model", input = "test")
         }
+        assertEquals(OctomilErrorCode.AUTHENTICATION_FAILED, error.errorCode)
     }
 
     // ------------------------------------------------------------------
