@@ -17,6 +17,7 @@ import ai.octomil.testConfig
 import ai.octomil.training.TFLiteTrainer
 import ai.octomil.training.WarmupResult
 import ai.octomil.sync.EventTypes
+import ai.octomil.utils.BatteryUtils
 import ai.octomil.utils.DeviceUtils
 import android.content.Context
 import io.mockk.coEvery
