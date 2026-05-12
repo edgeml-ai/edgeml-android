@@ -8,6 +8,7 @@ import org.junit.After
 import org.junit.Before
 import org.junit.Test
 import java.io.File
+import java.io.FileNotFoundException
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertNotNull
@@ -35,6 +36,7 @@ class ModelResolverTest {
 
         every { context.filesDir } returns filesDir
         every { context.cacheDir } returns cacheDir
+        every { context.assets.open(any()) } throws FileNotFoundException("asset missing in resolver test")
     }
 
     @After

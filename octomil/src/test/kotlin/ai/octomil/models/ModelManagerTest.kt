@@ -60,6 +60,7 @@ class ModelManagerTest {
 
         context = mockk<Context>(relaxed = true)
         every { context.cacheDir } returns cacheDir
+        every { context.filesDir } returns cacheDir
 
         api = mockk<OctomilApi>()
         storage = mockk<SecureStorage>(relaxed = true)

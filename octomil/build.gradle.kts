@@ -71,8 +71,10 @@ android {
             isIncludeAndroidResources = true
             isReturnDefaultValues = true
             all {
-                it.maxHeapSize = "2g"
-                it.forkEvery = 20
+                it.maxHeapSize = "3g"
+                it.maxParallelForks = 1
+                it.forkEvery = 1
+                it.setFailFast(true)
                 it.jvmArgs(
                     "--add-opens=java.base/java.lang=ALL-UNNAMED",
                     "--add-opens=java.base/java.lang.reflect=ALL-UNNAMED",

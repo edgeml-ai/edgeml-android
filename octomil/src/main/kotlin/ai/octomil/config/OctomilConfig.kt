@@ -410,7 +410,7 @@ data class OctomilConfig(
                     AuthConfig.OrgApiKey(
                         apiKey = _token ?: "",
                         orgId = _orgId ?: "",
-                        serverUrl = _serverUrl ?: DEFAULT_SERVER_URL,
+                        serverUrl = _serverUrl?.trimEnd('/') ?: DEFAULT_SERVER_URL,
                     )
                 } else {
                     throw OctomilException(

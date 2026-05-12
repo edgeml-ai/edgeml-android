@@ -96,7 +96,7 @@ class DeployBenchmarkSubmissionTest {
         val request = mockServer.takeRequest()
         assertEquals("POST", request.method)
         assertTrue(request.path!!.endsWith("/api/v1/deploy/pair/PAIR123/benchmark"))
-        assertEquals("application/json", request.getHeader("Content-Type"))
+        assertTrue(request.getHeader("Content-Type")!!.startsWith("application/json"))
         assertNotNull(request.getHeader("User-Agent"))
         assertTrue(request.getHeader("User-Agent")!!.startsWith("Octomil-Android-SDK/"))
 

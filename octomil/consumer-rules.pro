@@ -7,5 +7,6 @@
 -keep class ai.octomil.training.** { *; }
 
 # Engine JNI — keep all native method bindings
+-keep class ai.octomil.runtime.nativebridge.** { *; }
 -keep class com.k2fsa.sherpa.onnx.** { *; }
 -keep class com.arm.aichat.** { *; }

@@ -34,10 +34,10 @@ jobs:
   test:
     name: Test + Lint Android
     runs-on: ubuntu-latest
-    # Cap the gradle test run; the daily cron has been observed hanging
-    # for the full 6h job ceiling on `testDebugUnitTest`. Investigate
-    # the hang separately; this is the immediate runaway-cost fence.
-    timeout-minutes: 30
+    # Cap the gradle test run. Unit tests run with short-lived single-lane
+    # forks to avoid MockK/Robolectric heap accumulation, which is safer
+    # but a little slower than large shared test workers.
+    timeout-minutes: 45
     permissions:
       contents: read
 
