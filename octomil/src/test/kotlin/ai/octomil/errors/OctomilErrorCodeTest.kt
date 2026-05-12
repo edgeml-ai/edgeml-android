@@ -1,5 +1,6 @@
 package ai.octomil.errors
 
+import ai.octomil.generated.ErrorCode as ContractErrorCode
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
@@ -14,51 +15,24 @@ class OctomilErrorCodeTest {
     // =========================================================================
 
     @Test
-    fun `has exactly 34 canonical error codes`() {
-        assertEquals(34, OctomilErrorCode.entries.size)
+    fun `SDK error code count matches generated contract aliases`() {
+        assertEquals(expectedSdkCodes().size, OctomilErrorCode.entries.size)
     }
 
     @Test
-    fun `all expected codes are present`() {
-        val expected = setOf(
-            "NETWORK_UNAVAILABLE",
-            "REQUEST_TIMEOUT",
-            "SERVER_ERROR",
-            "INVALID_API_KEY",
-            "AUTHENTICATION_FAILED",
-            "FORBIDDEN",
-            "DEVICE_NOT_REGISTERED",
-            "MODEL_NOT_FOUND",
-            "MODEL_DISABLED",
-            "DOWNLOAD_FAILED",
-            "CHECKSUM_MISMATCH",
-            "INSUFFICIENT_STORAGE",
-            "RUNTIME_UNAVAILABLE",
-            "MODEL_LOAD_FAILED",
-            "INFERENCE_FAILED",
-            "INSUFFICIENT_MEMORY",
-            "RATE_LIMITED",
-            "INVALID_INPUT",
-            "UNSUPPORTED_MODALITY",
-            "CONTEXT_TOO_LARGE",
-            "VERSION_NOT_FOUND",
-            "ACCELERATOR_UNAVAILABLE",
-            "STREAM_INTERRUPTED",
-            "POLICY_DENIED",
-            "CLOUD_FALLBACK_DISALLOWED",
-            "MAX_TOOL_ROUNDS_EXCEEDED",
-            "TRAINING_FAILED",
-            "TRAINING_NOT_SUPPORTED",
-            "WEIGHT_UPLOAD_FAILED",
-            "CONTROL_SYNC_FAILED",
-            "ASSIGNMENT_NOT_FOUND",
-            "CANCELLED",
-            "APP_BACKGROUNDED",
-            "UNKNOWN",
-        )
-        val actual = OctomilErrorCode.entries.map { it.name }.toSet()
-        assertEquals(expected, actual)
+    fun `all generated contract codes map to SDK codes`() {
+        val actual = OctomilErrorCode.entries.toSet()
+        assertEquals(expectedSdkCodes(), actual)
     }
+
+    private fun expectedSdkCodes(): Set<OctomilErrorCode> =
+        ContractErrorCode.entries.map { contractCode ->
+            when (contractCode) {
+                ContractErrorCode.TOKEN_EXPIRED -> OctomilErrorCode.AUTHENTICATION_FAILED
+                ContractErrorCode.DEVICE_REVOKED -> OctomilErrorCode.FORBIDDEN
+                else -> OctomilErrorCode.valueOf(contractCode.name)
+            }
+        }.toSet()
 
     // =========================================================================
     // Retryable flags
