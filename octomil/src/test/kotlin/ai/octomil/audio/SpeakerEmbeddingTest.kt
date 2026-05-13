@@ -5,6 +5,10 @@ import ai.octomil.errors.OctomilException
 import ai.octomil.generated.RuntimeCapability
 import ai.octomil.runtime.nativebridge.NativeRuntimeBridge
 import ai.octomil.runtime.nativebridge.NativeRuntimeCapabilities
+import ai.octomil.runtime.nativebridge.NativeRuntimeResult
+import ai.octomil.runtime.nativebridge.NativeSession
+import io.mockk.every
+import io.mockk.mockk
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -86,5 +90,42 @@ class SpeakerEmbeddingTest {
                 RuntimeCapability.AUDIO_SPEAKER_EMBEDDING,
             ),
         )
+    }
+
+    // ------------------------------------------------------------------
+    // 3. Regression: poll-loop timeout must be REQUEST_TIMEOUT, not success
+    //
+    // Previously, if SESSION_COMPLETED never arrived before the drain
+    // deadline, drainEmbeddingEvents could return a partial embedding
+    // vector or throw INFERENCE_FAILED instead of REQUEST_TIMEOUT.
+    // This test pins the fix: an expired deadline without SessionCompleted
+    // must always throw REQUEST_TIMEOUT.
+    // ------------------------------------------------------------------
+
+    @Test
+    fun `drainEmbeddingEvents throws REQUEST_TIMEOUT when deadline expires without SessionCompleted`() {
+        // Arrange: a mock bridge whose pollEvent always returns null (JNI TIMEOUT)
+        // simulating a hung native session that never delivers SessionCompleted.
+        val mockBridge = mockk<NativeRuntimeBridge>(relaxed = true)
+        every { mockBridge.sessionPollEvent(any(), any()) } returns NativeRuntimeResult.Success(null)
+
+        val session = NativeSession(mockBridge, handle = 1L)
+        val embedding = SpeakerEmbedding(NativeRuntimeBridge("octomil_runtime_jni_missing_for_unit_test"))
+
+        try {
+            embedding.drainEmbeddingEvents(session, drainDeadlineMs = 0L)
+            fail("Expected OctomilException with REQUEST_TIMEOUT")
+        } catch (e: OctomilException) {
+            assertEquals(
+                "Poll-loop deadline expiry must surface as REQUEST_TIMEOUT",
+                OctomilErrorCode.REQUEST_TIMEOUT,
+                e.errorCode,
+            )
+            assertTrue(
+                "Error message must mention speaker.embedding and timeout",
+                e.message?.contains("speaker", ignoreCase = true) == true &&
+                    e.message?.contains("timed out", ignoreCase = true) == true,
+            )
+        }
     }
 }
