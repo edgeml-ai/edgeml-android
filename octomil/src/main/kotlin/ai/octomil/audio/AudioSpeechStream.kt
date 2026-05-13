@@ -163,6 +163,7 @@ class AudioSpeechStream internal constructor(
             val nativeModel = when (
                 val m = runtime.openModel(
                     ai.octomil.runtime.nativebridge.NativeModelConfig(
+                        modelUri = model,
                         engineHint = "sherpa_onnx",
                     ),
                 )
@@ -226,8 +227,17 @@ class AudioSpeechStream internal constructor(
         session: ai.octomil.runtime.nativebridge.NativeSession,
     ) {
         var chunkIndex = 0
-        var sawFinalChunk = false
+        // Pending chunk is held back by one so that the last audio chunk
+        // can be flushed with isFinal = true when SessionCompleted(OK) arrives.
+        var pendingChunk: TtsPcmChunk? = null
         val deadlineMs = System.currentTimeMillis() + DRAIN_DEADLINE_MS
+
+        suspend fun flushPending(finalFlag: Boolean) {
+            pendingChunk?.let { p ->
+                send(p.copy(isFinal = finalFlag))
+                pendingChunk = null
+            }
+        }
 
         while (System.currentTimeMillis() < deadlineMs) {
             val result = session.pollEvent(timeoutMs = POLL_TIMEOUT_MS)
@@ -244,25 +254,27 @@ class AudioSpeechStream internal constructor(
                     when (val ev = result.value) {
                         null -> continue
                         is NativeSessionEvent.TtsChunk -> {
-                            val isFinal = chunkIndex >= 0 && ev.pcm.isNotEmpty()
-                            val chunk = TtsPcmChunk(
+                            // Flush the previously buffered chunk (not final) before
+                            // buffering this one; the final flag will be set when
+                            // SessionCompleted arrives.
+                            flushPending(finalFlag = false)
+                            pendingChunk = TtsPcmChunk(
                                 pcm = ev.pcm,
                                 sampleRate = ev.sampleRate,
                                 chunkIndex = chunkIndex++,
                                 isFinal = false,
                             )
-                            send(chunk)
                         }
                         is NativeSessionEvent.AudioChunk -> {
                             // AudioChunk is the generic audio wire shape; accept
                             // it as a TTS chunk when in a TTS-stream session.
-                            val chunk = TtsPcmChunk(
+                            flushPending(finalFlag = false)
+                            pendingChunk = TtsPcmChunk(
                                 pcm = ev.pcm,
                                 sampleRate = ev.sampleRate,
                                 chunkIndex = chunkIndex++,
                                 isFinal = false,
                             )
-                            send(chunk)
                         }
                         is NativeSessionEvent.SessionCompleted -> {
                             if (ev.terminalStatus != NativeRuntimeStatus.OK) {
@@ -273,10 +285,9 @@ class AudioSpeechStream internal constructor(
                                         "error ${ev.terminalStatus.cName}",
                                 )
                             }
-                            // Mark last emitted chunk as final retroactively is not
-                            // possible via Flow; instead emit a zero-byte terminal
-                            // chunk when no chunks were ever emitted (degenerate case).
                             if (chunkIndex == 0) {
+                                // Degenerate: no audio chunks at all — emit a zero-byte
+                                // terminal sentinel so callers always receive isFinal = true.
                                 send(
                                     TtsPcmChunk(
                                         pcm = ByteArray(0),
@@ -286,7 +297,8 @@ class AudioSpeechStream internal constructor(
                                     ),
                                 )
                             } else {
-                                sawFinalChunk = true
+                                // Flush the last buffered chunk with isFinal = true.
+                                flushPending(finalFlag = true)
                             }
                             return
                         }
@@ -300,12 +312,11 @@ class AudioSpeechStream internal constructor(
             }
         }
 
-        if (!sawFinalChunk) {
-            throw OctomilException(
-                errorCode = OctomilErrorCode.REQUEST_TIMEOUT,
-                message = "audio.tts.stream: timed out waiting for SESSION_COMPLETED (${DRAIN_DEADLINE_MS}ms)",
-            )
-        }
+        // Deadline expired without SessionCompleted — this is a timeout, not success.
+        throw OctomilException(
+            errorCode = OctomilErrorCode.REQUEST_TIMEOUT,
+            message = "audio.tts.stream: timed out waiting for SESSION_COMPLETED (${DRAIN_DEADLINE_MS}ms)",
+        )
     }
 
     companion object {
