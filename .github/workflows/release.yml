@@ -1,13 +1,10 @@
 name: Release
 
 on:
-  push:
-    tags:
-      - 'v*'
   workflow_dispatch:
     inputs:
       version:
-        description: 'Release version (e.g. v1.0.0)'
+        description: 'Release version (e.g. 1.2.3 or v1.2.3)'
         required: true
         type: string
       include_external_runtimes:
@@ -30,35 +27,84 @@ jobs:
       contents: write
 
     steps:
+      - name: Generate version bot token
+        id: app-token
+        uses: actions/create-github-app-token@a8d616148505b5069dccd32f177bb87d7f39123b # v3.0.0
+        with:
+          app-id: ${{ secrets.VERSION_BOT_APP_ID }}
+          private-key: ${{ secrets.VERSION_BOT_PRIVATE_KEY }}
+          owner: octomil
+          repositories: octomil-android
+
       - name: Determine version
         id: version
         env:
-          EVENT_NAME: ${{ github.event_name }}
           INPUT_VERSION: ${{ inputs.version }}
         run: |
-          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
-            VERSION="$INPUT_VERSION"
-          else
-            VERSION="${GITHUB_REF#refs/tags/}"
+          RAW="$INPUT_VERSION"
+          PLAIN="${RAW#v}"
+          if ! printf '%s' "$PLAIN" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "::error::Expected stable SemVer, got '$RAW'"
+            exit 1
           fi
-          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
-          echo "Building release ${VERSION}"
+          TAG="v${PLAIN}"
+          echo "version=${TAG}" >> "$GITHUB_OUTPUT"
+          echo "plain=${PLAIN}" >> "$GITHUB_OUTPUT"
+          echo "Building release ${TAG}"
 
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v4
         with:
+          ref: main
           fetch-depth: 0
+          token: ${{ steps.app-token.outputs.token }}
 
-      - name: Create tag (workflow_dispatch only)
-        if: github.event_name == 'workflow_dispatch'
+      - name: Bump gradle.properties
+        env:
+          PLAIN: ${{ steps.version.outputs.plain }}
+          TAG: ${{ steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          git config user.name "octomil-release-bot"
+          git config user.email "release-bot@octomil.local"
+          CURRENT=$(grep -E '^OCTOMIL_VERSION=' gradle.properties | cut -d= -f2 | tr -d ' ')
+          if [ "$CURRENT" = "$PLAIN" ]; then
+            echo "gradle.properties already at ${PLAIN}; no commit needed."
+            exit 0
+          fi
+          # Use python with argv to avoid sed pattern interpolation.
+          python3 - "$PLAIN" <<'PY'
+          import pathlib, re, sys
+          plain = sys.argv[1]
+          if not re.fullmatch(r"\d+\.\d+\.\d+", plain):
+              raise SystemExit(f"refusing to write non-SemVer version: {plain!r}")
+          path = pathlib.Path("gradle.properties")
+          text = path.read_text(encoding="utf-8")
+          new, n = re.subn(
+              r"^OCTOMIL_VERSION=.*$",
+              f"OCTOMIL_VERSION={plain}",
+              text, count=1, flags=re.MULTILINE,
+          )
+          if n != 1:
+              raise SystemExit("expected exactly one OCTOMIL_VERSION line")
+          path.write_text(new, encoding="utf-8")
+          PY
+          git add gradle.properties
+          git commit -m "chore: release ${TAG}"
+          git push origin main
+
+      - name: Create tag
         env:
           TAG: ${{ steps.version.outputs.version }}
         run: |
-          if ! git rev-parse "refs/tags/${TAG}" >/dev/null 2>&1; then
+          git fetch --tags origin
+          if git rev-parse -q --verify "refs/tags/${TAG}" >/dev/null; then
+            echo "Tag ${TAG} already exists locally."
+          elif git ls-remote --exit-code --tags origin "refs/tags/${TAG}" >/dev/null 2>&1; then
+            echo "Tag ${TAG} already exists on origin."
+          else
             git tag "${TAG}"
             git push origin "${TAG}"
-          else
-            echo "Tag ${TAG} already exists, skipping creation"
           fi
 
       - name: Set up JDK 17
@@ -125,6 +171,15 @@ jobs:
       contents: write
 
     steps:
+      - name: Generate version bot token
+        id: app-token
+        uses: actions/create-github-app-token@a8d616148505b5069dccd32f177bb87d7f39123b # v3.0.0
+        with:
+          app-id: ${{ secrets.VERSION_BOT_APP_ID }}
+          private-key: ${{ secrets.VERSION_BOT_PRIVATE_KEY }}
+          owner: octomil
+          repositories: octomil-android
+
       - name: Download artifact
         uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
         with:
@@ -137,10 +192,14 @@ jobs:
 
       - name: Create GitHub Release
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
           VERSION: ${{ needs.build.outputs.version }}
           PROVENANCE: ${{ needs.provenance.outputs.provenance-name }}
         run: |
+          if gh release view "${VERSION}" --repo "${GITHUB_REPOSITORY}" >/dev/null 2>&1; then
+            echo "Release ${VERSION} already exists; skipping creation."
+            exit 0
+          fi
           gh release create "${VERSION}" \
             octomil-release.aar \
             "${PROVENANCE}" \
