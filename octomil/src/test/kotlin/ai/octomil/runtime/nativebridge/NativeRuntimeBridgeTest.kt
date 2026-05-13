@@ -45,7 +45,7 @@ class NativeRuntimeBridgeTest {
     }
 
     @Test
-    fun `chat stream remains a non-advertised profile`() {
+    fun `chat stream remains advertised when runtime reports it`() {
         val wire = NativeRuntimeCapabilitiesWire(
             statusCode = NativeRuntimeStatus.OK.code,
             message = null,
@@ -65,9 +65,71 @@ class NativeRuntimeBridgeTest {
         val capabilities = NativeRuntimeCapabilities.fromWire(wire)
 
         assertTrue(capabilities.supportedCapabilities.contains(RuntimeCapability.CHAT_COMPLETION))
-        assertFalse(capabilities.supportedCapabilities.contains(RuntimeCapability.CHAT_STREAM))
-        assertTrue(capabilities.rejectedProfileCodes.contains(RuntimeCapability.CHAT_STREAM.code))
-        assertTrue(NativeRuntimeCapabilities.NON_ADVERTISED_PROFILES.contains(RuntimeCapability.CHAT_STREAM))
+        assertTrue(capabilities.supportedCapabilities.contains(RuntimeCapability.CHAT_STREAM))
+        assertFalse(capabilities.rejectedProfileCodes.contains(RuntimeCapability.CHAT_STREAM.code))
+        assertFalse(NativeRuntimeCapabilities.NON_ADVERTISED_PROFILES.contains(RuntimeCapability.CHAT_STREAM))
+    }
+
+    @Test
+    fun `diarization remains advertised when runtime reports it`() {
+        val wire = NativeRuntimeCapabilitiesWire(
+            statusCode = NativeRuntimeStatus.OK.code,
+            message = null,
+            supportedEngines = arrayOf("diarization"),
+            supportedCapabilities = arrayOf(RuntimeCapability.AUDIO_DIARIZATION.code),
+            supportedArchs = arrayOf("android-arm64"),
+            ramTotalBytes = 0,
+            ramAvailableBytes = 0,
+            hasAppleSilicon = false,
+            hasCuda = false,
+            hasMetal = false,
+        )
+
+        val capabilities = NativeRuntimeCapabilities.fromWire(wire)
+
+        assertTrue(capabilities.supportedCapabilities.contains(RuntimeCapability.AUDIO_DIARIZATION))
+        assertFalse(capabilities.rejectedProfileCodes.contains(RuntimeCapability.AUDIO_DIARIZATION.code))
+    }
+
+    @Test
+    fun `stt capabilities and cache introspect remain advertised when runtime reports them`() {
+        val wire = NativeRuntimeCapabilitiesWire(
+            statusCode = NativeRuntimeStatus.OK.code,
+            message = null,
+            supportedEngines = arrayOf("whisper_cpp", "sherpa_onnx"),
+            supportedCapabilities = arrayOf(
+                RuntimeCapability.AUDIO_STT_BATCH.code,
+                RuntimeCapability.AUDIO_STT_STREAM.code,
+                RuntimeCapability.CACHE_INTROSPECT.code,
+            ),
+            supportedArchs = arrayOf("android-arm64"),
+            ramTotalBytes = 0,
+            ramAvailableBytes = 0,
+            hasAppleSilicon = false,
+            hasCuda = false,
+            hasMetal = false,
+        )
+
+        val capabilities = NativeRuntimeCapabilities.fromWire(wire)
+
+        assertTrue(capabilities.supportedCapabilities.contains(RuntimeCapability.AUDIO_STT_BATCH))
+        assertTrue(capabilities.supportedCapabilities.contains(RuntimeCapability.AUDIO_STT_STREAM))
+        assertTrue(capabilities.supportedCapabilities.contains(RuntimeCapability.CACHE_INTROSPECT))
+        assertFalse(capabilities.rejectedProfileCodes.contains(RuntimeCapability.AUDIO_STT_BATCH.code))
+        assertFalse(capabilities.rejectedProfileCodes.contains(RuntimeCapability.AUDIO_STT_STREAM.code))
+        assertFalse(capabilities.rejectedProfileCodes.contains(RuntimeCapability.CACHE_INTROSPECT.code))
+        assertTrue(
+            NativeRuntimeCapabilities.LIVE_NATIVE_CONDITIONAL_PROFILES.contains(RuntimeCapability.AUDIO_STT_BATCH),
+        )
+        assertTrue(
+            NativeRuntimeCapabilities.LIVE_NATIVE_CONDITIONAL_PROFILES.contains(RuntimeCapability.AUDIO_STT_STREAM),
+        )
+        assertTrue(
+            NativeRuntimeCapabilities.LIVE_NATIVE_CONDITIONAL_PROFILES.contains(RuntimeCapability.CACHE_INTROSPECT),
+        )
+        assertFalse(
+            NativeRuntimeCapabilities.LIVE_NATIVE_CONDITIONAL_PROFILES.contains(RuntimeCapability.CHAT_STREAM),
+        )
     }
 
     @Test

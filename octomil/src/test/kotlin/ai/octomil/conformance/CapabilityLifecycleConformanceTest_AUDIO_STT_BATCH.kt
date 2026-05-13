@@ -1,7 +1,6 @@
 package ai.octomil.conformance
 
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Assert.fail
 import org.junit.Ignore
@@ -10,7 +9,7 @@ import org.junit.Test
 /**
  * AUTO-GENERATED — do not edit.
  *
- * Source contract: conformance/audio.transcription.yaml
+ * Source contract: conformance/audio.stt.batch.yaml
  * Conformance version: 0.1.5-rc1
  * Generator: scripts/generate_conformance.py (target=kotlin)
  *
@@ -20,15 +19,15 @@ import org.junit.Test
  * Required runtime ABI: {major:0, minor:10}
  * is_advertised: true
  *
- * Native-path lifecycle tests carry @Ignore — native shared library and
- * artifact wiring are not yet present in octomil-android. Each @Ignore body
- * calls fail() so removal without the bridge artifacts causes a loud failure.
+ * Native-path lifecycle tests carry @Ignore — native runtime artifacts are
+ * optional in octomil-android. Each @Ignore body calls fail() so removal
+ * without bridge plus model artifacts causes a loud failure.
  */
 @Suppress("ClassName")
-class CapabilityLifecycleConformanceTest_AUDIO_TRANSCRIPTION {
+class CapabilityLifecycleConformanceTest_AUDIO_STT_BATCH {
     @Test
     fun `capability name is byte-for-byte canonical`() {
-        assertEquals("audio.transcription", CAPABILITY)
+        assertEquals("audio.stt.batch", CAPABILITY)
     }
 
     @Test
@@ -76,6 +75,7 @@ class CapabilityLifecycleConformanceTest_AUDIO_TRANSCRIPTION {
         assertTrue(DENY_FIELD_SUBSTRINGS.contains(".wav"))
         assertTrue(DENY_FIELD_SUBSTRINGS.contains(".pcm"))
         assertTrue(DENY_FIELD_SUBSTRINGS.contains("ggml-tiny.bin"))
+        assertTrue(DENY_FIELD_SUBSTRINGS.contains("ggml-base.bin"))
     }
 
     // =========================================================================
@@ -83,9 +83,9 @@ class CapabilityLifecycleConformanceTest_AUDIO_TRANSCRIPTION {
     // =========================================================================
 
     @Test
-    @Ignore("SKIP_WITH_EXPLICIT_REASON: native runtime bridge artifacts are not yet wired in octomil-android — liboctomil_runtime_jni.so / liboctomil_runtime.so are missing. NativePathSkip.CLOUD_FALLBACK_ACTIVE = false (cloud transport explicitly disallowed from masking native skip). See TODO: native-ffi-binding")
-    fun `audioTranscription_native_lifecycle`() {
-        fail("Native bridge artifacts are missing — this test should not be running")
+    @Ignore("SKIP_WITH_EXPLICIT_REASON: native runtime bridge/model artifacts are optional in octomil-android — liboctomil_runtime.so and Whisper artifacts must be present. NativePathSkip.CLOUD_FALLBACK_ACTIVE = false (cloud transport explicitly disallowed from masking native skip). See TODO: native-ffi-binding")
+    fun `audioSttBatch_native_lifecycle`() {
+        fail("Native bridge or Whisper artifacts are missing — this test should not be running")
     }
 }
 
@@ -93,7 +93,7 @@ class CapabilityLifecycleConformanceTest_AUDIO_TRANSCRIPTION {
 // Contract constants — read from YAML, not from SDK (fixes B1 oracle drift)
 // =============================================================================
 
-private const val CAPABILITY = "audio.transcription"
+private const val CAPABILITY = "audio.stt.batch"
 private val IS_ADVERTISED = true
 private val LIFECYCLE_STEPS: List<String> = listOf("runtime_open", "model_open", "model_warm", "session_open", "send_audio", "poll_event", "session_close", "model_close", "runtime_close")
 private val BOUNDED_ERROR_CODES: Set<String> = setOf("cancelled", "inference_failed", "invalid_input", "runtime_unavailable", "unsupported_modality")
@@ -104,7 +104,7 @@ private val EVENT_SEQUENCE: List<EventStep> = listOf(
     EventStep("OCT_EVENT_TRANSCRIPT_FINAL", Quantifier.EXACTLY_ONE),
     EventStep("OCT_EVENT_SESSION_COMPLETED", Quantifier.EXACTLY_ONE),
 )
-private val DENY_FIELD_SUBSTRINGS: Set<String> = setOf("/Users/", "/private/var/", "/home/", ".wav", ".pcm", "ggml-tiny.bin")
+private val DENY_FIELD_SUBSTRINGS: Set<String> = setOf("/Users/", "/private/var/", "/home/", ".wav", ".pcm", "ggml-tiny.bin", "ggml-base.bin")
 private const val DELIVERY_TIMING = ""
 
 // Stub set used by is_advertised=false assertion — populated at wiring time

@@ -29,6 +29,12 @@ android {
         consumerProguardFiles("consumer-rules.pro")
 
         buildConfigField("String", "OCTOMIL_VERSION", "\"${project.property("OCTOMIL_VERSION")}\"")
+
+        externalNativeBuild {
+            cmake {
+                cppFlags += listOf("-std=c++17", "-fexceptions", "-frtti")
+            }
+        }
     }
 
     buildTypes {
@@ -64,6 +70,12 @@ android {
     buildFeatures {
         buildConfig = true
         compose = true
+    }
+
+    externalNativeBuild {
+        cmake {
+            path = file("src/main/cpp/CMakeLists.txt")
+        }
     }
 
     testOptions {

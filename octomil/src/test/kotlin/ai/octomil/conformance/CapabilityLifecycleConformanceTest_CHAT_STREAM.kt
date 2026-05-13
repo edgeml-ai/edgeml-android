@@ -1,7 +1,6 @@
 package ai.octomil.conformance
 
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Assert.fail
 import org.junit.Ignore
@@ -17,12 +16,12 @@ import org.junit.Test
  * Regenerated from contracts YAML; assertions read from contract source,
  * not SDK-self-reference (fixes Codex B1-class finding).
  *
- * Required runtime ABI: {major:0, minor:9}
- * is_advertised: false
+ * Required runtime ABI: {major:0, minor:10}
+ * is_advertised: true
  *
- * Native-path lifecycle tests carry @Ignore — JNI not yet wired in
- * octomil-android. Each @Ignore body calls fail() so removal without
- * implementing the FFI bridge causes a loud failure.
+ * Native-path lifecycle tests carry @Ignore — native shared library and
+ * artifact wiring are not yet present in octomil-android. Each @Ignore body
+ * calls fail() so removal without the bridge artifacts causes a loud failure.
  */
 @Suppress("ClassName")
 class CapabilityLifecycleConformanceTest_CHAT_STREAM {
@@ -33,7 +32,7 @@ class CapabilityLifecycleConformanceTest_CHAT_STREAM {
 
     @Test
     fun `is_advertised flag matches contract`() {
-        assertEquals(false, IS_ADVERTISED)
+        assertEquals(true, IS_ADVERTISED)
     }
 
     @Test
@@ -73,23 +72,14 @@ class CapabilityLifecycleConformanceTest_CHAT_STREAM {
         assertTrue(DENY_FIELD_SUBSTRINGS.contains("/home/"))
     }
 
-    @Test
-    fun `is_advertised false — literal capability must NOT appear as standalone`() {
-        // Codex G-003 equivalent: streaming profiles must not be falsely advertised.
-        assertFalse(
-            "is_advertised=false: '$CAPABILITY' must NOT be in LiveCapability.ALL",
-            LIVE_CAPABILITY_STUBS.contains(CAPABILITY),
-        )
-    }
-
     // =========================================================================
     // SKIP_WITH_EXPLICIT_REASON: native path lifecycle
     // =========================================================================
 
     @Test
-    @Ignore("SKIP_WITH_EXPLICIT_REASON: native runtime FFI not yet wired in octomil-android — oct_runtime_open / oct_session_open / oct_session_send / oct_session_poll / oct_session_close JNI stubs do not exist. NativePathSkip.CLOUD_FALLBACK_ACTIVE = false (cloud transport explicitly disallowed from masking native skip). See TODO: native-ffi-binding")
+    @Ignore("SKIP_WITH_EXPLICIT_REASON: native runtime bridge artifacts are not yet wired in octomil-android — liboctomil_runtime_jni.so / liboctomil_runtime.so are missing. NativePathSkip.CLOUD_FALLBACK_ACTIVE = false (cloud transport explicitly disallowed from masking native skip). See TODO: native-ffi-binding")
     fun `chatStream_native_lifecycle`() {
-        fail("FFI bridge not implemented — this test should not be running")
+        fail("Native bridge artifacts are missing — this test should not be running")
     }
 }
 
@@ -98,7 +88,7 @@ class CapabilityLifecycleConformanceTest_CHAT_STREAM {
 // =============================================================================
 
 private const val CAPABILITY = "chat.stream"
-private val IS_ADVERTISED = false
+private val IS_ADVERTISED = true
 private val LIFECYCLE_STEPS: List<String> = listOf("runtime_open", "model_open", "model_warm", "session_open", "send_text", "poll_event", "session_close", "model_close", "runtime_close")
 private val BOUNDED_ERROR_CODES: Set<String> = setOf("cancelled", "inference_failed", "invalid_input", "stream_interrupted")
 private val EVENT_SEQUENCE: List<EventStep> = listOf(
@@ -109,6 +99,3 @@ private val EVENT_SEQUENCE: List<EventStep> = listOf(
 )
 private val DENY_FIELD_SUBSTRINGS: Set<String> = setOf("/Users/", "/private/var/", "/home/")
 private const val DELIVERY_TIMING = ""
-
-// Stub set used by is_advertised=false assertion — populated at wiring time
-private val LIVE_CAPABILITY_STUBS: Set<String> = emptySet()

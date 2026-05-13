@@ -12,6 +12,7 @@ import ai.octomil.runtime.core.Engine
 import ai.octomil.runtime.core.ModelRuntimeRegistry
 import ai.octomil.runtime.engines.tflite.EngineRegistry
 import ai.octomil.runtime.engines.tflite.LLMRuntimeAdapter
+import ai.octomil.runtime.nativebridge.NativeRuntimeBridge
 import ai.octomil.api.OctomilApiFactory
 import ai.octomil.api.dto.DeviceCapabilities
 import ai.octomil.api.dto.DeviceRegistrationRequest
@@ -713,6 +714,19 @@ object Octomil {
         val responses = buildResponses(context, name, ModelResolver.default())
         return OctomilChat(modelName = name, responses = responses)
     }
+
+    /**
+     * Create a fail-closed bridge to the native OCT runtime C ABI.
+     *
+     * The returned bridge loads `liboctomil_runtime_jni.so`, then that JNI
+     * shim dynamically loads the platform `liboctomil_runtime.so`. If the
+     * runtime binary or model artifacts are absent, native calls return
+     * `NativeRuntimeResult.Skipped`/bounded errors rather than falling back to
+     * cloud execution.
+     */
+    fun nativeRuntimeBridge(
+        libraryName: String = NativeRuntimeBridge.DEFAULT_LIBRARY_NAME,
+    ): NativeRuntimeBridge = NativeRuntimeBridge(libraryName)
 
     /**
      * Create a chat interface with a custom [ModelResolver].

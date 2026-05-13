@@ -7,9 +7,9 @@ import ai.octomil.generated.RuntimeCapability
 /**
  * Minimal fail-closed JNI boundary for the OCT native runtime.
  *
- * This layer intentionally stops at runtime open, capabilities, last-error
- * mapping, and close. Model/session/event inference support is not exposed
- * until the Android module has real native build wiring and tests that prove it.
+ * The Android SDK carries runtime, model, session, event, and cache lifecycle
+ * objects. The native path fails closed until a platform liboctomil_runtime.so
+ * and required model artifacts are packaged with the app.
  */
 class NativeRuntimeBridge internal constructor(
     private val jni: NativeRuntimeJni,
@@ -101,6 +101,290 @@ class NativeRuntimeBridge internal constructor(
         }
     }
 
+    internal fun cacheIntrospect(handle: Long, bufferBytes: Int = 65_536): NativeRuntimeResult<String> {
+        if (handle <= 0L) {
+            return NativeRuntimeResult.Error(
+                NativeRuntimeIssue.fromStatus(
+                    NativeRuntimeStatus.INVALID_INPUT,
+                    "Native runtime handle is not open",
+                ),
+            )
+        }
+        if (bufferBytes <= 0) {
+            return NativeRuntimeResult.Error(
+                NativeRuntimeIssue.fromStatus(
+                    NativeRuntimeStatus.INVALID_INPUT,
+                    "Native cache introspect bufferBytes must be > 0",
+                ),
+            )
+        }
+
+        return when (val inspected = nativeCall { jni.cacheIntrospect(handle, bufferBytes) }) {
+            is NativeRuntimeResult.Success -> {
+                val wire = inspected.value
+                val status = NativeRuntimeStatus.fromCode(wire.statusCode)
+                if (status == NativeRuntimeStatus.OK && wire.json != null) {
+                    NativeRuntimeResult.Success(wire.json)
+                } else {
+                    NativeRuntimeResult.Error(
+                        NativeRuntimeIssue.fromStatus(
+                            status = status,
+                            message = wire.message ?: safeLastError(handle)
+                                ?: "Native runtime cache introspect failed with ${status.cName}",
+                        ),
+                    )
+                }
+            }
+            is NativeRuntimeResult.Error -> inspected
+            is NativeRuntimeResult.Skipped -> inspected
+        }
+    }
+
+    internal fun openModel(runtimeHandle: Long, config: NativeModelConfig): NativeRuntimeResult<NativeModel> {
+        if (runtimeHandle <= 0L) {
+            return NativeRuntimeResult.Error(
+                NativeRuntimeIssue.fromStatus(
+                    NativeRuntimeStatus.INVALID_INPUT,
+                    "Native runtime handle is not open",
+                ),
+            )
+        }
+
+        return when (val opened = nativeCall { jni.modelOpen(runtimeHandle, config) }) {
+            is NativeRuntimeResult.Success -> {
+                val wire = opened.value
+                val status = NativeRuntimeStatus.fromCode(wire.statusCode)
+                when {
+                    status == NativeRuntimeStatus.OK && wire.handle > 0L ->
+                        NativeRuntimeResult.Success(NativeModel(this, runtimeHandle, wire.handle))
+                    status == NativeRuntimeStatus.OK ->
+                        NativeRuntimeResult.Error(
+                            NativeRuntimeIssue.fromStatus(
+                                NativeRuntimeStatus.INTERNAL,
+                                wire.message ?: "Native runtime returned OK with a zero model handle",
+                            ),
+                        )
+                    else ->
+                        NativeRuntimeResult.Error(
+                            NativeRuntimeIssue.fromStatus(
+                                status = status,
+                                message = wire.message ?: safeLastThreadError()
+                                    ?: "Native model open failed with ${status.cName}",
+                            ),
+                        )
+                }
+            }
+            is NativeRuntimeResult.Error -> opened
+            is NativeRuntimeResult.Skipped -> opened
+        }
+    }
+
+    internal fun openSession(
+        runtimeHandle: Long,
+        modelHandle: Long,
+        config: NativeSessionConfig,
+    ): NativeRuntimeResult<NativeSession> {
+        if (runtimeHandle <= 0L) {
+            return NativeRuntimeResult.Error(
+                NativeRuntimeIssue.fromStatus(
+                    NativeRuntimeStatus.INVALID_INPUT,
+                    "Native runtime handle is not open",
+                ),
+            )
+        }
+        if (modelHandle <= 0L) {
+            return NativeRuntimeResult.Error(
+                NativeRuntimeIssue.fromStatus(
+                    NativeRuntimeStatus.INVALID_INPUT,
+                    "Native model handle is not open",
+                ),
+            )
+        }
+
+        return when (val opened = nativeCall { jni.sessionOpen(runtimeHandle, modelHandle, config) }) {
+            is NativeRuntimeResult.Success -> {
+                val wire = opened.value
+                val status = NativeRuntimeStatus.fromCode(wire.statusCode)
+                when {
+                    status == NativeRuntimeStatus.OK && wire.handle > 0L ->
+                        NativeRuntimeResult.Success(NativeSession(this, wire.handle))
+                    status == NativeRuntimeStatus.OK ->
+                        NativeRuntimeResult.Error(
+                            NativeRuntimeIssue.fromStatus(
+                                NativeRuntimeStatus.INTERNAL,
+                                wire.message ?: "Native runtime returned OK with a zero session handle",
+                            ),
+                        )
+                    else ->
+                        NativeRuntimeResult.Error(
+                            NativeRuntimeIssue.fromStatus(
+                                status = status,
+                                message = wire.message ?: safeLastThreadError()
+                                    ?: "Native session open failed with ${status.cName}",
+                            ),
+                        )
+                }
+            }
+            is NativeRuntimeResult.Error -> opened
+            is NativeRuntimeResult.Skipped -> opened
+        }
+    }
+
+    internal fun modelWarm(handle: Long): NativeRuntimeResult<Unit> {
+        if (handle <= 0L) {
+            return NativeRuntimeResult.Error(
+                NativeRuntimeIssue.fromStatus(
+                    NativeRuntimeStatus.INVALID_INPUT,
+                    "Native model handle is not open",
+                ),
+            )
+        }
+
+        return when (val warmed = nativeCall { jni.modelWarm(handle) }) {
+            is NativeRuntimeResult.Success -> {
+                val wire = warmed.value
+                val status = NativeRuntimeStatus.fromCode(wire.statusCode)
+                if (status == NativeRuntimeStatus.OK) {
+                    NativeRuntimeResult.Success(Unit)
+                } else {
+                    NativeRuntimeResult.Error(
+                        NativeRuntimeIssue.fromStatus(
+                            status = status,
+                            message = wire.message ?: safeLastError(handle)
+                                ?: "Native model warm failed with ${status.cName}",
+                        ),
+                    )
+                }
+            }
+            is NativeRuntimeResult.Error -> warmed
+            is NativeRuntimeResult.Skipped -> warmed
+        }
+    }
+
+    internal fun sessionSendAudio(handle: Long, audio: NativeAudioView): NativeRuntimeResult<Unit> {
+        if (handle <= 0L) {
+            return NativeRuntimeResult.Error(
+                NativeRuntimeIssue.fromStatus(
+                    NativeRuntimeStatus.INVALID_INPUT,
+                    "Native session handle is not open",
+                ),
+            )
+        }
+
+        return when (val sent = nativeCall { jni.sessionSendAudio(handle, audio) }) {
+            is NativeRuntimeResult.Success -> {
+                val wire = sent.value
+                val status = NativeRuntimeStatus.fromCode(wire.statusCode)
+                if (status == NativeRuntimeStatus.OK) {
+                    NativeRuntimeResult.Success(Unit)
+                } else {
+                    NativeRuntimeResult.Error(
+                        NativeRuntimeIssue.fromStatus(
+                            status = status,
+                            message = wire.message ?: safeLastError(handle)
+                                ?: "Native session send_audio failed with ${status.cName}",
+                        ),
+                    )
+                }
+            }
+            is NativeRuntimeResult.Error -> sent
+            is NativeRuntimeResult.Skipped -> sent
+        }
+    }
+
+    internal fun sessionSendText(handle: Long, text: String): NativeRuntimeResult<Unit> {
+        if (handle <= 0L) {
+            return NativeRuntimeResult.Error(
+                NativeRuntimeIssue.fromStatus(
+                    NativeRuntimeStatus.INVALID_INPUT,
+                    "Native session handle is not open",
+                ),
+            )
+        }
+
+        return when (val sent = nativeCall { jni.sessionSendText(handle, text) }) {
+            is NativeRuntimeResult.Success -> {
+                val wire = sent.value
+                val status = NativeRuntimeStatus.fromCode(wire.statusCode)
+                if (status == NativeRuntimeStatus.OK) {
+                    NativeRuntimeResult.Success(Unit)
+                } else {
+                    NativeRuntimeResult.Error(
+                        NativeRuntimeIssue.fromStatus(
+                            status = status,
+                            message = wire.message ?: safeLastError(handle)
+                                ?: "Native session send_text failed with ${status.cName}",
+                        ),
+                    )
+                }
+            }
+            is NativeRuntimeResult.Error -> sent
+            is NativeRuntimeResult.Skipped -> sent
+        }
+    }
+
+    internal fun sessionPollEvent(handle: Long, timeoutMs: Int): NativeRuntimeResult<NativeSessionEvent?> {
+        if (handle <= 0L) {
+            return NativeRuntimeResult.Error(
+                NativeRuntimeIssue.fromStatus(
+                    NativeRuntimeStatus.INVALID_INPUT,
+                    "Native session handle is not open",
+                ),
+            )
+        }
+
+        return when (val polled = nativeCall { jni.sessionPollEvent(handle, timeoutMs) }) {
+            is NativeRuntimeResult.Success -> {
+                val wire = polled.value
+                val status = NativeRuntimeStatus.fromCode(wire.statusCode)
+                when (status) {
+                    NativeRuntimeStatus.OK -> NativeRuntimeResult.Success(wire.event?.toDomain())
+                    NativeRuntimeStatus.TIMEOUT -> NativeRuntimeResult.Success(null)
+                    else -> NativeRuntimeResult.Error(
+                        NativeRuntimeIssue.fromStatus(
+                            status = status,
+                            message = wire.message ?: safeLastError(handle)
+                                ?: "Native session poll_event failed with ${status.cName}",
+                        ),
+                    )
+                }
+            }
+            is NativeRuntimeResult.Error -> polled
+            is NativeRuntimeResult.Skipped -> polled
+        }
+    }
+
+    internal fun sessionCancel(handle: Long): NativeRuntimeResult<Unit> {
+        if (handle <= 0L) {
+            return NativeRuntimeResult.Error(
+                NativeRuntimeIssue.fromStatus(
+                    NativeRuntimeStatus.INVALID_INPUT,
+                    "Native session handle is not open",
+                ),
+            )
+        }
+
+        return when (val cancelled = nativeCall { jni.sessionCancel(handle) }) {
+            is NativeRuntimeResult.Success -> {
+                val wire = cancelled.value
+                val status = NativeRuntimeStatus.fromCode(wire.statusCode)
+                if (status == NativeRuntimeStatus.OK || status == NativeRuntimeStatus.CANCELLED) {
+                    NativeRuntimeResult.Success(Unit)
+                } else {
+                    NativeRuntimeResult.Error(
+                        NativeRuntimeIssue.fromStatus(
+                            status = status,
+                            message = wire.message ?: safeLastError(handle)
+                                ?: "Native session cancel failed with ${status.cName}",
+                        ),
+                    )
+                }
+            }
+            is NativeRuntimeResult.Error -> cancelled
+            is NativeRuntimeResult.Skipped -> cancelled
+        }
+    }
+
     internal fun close(handle: Long) {
         if (handle <= 0L) return
         if (jni.ensureAvailable() is NativeRuntimeAvailability.Available) {
@@ -110,6 +394,32 @@ class NativeRuntimeBridge internal constructor(
                 // Close is best-effort on an already unavailable JNI boundary.
             } catch (_: SecurityException) {
                 // Close is best-effort on an already unavailable JNI boundary.
+            }
+        }
+    }
+
+    internal fun closeModel(handle: Long) {
+        if (handle <= 0L) return
+        if (jni.ensureAvailable() is NativeRuntimeAvailability.Available) {
+            try {
+                jni.modelClose(handle)
+            } catch (_: UnsatisfiedLinkError) {
+                // Best effort.
+            } catch (_: SecurityException) {
+                // Best effort.
+            }
+        }
+    }
+
+    internal fun closeSession(handle: Long) {
+        if (handle <= 0L) return
+        if (jni.ensureAvailable() is NativeRuntimeAvailability.Available) {
+            try {
+                jni.sessionClose(handle)
+            } catch (_: UnsatisfiedLinkError) {
+                // Best effort.
+            } catch (_: SecurityException) {
+                // Best effort.
             }
         }
     }
@@ -154,7 +464,7 @@ class NativeRuntimeBridge internal constructor(
     companion object {
         const val DEFAULT_LIBRARY_NAME = "octomil_runtime_jni"
         const val REQUIRED_ABI_MAJOR = 0
-        const val REQUIRED_ABI_MINOR = 9
+        const val REQUIRED_ABI_MINOR = 10
     }
 }
 
@@ -183,6 +493,30 @@ class NativeRuntime internal constructor(
             )
         }
         return bridge.capabilities(handle)
+    }
+
+    fun cacheIntrospect(bufferBytes: Int = 65_536): NativeRuntimeResult<String> {
+        if (closed) {
+            return NativeRuntimeResult.Error(
+                NativeRuntimeIssue.fromStatus(
+                    NativeRuntimeStatus.INVALID_INPUT,
+                    "Native runtime handle is already closed",
+                ),
+            )
+        }
+        return bridge.cacheIntrospect(handle, bufferBytes)
+    }
+
+    fun openModel(config: NativeModelConfig = NativeModelConfig()): NativeRuntimeResult<NativeModel> {
+        if (closed) {
+            return NativeRuntimeResult.Error(
+                NativeRuntimeIssue.fromStatus(
+                    NativeRuntimeStatus.INVALID_INPUT,
+                    "Native runtime handle is already closed",
+                ),
+            )
+        }
+        return bridge.openModel(handle, config)
     }
 
     override fun close() {
@@ -243,7 +577,18 @@ data class NativeRuntimeCapabilities(
     val hasMetal: Boolean,
 ) {
     companion object {
-        val NON_ADVERTISED_PROFILES: Set<RuntimeCapability> = setOf(RuntimeCapability.CHAT_STREAM)
+        /**
+         * Capabilities that are currently live only when the native runtime
+         * ships the backing implementation and advertises them at open-time.
+         */
+        val LIVE_NATIVE_CONDITIONAL_PROFILES: Set<RuntimeCapability> =
+            setOf(
+                RuntimeCapability.AUDIO_STT_BATCH,
+                RuntimeCapability.AUDIO_STT_STREAM,
+                RuntimeCapability.CACHE_INTROSPECT,
+            )
+
+        val NON_ADVERTISED_PROFILES: Set<RuntimeCapability> = emptySet()
 
         internal fun fromWire(wire: NativeRuntimeCapabilitiesWire): NativeRuntimeCapabilities {
             val parsed = linkedSetOf<RuntimeCapability>()
