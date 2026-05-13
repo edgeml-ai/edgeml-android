@@ -168,11 +168,13 @@ class AudioDiarization internal constructor(
         }
     }
 
-    private fun drainDiarizationEvents(
+    internal fun drainDiarizationEvents(
         session: ai.octomil.runtime.nativebridge.NativeSession,
+        drainDeadlineMs: Long = DRAIN_DEADLINE_MS,
     ): List<DiarizationSegment> {
         val segments = mutableListOf<DiarizationSegment>()
-        val deadlineMs = System.currentTimeMillis() + DRAIN_DEADLINE_MS
+        val deadlineMs = System.currentTimeMillis() + drainDeadlineMs
+        var sawCompleted = false
 
         while (System.currentTimeMillis() < deadlineMs) {
             val result = session.pollEvent(timeoutMs = POLL_TIMEOUT_MS)
@@ -205,6 +207,7 @@ class AudioDiarization internal constructor(
                                         "error ${ev.terminalStatus.cName}",
                                 )
                             }
+                            sawCompleted = true
                             break
                         }
                         is NativeSessionEvent.Error -> throw OctomilException(
@@ -215,6 +218,13 @@ class AudioDiarization internal constructor(
                     }
                 }
             }
+        }
+
+        if (!sawCompleted) {
+            throw OctomilException(
+                errorCode = OctomilErrorCode.REQUEST_TIMEOUT,
+                message = "audio.diarization: timed out waiting for SESSION_COMPLETED (${drainDeadlineMs}ms)",
+            )
         }
 
         return segments
