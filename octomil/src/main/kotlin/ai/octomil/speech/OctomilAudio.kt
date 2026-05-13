@@ -1,8 +1,12 @@
 package ai.octomil.speech
 
 import ai.octomil.ModelResolver
+import ai.octomil.audio.AudioDiarization
 import ai.octomil.audio.AudioSpeech
+import ai.octomil.audio.AudioSpeechStream
 import ai.octomil.audio.AudioTranscriptions
+import ai.octomil.audio.AudioVad
+import ai.octomil.audio.SpeakerEmbedding
 import android.content.Context
 import android.util.Log
 import kotlinx.coroutines.Dispatchers
@@ -46,6 +50,41 @@ class OctomilAudio internal constructor(
      * optional sherpa-onnx TTS runtime is not on the classpath.
      */
     val speech: AudioSpeech by lazy { AudioSpeech() }
+
+    /**
+     * Voice activity detection — `audio.vad.detect(samples, sampleRate)`.
+     *
+     * Fail-closed: surfaces `RUNTIME_UNAVAILABLE` until the native
+     * runtime advertises `audio.vad`.
+     */
+    val vad: AudioVad by lazy { AudioVad() }
+
+    /**
+     * Speaker embedding — `audio.speakerEmbedding.create(samples, sampleRate)`.
+     *
+     * Returns an L2-normalised [FloatArray]. Fail-closed: surfaces
+     * `RUNTIME_UNAVAILABLE` until the native runtime advertises
+     * `audio.speaker.embedding`.
+     */
+    val speakerEmbedding: SpeakerEmbedding by lazy { SpeakerEmbedding() }
+
+    /**
+     * Speaker diarization — `audio.diarization.create(samples, sampleRate)`.
+     *
+     * Fail-closed: surfaces `RUNTIME_UNAVAILABLE` until the native
+     * runtime advertises `audio.diarization`.
+     */
+    val diarization: AudioDiarization by lazy { AudioDiarization() }
+
+    /**
+     * Streaming TTS — `audio.speech.stream(model, input, ...)`.
+     *
+     * Returns a Kotlin [kotlinx.coroutines.flow.Flow] of
+     * [ai.octomil.audio.TtsPcmChunk] values (sentence-bounded). Fail-closed:
+     * surfaces `RUNTIME_UNAVAILABLE` until the native runtime advertises
+     * `audio.tts.stream`.
+     */
+    val speechStream: AudioSpeechStream by lazy { AudioSpeechStream() }
 
     /**
      * Create a streaming transcription session for the given model.

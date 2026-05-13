@@ -585,6 +585,10 @@ data class NativeRuntimeCapabilities(
             setOf(
                 RuntimeCapability.AUDIO_STT_BATCH,
                 RuntimeCapability.AUDIO_STT_STREAM,
+                RuntimeCapability.AUDIO_VAD,
+                RuntimeCapability.AUDIO_SPEAKER_EMBEDDING,
+                RuntimeCapability.AUDIO_DIARIZATION,
+                RuntimeCapability.AUDIO_TTS_STREAM,
                 RuntimeCapability.CACHE_INTROSPECT,
             )
 
