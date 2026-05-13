@@ -166,9 +166,13 @@ class AudioVad internal constructor(
         }
     }
 
-    private fun drainVadEvents(session: ai.octomil.runtime.nativebridge.NativeSession): List<VadTransition> {
+    internal fun drainVadEvents(
+        session: ai.octomil.runtime.nativebridge.NativeSession,
+        drainDeadlineMs: Long = DRAIN_DEADLINE_MS,
+    ): List<VadTransition> {
         val transitions = mutableListOf<VadTransition>()
-        val deadlineMs = System.currentTimeMillis() + DRAIN_DEADLINE_MS
+        val deadlineMs = System.currentTimeMillis() + drainDeadlineMs
+        var sawCompleted = false
 
         while (System.currentTimeMillis() < deadlineMs) {
             val result = session.pollEvent(timeoutMs = POLL_TIMEOUT_MS)
@@ -199,6 +203,7 @@ class AudioVad internal constructor(
                                     message = "audio.vad: session completed with error ${ev.terminalStatus.cName}",
                                 )
                             }
+                            sawCompleted = true
                             break
                         }
                         is NativeSessionEvent.Error -> throw OctomilException(
@@ -209,6 +214,13 @@ class AudioVad internal constructor(
                     }
                 }
             }
+        }
+
+        if (!sawCompleted) {
+            throw OctomilException(
+                errorCode = OctomilErrorCode.REQUEST_TIMEOUT,
+                message = "audio.vad: timed out waiting for SESSION_COMPLETED (${drainDeadlineMs}ms)",
+            )
         }
 
         return transitions
