@@ -130,6 +130,35 @@ class NativeRuntimeLifecycleTest {
     }
 
     @Test
+    fun `openSessionModelFree passes modelHandle zero for vad model-free path`() {
+        val fake = FakeNativeRuntimeJni()
+        val bridge = NativeRuntimeBridge(fake)
+
+        val runtime = bridge.open()
+        assertTrue(runtime is NativeRuntimeResult.Success)
+        val openedRuntime = (runtime as NativeRuntimeResult.Success).value
+
+        val session = openedRuntime.openSessionModelFree(
+            NativeSessionConfig(
+                capability = RuntimeCapability.AUDIO_VAD,
+                sampleRateIn = 16000,
+            ),
+        )
+        assertTrue("model-free session must succeed with fake JNI", session is NativeRuntimeResult.Success)
+
+        // The JNI call for model-free path must record sessionOpen with the vad capability.
+        assertTrue(fake.calls.any { it.startsWith("sessionOpen:audio.vad") })
+        // Verify the model handle passed was 0 (model-free).
+        assertEquals(
+            listOf(0L),
+            fake.sessionOpenModelHandles,
+        )
+
+        (session as NativeRuntimeResult.Success).value.close()
+        openedRuntime.close()
+    }
+
+    @Test
     fun `stt transcript segment and final events preserve native shape`() {
         val segment = NativeSessionEventWire(
             kind = "transcript_segment",
@@ -174,6 +203,7 @@ private class FakeNativeRuntimeJni(
     ),
 ) : NativeRuntimeJni {
     val calls = mutableListOf<String>()
+    val sessionOpenModelHandles = mutableListOf<Long>()
 
     override fun ensureAvailable(): NativeRuntimeAvailability = NativeRuntimeAvailability.Available
 
@@ -230,6 +260,7 @@ private class FakeNativeRuntimeJni(
 
     override fun sessionOpen(runtimeHandle: Long, modelHandle: Long, config: NativeSessionConfig): NativeSessionOpenWire {
         calls += "sessionOpen:${config.capability?.code ?: "null"}"
+        sessionOpenModelHandles += modelHandle
         return NativeSessionOpenWire(
             statusCode = NativeRuntimeStatus.OK.code,
             handle = 31L,
