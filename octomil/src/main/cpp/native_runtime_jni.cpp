@@ -860,6 +860,47 @@ Java_ai_octomil_runtime_nativebridge_SystemNativeRuntimeJni_nativeSessionOpen(
 }
 
 extern "C" JNIEXPORT jobject JNICALL
+Java_ai_octomil_runtime_nativebridge_SystemNativeRuntimeJni_nativeSessionOpenModelFree(
+    JNIEnv* env,
+    jobject,
+    jlong runtime_handle,
+    jstring capability,
+    jstring model_uri,
+    jstring locality,
+    jstring policy_preset,
+    jstring speaker_id,
+    jint sample_rate_in,
+    jint sample_rate_out,
+    jint priority,
+    jlong user_data
+) {
+    RuntimeApi& runtime = api();
+    if (runtime.session_open == nullptr) {
+        return new_session_open_wire(env, OCT_STATUS_UNSUPPORTED, 0, runtime.load_error.c_str());
+    }
+    std::string capability_value = jstring_to_string(env, capability);
+    std::string model_uri_value = jstring_to_string(env, model_uri);
+    std::string locality_value = jstring_to_string(env, locality);
+    std::string policy_preset_value = jstring_to_string(env, policy_preset);
+    std::string speaker_id_value = jstring_to_string(env, speaker_id);
+    oct_session_config_t config{};
+    config.version = kSessionConfigVersion;
+    config.model_uri = model_uri == nullptr ? nullptr : model_uri_value.c_str();
+    config.capability = capability == nullptr ? nullptr : capability_value.c_str();
+    config.locality = locality == nullptr ? "on_device" : locality_value.c_str();
+    config.policy_preset = policy_preset == nullptr ? nullptr : policy_preset_value.c_str();
+    config.speaker_id = speaker_id == nullptr ? nullptr : speaker_id_value.c_str();
+    config.sample_rate_in = static_cast<uint32_t>(std::max(0, sample_rate_in));
+    config.sample_rate_out = static_cast<uint32_t>(std::max(0, sample_rate_out));
+    config.priority = static_cast<oct_priority_t>(std::max(0, priority));
+    config.user_data = reinterpret_cast<void*>(user_data);
+    config.model = nullptr;  // Model-free: runtime resolves via capability/model_uri.
+    oct_session_t* session = nullptr;
+    oct_status_t status = runtime.session_open(reinterpret_cast<oct_runtime_t*>(runtime_handle), &config, &session);
+    return new_session_open_wire(env, status, reinterpret_cast<jlong>(session));
+}
+
+extern "C" JNIEXPORT jobject JNICALL
 Java_ai_octomil_runtime_nativebridge_SystemNativeRuntimeJni_nativeSessionSendAudio(
     JNIEnv* env,
     jobject,

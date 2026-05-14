@@ -7,8 +7,10 @@ import ai.octomil.runtime.nativebridge.NativeRuntimeBridge
 import ai.octomil.runtime.nativebridge.NativeRuntimeCapabilities
 import ai.octomil.runtime.nativebridge.NativeRuntimeResult
 import ai.octomil.runtime.nativebridge.NativeSession
+import ai.octomil.runtime.nativebridge.NativeSessionEvent
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.verify
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -155,5 +157,68 @@ class AudioDiarizationTest {
                     e.message?.contains("timed out", ignoreCase = true) == true,
             )
         }
+    }
+
+    // ------------------------------------------------------------------
+    // Regression: diarization MUST route through openSessionModelFree
+    //
+    // Python's audio.diarization is model-free — sherpa-onnx loads
+    // segmentation + speaker-embedding artifacts at runtime_open, no
+    // oct_model_t. The Android facade previously called
+    // runtime.openModel() + model.openSession() which violates the
+    // contract. This test pins the model-free path.
+    // ------------------------------------------------------------------
+
+    @Test
+    fun `create routes through openSessionModelFree and never calls openModel`() = runBlocking {
+        val mockBridge = mockk<NativeRuntimeBridge>(relaxed = true)
+        every { mockBridge.open(any()) } returns
+            NativeRuntimeResult.Success(
+                ai.octomil.runtime.nativebridge.NativeRuntime(mockBridge, handle = 1L),
+            )
+        every { mockBridge.capabilities(any()) } returns
+            NativeRuntimeResult.Success(
+                NativeRuntimeCapabilities(
+                    supportedEngines = listOf("sherpa_onnx"),
+                    supportedCapabilities = setOf(RuntimeCapability.AUDIO_DIARIZATION),
+                    rawSupportedCapabilityCodes = listOf(RuntimeCapability.AUDIO_DIARIZATION.code),
+                    unknownCapabilityCodes = emptyList(),
+                    rejectedProfileCodes = emptySet(),
+                    supportedArchs = listOf("arm64-v8a"),
+                    ramTotalBytes = 0,
+                    ramAvailableBytes = 0,
+                    hasAppleSilicon = false,
+                    hasCuda = false,
+                    hasMetal = false,
+                ),
+            )
+        every { mockBridge.openSessionModelFree(any(), any()) } returns
+            NativeRuntimeResult.Success(NativeSession(mockBridge, handle = 2L))
+        every { mockBridge.sessionSendAudio(any(), any()) } returns
+            NativeRuntimeResult.Success(Unit)
+        every { mockBridge.sessionPollEvent(any(), any()) } returnsMany listOf(
+            NativeRuntimeResult.Success(
+                NativeSessionEvent.DiarizationSegment(
+                    startMs = 0,
+                    endMs = 1000,
+                    speakerTag = 0,
+                ),
+            ),
+            NativeRuntimeResult.Success(
+                NativeSessionEvent.SessionCompleted(
+                    ai.octomil.runtime.nativebridge.NativeRuntimeStatus.OK,
+                ),
+            ),
+        )
+
+        val diarization = AudioDiarization(mockBridge)
+        val segments = diarization.create(floatArrayOf(0f, 1f, -1f), sampleRate = 16_000)
+
+        assertEquals(1, segments.size)
+        // Contract pin — facade never invokes model-bound open.
+        verify(exactly = 0) { mockBridge.openModel(any(), any()) }
+        verify(exactly = 0) { mockBridge.openSession(any(), any(), any()) }
+        // And it MUST have used the model-free path.
+        verify(atLeast = 1) { mockBridge.openSessionModelFree(any(), any()) }
     }
 }

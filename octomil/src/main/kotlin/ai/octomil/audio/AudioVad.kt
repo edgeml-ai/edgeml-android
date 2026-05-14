@@ -115,53 +115,42 @@ class AudioVad internal constructor(
                 )
             }
 
-            val model = when (val m = runtime.openModel()) {
-                is NativeRuntimeResult.Success -> m.value
+            // audio.vad is model-free per Python truth + runtime conformance:
+            // silero loads its weights at runtime_open, no oct_model_t. Use
+            // openSessionModelFree to skip the model_open dance.
+            val session = when (
+                val s = runtime.openSessionModelFree(
+                    NativeSessionConfig(
+                        capability = RuntimeCapability.AUDIO_VAD,
+                        sampleRateIn = sampleRate,
+                    ),
+                )
+            ) {
+                is NativeRuntimeResult.Success -> s.value
                 is NativeRuntimeResult.Error -> throw OctomilException(
-                    errorCode = m.error.sdkErrorCode,
-                    message = "audio.vad: model open failed — ${m.error.message}",
+                    errorCode = s.error.sdkErrorCode,
+                    message = "audio.vad: session open failed — ${s.error.message}",
                 )
                 is NativeRuntimeResult.Skipped -> throw OctomilException(
                     errorCode = OctomilErrorCode.RUNTIME_UNAVAILABLE,
-                    message = "audio.vad: model open skipped — ${m.reason.message}",
+                    message = "audio.vad: session open skipped — ${s.reason.message}",
                 )
             }
 
-            model.use {
-                val session = when (
-                    val s = model.openSession(
-                        NativeSessionConfig(
-                            capability = RuntimeCapability.AUDIO_VAD,
-                            sampleRateIn = sampleRate,
-                        ),
-                    )
-                ) {
-                    is NativeRuntimeResult.Success -> s.value
+            session.use {
+                when (val sent = session.sendAudio(NativeAudioView(audio, sampleRate))) {
                     is NativeRuntimeResult.Error -> throw OctomilException(
-                        errorCode = s.error.sdkErrorCode,
-                        message = "audio.vad: session open failed — ${s.error.message}",
+                        errorCode = sent.error.sdkErrorCode,
+                        message = "audio.vad: sendAudio failed — ${sent.error.message}",
                     )
                     is NativeRuntimeResult.Skipped -> throw OctomilException(
                         errorCode = OctomilErrorCode.RUNTIME_UNAVAILABLE,
-                        message = "audio.vad: session open skipped — ${s.reason.message}",
+                        message = "audio.vad: sendAudio skipped — ${sent.reason.message}",
                     )
+                    is NativeRuntimeResult.Success -> Unit
                 }
 
-                session.use {
-                    when (val sent = session.sendAudio(NativeAudioView(audio, sampleRate))) {
-                        is NativeRuntimeResult.Error -> throw OctomilException(
-                            errorCode = sent.error.sdkErrorCode,
-                            message = "audio.vad: sendAudio failed — ${sent.error.message}",
-                        )
-                        is NativeRuntimeResult.Skipped -> throw OctomilException(
-                            errorCode = OctomilErrorCode.RUNTIME_UNAVAILABLE,
-                            message = "audio.vad: sendAudio skipped — ${sent.reason.message}",
-                        )
-                        is NativeRuntimeResult.Success -> Unit
-                    }
-
-                    drainVadEvents(session)
-                }
+                drainVadEvents(session)
             }
         }
     }

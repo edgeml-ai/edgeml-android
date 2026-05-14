@@ -7,8 +7,10 @@ import ai.octomil.runtime.nativebridge.NativeRuntimeBridge
 import ai.octomil.runtime.nativebridge.NativeRuntimeCapabilities
 import ai.octomil.runtime.nativebridge.NativeRuntimeResult
 import ai.octomil.runtime.nativebridge.NativeSession
+import ai.octomil.runtime.nativebridge.NativeSessionEvent
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.verify
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -150,5 +152,67 @@ class AudioVadTest {
                     e.message?.contains("timed out", ignoreCase = true) == true,
             )
         }
+    }
+
+    // ------------------------------------------------------------------
+    // 5. Regression: VAD MUST route through openSessionModelFree
+    //
+    // Python's audio.vad is model-free — silero loads its weights at
+    // runtime_open with no oct_model_t. The Android facade previously
+    // (#260 first pass) called runtime.openModel() + model.openSession()
+    // which violates the contract. This test pins the model-free path:
+    // `bridge.openModel` MUST NOT be invoked anywhere on the detect()
+    // call path, and `bridge.openSessionModelFree` MUST be the actual
+    // session-open call.
+    // ------------------------------------------------------------------
+
+    @Test
+    fun `detect routes through openSessionModelFree and never calls openModel`() = runBlocking {
+        val mockBridge = mockk<NativeRuntimeBridge>(relaxed = true)
+        every { mockBridge.open(any()) } returns
+            NativeRuntimeResult.Success(
+                ai.octomil.runtime.nativebridge.NativeRuntime(mockBridge, handle = 1L),
+            )
+        every { mockBridge.capabilities(any()) } returns
+            NativeRuntimeResult.Success(
+                NativeRuntimeCapabilities(
+                    supportedEngines = listOf("silero_vad"),
+                    supportedCapabilities = setOf(RuntimeCapability.AUDIO_VAD),
+                    rawSupportedCapabilityCodes = listOf(RuntimeCapability.AUDIO_VAD.code),
+                    unknownCapabilityCodes = emptyList(),
+                    rejectedProfileCodes = emptySet(),
+                    supportedArchs = listOf("arm64-v8a"),
+                    ramTotalBytes = 0,
+                    ramAvailableBytes = 0,
+                    hasAppleSilicon = false,
+                    hasCuda = false,
+                    hasMetal = false,
+                ),
+            )
+        every { mockBridge.openSessionModelFree(any(), any()) } returns
+            NativeRuntimeResult.Success(NativeSession(mockBridge, handle = 2L))
+        every { mockBridge.sessionSendAudio(any(), any()) } returns
+            NativeRuntimeResult.Success(Unit)
+        every { mockBridge.sessionPollEvent(any(), any()) } returnsMany listOf(
+            NativeRuntimeResult.Success(
+                NativeSessionEvent.VadSegment(voiced = true, startMs = 0, endMs = 100),
+            ),
+            NativeRuntimeResult.Success(
+                NativeSessionEvent.SessionCompleted(
+                    ai.octomil.runtime.nativebridge.NativeRuntimeStatus.OK,
+                ),
+            ),
+        )
+
+        val vad = AudioVad(mockBridge)
+        val transitions = vad.detect(floatArrayOf(0f, 1f, -1f), sampleRate = 16_000)
+
+        // Functional sanity — one transition emitted.
+        assertEquals(1, transitions.size)
+        // Contract pin — facade never invokes model-bound open.
+        verify(exactly = 0) { mockBridge.openModel(any(), any()) }
+        verify(exactly = 0) { mockBridge.openSession(any(), any(), any()) }
+        // And it MUST have used the model-free path.
+        verify(atLeast = 1) { mockBridge.openSessionModelFree(any(), any()) }
     }
 }
