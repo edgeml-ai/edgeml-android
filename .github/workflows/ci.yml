@@ -65,12 +65,19 @@ jobs:
         # compile shared across testDebugUnitTest + lintDebug + jacocoTestReport.
         # If you split this back into multiple `run:` steps or jobs, you will
         # re-pay the AGP/Kotlin compile cost for each one. Don't.
+        #
+        # -PoctomilRuntime.skipFetch=true: octomil/octomil-runtime is a private
+        # repo and CI does not carry a PAT scoped to it. fetchRuntime would
+        # therefore hit the GitHub API anonymously, get a 404 on the private
+        # release, and fail the build. Once v0.1.5 lands as a public asset (or
+        # CI gains a secret with read access), this flag can be dropped.
         run: >
           ./gradlew
           :octomil:testDebugUnitTest
           :octomil:lintDebug
           :octomil:jacocoTestReport
           --build-cache
+          -PoctomilRuntime.skipFetch=true
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@671740ac38dd9b0130fbe1cec585b89eea48d3de # v5
@@ -135,4 +142,4 @@ jobs:
         # `--no-configuration-cache` lives here and ONLY here — the Sonar
         # plugin is the only task in this repo that breaks Gradle's
         # configuration cache. Don't propagate the flag elsewhere.
-        run: ./gradlew sonar --no-configuration-cache --build-cache
+        run: ./gradlew sonar --no-configuration-cache --build-cache -PoctomilRuntime.skipFetch=true

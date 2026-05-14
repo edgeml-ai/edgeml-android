@@ -59,8 +59,11 @@ jobs:
         env:
           CONTRACT_ROOT: ${{ github.workspace }}/.contract
           CONTRACT_VERSION: ${{ steps.contract.outputs.version }}
+        # -PoctomilRuntime.skipFetch=true: octomil-runtime is a private repo
+        # and conformance CI does not carry a PAT for it. Drop this once the
+        # release is public or CI is granted a scoped secret.
         run: |
-          ./gradlew :octomil:testDebugUnitTest --tests 'ai.octomil.conformance.*'
+          ./gradlew :octomil:testDebugUnitTest --tests 'ai.octomil.conformance.*' -PoctomilRuntime.skipFetch=true
           python3 .contract/ci/audit-sdks.py --sdk android --sdk-path . --out parity_report.json
 
       - name: Gate parity score
