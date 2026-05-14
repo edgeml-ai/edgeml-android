@@ -405,12 +405,13 @@ class FetchRuntimeTaskTest {
             }
             firstConn.connect()
             assertEquals(302, firstConn.responseCode)
-            val location = firstConn.getHeaderField("Location") ?: fail("no Location header") as Nothing
+            val location = firstConn.getHeaderField("Location")
             firstConn.disconnect()
+            assertNotNull("first response must include Location header", location)
 
             // Redirect target — apply the production policy: only attach
             // the bearer if shouldSendGithubAuth(target) is true.
-            val redirectUrl = URL(location)
+            val redirectUrl = URL(location!!)
             val secondConn = (redirectUrl.openConnection() as java.net.HttpURLConnection).apply {
                 if (shouldSendGithubAuth(redirectUrl)) {
                     setRequestProperty("Authorization", "Bearer $token")
