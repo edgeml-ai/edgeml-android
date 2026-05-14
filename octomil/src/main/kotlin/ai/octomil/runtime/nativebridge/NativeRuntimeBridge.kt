@@ -233,11 +233,13 @@ class NativeRuntimeBridge internal constructor(
     /**
      * Open a session without a pre-loaded model handle.
      *
-     * Required for capability-first engines (VAD, diarization, speaker
-     * embedding) that resolve the model internally via [NativeSessionConfig.capability]
-     * or [NativeSessionConfig.modelUri] rather than through a prior
-     * `oct_model_open` call. Sets `oct_session_config_t.model = NULL` in
-     * the C ABI, delegating model resolution to the runtime.
+     * Required for the model-free capabilities (`audio.vad`,
+     * `audio.diarization`) whose adapters resolve their artifacts at
+     * `oct_runtime_open` and accept session configs with no `oct_model_t`.
+     * `audio.speaker.embedding` is model-bound and goes through the
+     * standard `openModel + openSession` path; do NOT route it here.
+     * Sets `oct_session_config_t.model = NULL` in the C ABI, delegating
+     * model resolution to the runtime.
      */
     internal fun openSessionModelFree(
         runtimeHandle: Long,
@@ -574,9 +576,11 @@ class NativeRuntime internal constructor(
      * Open a session without a pre-loaded model handle.
      *
      * The runtime resolves the model via [NativeSessionConfig.capability]
-     * or [NativeSessionConfig.modelUri]. Used by capability-first engines
-     * (VAD, diarization, speaker embedding) where `oct_model_open` is
-     * not required before opening a session.
+     * or [NativeSessionConfig.modelUri]. Used by the model-free
+     * capabilities (`audio.vad`, `audio.diarization`) whose adapters load
+     * their artifacts at `oct_runtime_open`. `audio.speaker.embedding`
+     * is model-bound and uses the standard `openModel + openSession`
+     * path; do NOT route it here.
      */
     fun openSessionModelFree(config: NativeSessionConfig): NativeRuntimeResult<NativeSession> {
         if (closed) {

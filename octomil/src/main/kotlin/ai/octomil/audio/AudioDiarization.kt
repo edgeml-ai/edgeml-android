@@ -117,53 +117,43 @@ class AudioDiarization internal constructor(
                 )
             }
 
-            val model = when (val m = runtime.openModel()) {
-                is NativeRuntimeResult.Success -> m.value
+            // audio.diarization is model-free per Python truth: the sherpa-onnx
+            // diarization adapter loads its segmentation + speaker-embedding
+            // artifacts at runtime_open, no oct_model_t. Use
+            // openSessionModelFree to skip the model_open dance.
+            val session = when (
+                val s = runtime.openSessionModelFree(
+                    NativeSessionConfig(
+                        capability = RuntimeCapability.AUDIO_DIARIZATION,
+                        sampleRateIn = sampleRate,
+                    ),
+                )
+            ) {
+                is NativeRuntimeResult.Success -> s.value
                 is NativeRuntimeResult.Error -> throw OctomilException(
-                    errorCode = m.error.sdkErrorCode,
-                    message = "audio.diarization: model open failed — ${m.error.message}",
+                    errorCode = s.error.sdkErrorCode,
+                    message = "audio.diarization: session open failed — ${s.error.message}",
                 )
                 is NativeRuntimeResult.Skipped -> throw OctomilException(
                     errorCode = OctomilErrorCode.RUNTIME_UNAVAILABLE,
-                    message = "audio.diarization: model open skipped — ${m.reason.message}",
+                    message = "audio.diarization: session open skipped — ${s.reason.message}",
                 )
             }
 
-            model.use {
-                val session = when (
-                    val s = model.openSession(
-                        NativeSessionConfig(
-                            capability = RuntimeCapability.AUDIO_DIARIZATION,
-                            sampleRateIn = sampleRate,
-                        ),
-                    )
-                ) {
-                    is NativeRuntimeResult.Success -> s.value
+            session.use {
+                when (val sent = session.sendAudio(NativeAudioView(audio, sampleRate))) {
                     is NativeRuntimeResult.Error -> throw OctomilException(
-                        errorCode = s.error.sdkErrorCode,
-                        message = "audio.diarization: session open failed — ${s.error.message}",
+                        errorCode = sent.error.sdkErrorCode,
+                        message = "audio.diarization: sendAudio failed — ${sent.error.message}",
                     )
                     is NativeRuntimeResult.Skipped -> throw OctomilException(
                         errorCode = OctomilErrorCode.RUNTIME_UNAVAILABLE,
-                        message = "audio.diarization: session open skipped — ${s.reason.message}",
+                        message = "audio.diarization: sendAudio skipped — ${sent.reason.message}",
                     )
+                    is NativeRuntimeResult.Success -> Unit
                 }
 
-                session.use {
-                    when (val sent = session.sendAudio(NativeAudioView(audio, sampleRate))) {
-                        is NativeRuntimeResult.Error -> throw OctomilException(
-                            errorCode = sent.error.sdkErrorCode,
-                            message = "audio.diarization: sendAudio failed — ${sent.error.message}",
-                        )
-                        is NativeRuntimeResult.Skipped -> throw OctomilException(
-                            errorCode = OctomilErrorCode.RUNTIME_UNAVAILABLE,
-                            message = "audio.diarization: sendAudio skipped — ${sent.reason.message}",
-                        )
-                        is NativeRuntimeResult.Success -> Unit
-                    }
-
-                    drainDiarizationEvents(session)
-                }
+                drainDiarizationEvents(session)
             }
         }
     }
