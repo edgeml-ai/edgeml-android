@@ -1,8 +1,12 @@
 package ai.octomil.speech
 
 import ai.octomil.ModelResolver
+import ai.octomil.audio.AudioDiarization
 import ai.octomil.audio.AudioSpeech
+import ai.octomil.audio.AudioSpeechStream
 import ai.octomil.audio.AudioTranscriptions
+import ai.octomil.audio.AudioVad
+import ai.octomil.audio.SpeakerEmbedding
 import android.content.Context
 import android.util.Log
 import kotlinx.coroutines.Dispatchers
@@ -46,6 +50,39 @@ class OctomilAudio internal constructor(
      * optional sherpa-onnx TTS runtime is not on the classpath.
      */
     val speech: AudioSpeech by lazy { AudioSpeech() }
+
+    /**
+     * Voice activity detection — `audio.vad.detect(samples, sampleRate, ...)`.
+     * Routes through the native runtime (Phase 4 JNI session-open). Emits a
+     * [kotlinx.coroutines.flow.Flow] of typed [ai.octomil.audio.VadEvent]
+     * values. Fail-closed: surfaces `RUNTIME_UNAVAILABLE` until the native
+     * runtime is available and advertises `audio.vad`.
+     */
+    val vad: AudioVad by lazy { AudioVad() }
+
+    /**
+     * Speaker embedding — `audio.speakerEmbedding.create(samples, sampleRate, ...)`.
+     * Returns an L2-normalised float vector via the native runtime. Fail-closed
+     * to `RUNTIME_UNAVAILABLE` when the runtime is absent or does not
+     * advertise `audio.speaker.embedding`.
+     */
+    val speakerEmbedding: SpeakerEmbedding by lazy { SpeakerEmbedding() }
+
+    /**
+     * Speaker diarization — `audio.diarization.create(samples, sampleRate, ...)`.
+     * Emits typed segment events as a [kotlinx.coroutines.flow.Flow]. Fail-closed
+     * to `RUNTIME_UNAVAILABLE` when the runtime is absent or does not
+     * advertise `audio.diarization`.
+     */
+    val diarization: AudioDiarization by lazy { AudioDiarization() }
+
+    /**
+     * Streaming TTS — `audio.speechStream.stream(model, input, ...)`. Returns
+     * a [kotlinx.coroutines.flow.Flow] of [ai.octomil.audio.TtsStreamEvent]
+     * values (sentence-bounded). Fail-closed to `RUNTIME_UNAVAILABLE` when
+     * the runtime is absent or does not advertise `audio.tts.stream`.
+     */
+    val speechStream: AudioSpeechStream by lazy { AudioSpeechStream() }
 
     /**
      * Create a streaming transcription session for the given model.
