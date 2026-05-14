@@ -230,6 +230,57 @@ class NativeRuntimeBridge internal constructor(
         }
     }
 
+    /**
+     * Open a session without a pre-loaded model handle.
+     *
+     * Required for capability-first engines (VAD, diarization, speaker
+     * embedding) that resolve the model internally via [NativeSessionConfig.capability]
+     * or [NativeSessionConfig.modelUri] rather than through a prior
+     * `oct_model_open` call. Sets `oct_session_config_t.model = NULL` in
+     * the C ABI, delegating model resolution to the runtime.
+     */
+    internal fun openSessionModelFree(
+        runtimeHandle: Long,
+        config: NativeSessionConfig,
+    ): NativeRuntimeResult<NativeSession> {
+        if (runtimeHandle <= 0L) {
+            return NativeRuntimeResult.Error(
+                NativeRuntimeIssue.fromStatus(
+                    NativeRuntimeStatus.INVALID_INPUT,
+                    "Native runtime handle is not open",
+                ),
+            )
+        }
+
+        return when (val opened = nativeCall { jni.sessionOpenModelFree(runtimeHandle, config) }) {
+            is NativeRuntimeResult.Success -> {
+                val wire = opened.value
+                val status = NativeRuntimeStatus.fromCode(wire.statusCode)
+                when {
+                    status == NativeRuntimeStatus.OK && wire.handle > 0L ->
+                        NativeRuntimeResult.Success(NativeSession(this, wire.handle))
+                    status == NativeRuntimeStatus.OK ->
+                        NativeRuntimeResult.Error(
+                            NativeRuntimeIssue.fromStatus(
+                                NativeRuntimeStatus.INTERNAL,
+                                wire.message ?: "Native runtime returned OK with a zero session handle",
+                            ),
+                        )
+                    else ->
+                        NativeRuntimeResult.Error(
+                            NativeRuntimeIssue.fromStatus(
+                                status = status,
+                                message = wire.message ?: safeLastThreadError()
+                                    ?: "Native model-free session open failed with ${status.cName}",
+                            ),
+                        )
+                }
+            }
+            is NativeRuntimeResult.Error -> opened
+            is NativeRuntimeResult.Skipped -> opened
+        }
+    }
+
     internal fun modelWarm(handle: Long): NativeRuntimeResult<Unit> {
         if (handle <= 0L) {
             return NativeRuntimeResult.Error(
@@ -517,6 +568,26 @@ class NativeRuntime internal constructor(
             )
         }
         return bridge.openModel(handle, config)
+    }
+
+    /**
+     * Open a session without a pre-loaded model handle.
+     *
+     * The runtime resolves the model via [NativeSessionConfig.capability]
+     * or [NativeSessionConfig.modelUri]. Used by capability-first engines
+     * (VAD, diarization, speaker embedding) where `oct_model_open` is
+     * not required before opening a session.
+     */
+    fun openSessionModelFree(config: NativeSessionConfig): NativeRuntimeResult<NativeSession> {
+        if (closed) {
+            return NativeRuntimeResult.Error(
+                NativeRuntimeIssue.fromStatus(
+                    NativeRuntimeStatus.INVALID_INPUT,
+                    "Native runtime handle is already closed",
+                ),
+            )
+        }
+        return bridge.openSessionModelFree(handle, config)
     }
 
     override fun close() {

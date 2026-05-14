@@ -237,6 +237,15 @@ private class FakeNativeRuntimeJni(
         )
     }
 
+    override fun sessionOpenModelFree(runtimeHandle: Long, config: NativeSessionConfig): NativeSessionOpenWire {
+        calls += "sessionOpenModelFree:${config.capability?.code ?: "null"}"
+        return NativeSessionOpenWire(
+            statusCode = NativeRuntimeStatus.OK.code,
+            handle = 31L,
+            message = null,
+        )
+    }
+
     override fun sessionSendAudio(sessionHandle: Long, audio: NativeAudioView): NativeRuntimeStatusWire {
         calls += "sendAudio:${audio.samples.size}:${audio.sampleRate}:${audio.channels}"
         return NativeRuntimeStatusWire(NativeRuntimeStatus.OK.code)

@@ -10,6 +10,7 @@ internal interface NativeRuntimeJni {
     fun modelWarm(modelHandle: Long): NativeRuntimeStatusWire
     fun modelClose(modelHandle: Long)
     fun sessionOpen(runtimeHandle: Long, modelHandle: Long, config: NativeSessionConfig): NativeSessionOpenWire
+    fun sessionOpenModelFree(runtimeHandle: Long, config: NativeSessionConfig): NativeSessionOpenWire
     fun sessionSendAudio(sessionHandle: Long, audio: NativeAudioView): NativeRuntimeStatusWire
     fun sessionSendText(sessionHandle: Long, text: String): NativeRuntimeStatusWire
     fun sessionPollEvent(sessionHandle: Long, timeoutMs: Int): NativeSessionPollWire
@@ -119,6 +120,22 @@ internal class SystemNativeRuntimeJni(
         )
     }
 
+    override fun sessionOpenModelFree(runtimeHandle: Long, config: NativeSessionConfig): NativeSessionOpenWire {
+        ensureAvailable()
+        return nativeSessionOpenModelFree(
+            runtimeHandle = runtimeHandle,
+            capability = config.capability?.code,
+            modelUri = config.modelUri,
+            locality = config.locality,
+            policyPreset = config.policyPreset,
+            speakerId = config.speakerId,
+            sampleRateIn = config.sampleRateIn,
+            sampleRateOut = config.sampleRateOut,
+            priority = config.priority,
+            userData = config.userData,
+        )
+    }
+
     override fun sessionSendAudio(sessionHandle: Long, audio: NativeAudioView): NativeRuntimeStatusWire {
         ensureAvailable()
         return nativeSessionSendAudio(
@@ -213,6 +230,18 @@ internal class SystemNativeRuntimeJni(
     private external fun nativeSessionOpen(
         runtimeHandle: Long,
         modelHandle: Long,
+        capability: String?,
+        modelUri: String?,
+        locality: String,
+        policyPreset: String?,
+        speakerId: String?,
+        sampleRateIn: Int,
+        sampleRateOut: Int,
+        priority: Int,
+        userData: Long,
+    ): NativeSessionOpenWire
+    private external fun nativeSessionOpenModelFree(
+        runtimeHandle: Long,
         capability: String?,
         modelUri: String?,
         locality: String,
