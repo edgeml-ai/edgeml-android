@@ -77,6 +77,90 @@ println(model.warmupResult)        // cold: 62ms, warm: 4ms
 
 That's it. The SDK copies the asset to cache, loads the TFLite interpreter, benchmarks GPU vs CPU vs vendor NPU, picks the fastest delegate, and warms up the model.
 
+## Native Runtime (liboctomil-runtime.so)
+
+The Android SDK routes FFI calls through `liboctomil-runtime.so` (the Octomil
+native runtime) and `libc++_shared.so`. These are **not committed** to the
+repository — they are fetched at build time from the private
+`octomil/octomil-runtime` GitHub release.
+
+### Version requirement
+
+**v0.1.5 or later is required.** v0.1.4 did NOT ship `android-arm64` artifacts.
+The Gradle task will fail with a clear message if you point at v0.1.4 or earlier.
+
+### GitHub token
+
+The `octomil/octomil-runtime` repo is private. The `fetchRuntime` Gradle task
+resolves a token in this order:
+
+1. `$GH_TOKEN`
+2. `$GITHUB_TOKEN`
+3. `$OCTOMIL_RUNTIME_TOKEN`
+4. `gh auth token` (via the GitHub CLI)
+
+If none are available the build fails with:
+```
+fetchRuntime: no GitHub token available.
+Set GH_TOKEN or GITHUB_TOKEN env var, or run `gh auth login`.
+```
+
+Run `gh auth login` once and the CLI token is picked up automatically.
+
+### Version pin and flavor
+
+Defaults live in `octomil-runtime.properties` at the repo root:
+
+```properties
+octomilRuntime.version=v0.1.5
+octomilRuntime.flavor=chat
+octomilRuntime.abi=arm64-v8a
+```
+
+Override per-build on the command line:
+```bash
+./gradlew :octomil:assembleDebug -PoctomilRuntime.version=v0.1.6
+```
+
+The `flavor` selects which runtime flavor is bundled in the AAR:
+- `chat` — llama.cpp inference (`chat.completion`, `chat.stream`, `embeddings.text`)
+- `stt` — whisper.cpp + sherpa-onnx audio (`audio.stt.batch`, `audio.stt.stream`)
+
+The AAR bundles **one flavor at build time**. Multi-flavor AAR support is a
+future option. The Kotlin loader side selects the flavor at runtime via the
+`OCTOMIL_RUNTIME_FLAVOR` env var (or the `OctomilConfig.runtimeFlavor` field),
+but that only matters if you swap the AAR for a different build.
+
+### Offline / pre-cached builds
+
+Skip the GitHub download entirely when the `.so` files are already in place:
+
+```bash
+./gradlew :octomil:assembleDebug -PoctomilRuntime.skipFetch=true
+```
+
+Or set `octomilRuntime.skipFetch=true` in `octomil-runtime.properties`. The
+`.so` files must already be present in `octomil/src/main/jniLibs/arm64-v8a/`
+for the build to succeed.
+
+### Cache layout
+
+Downloads are cached under `.gradle/octomil-runtime/<version>/<flavor>/` in
+the repo root. A `.extracted-ok` sentinel prevents re-downloads when the
+version and flavor match what is already staged. The `.so` files in
+`jniLibs/` are `.gitignore`-d and regenerated on each fresh checkout.
+
+### What it wires
+
+The `fetchRuntime` task runs before `preBuild` so both debug and release builds
+pick it up. The standard AAR pipeline (`mergeJniLibFolders`) then bundles:
+- `jniLibs/arm64-v8a/liboctomil-runtime.so`
+- `jniLibs/arm64-v8a/libc++_shared.so`
+
+These are loaded at runtime by `NativeRuntimeBridge` (via `System.loadLibrary`)
+alongside the JNI bridge `liboctomil_runtime_jni.so` that is compiled from
+`src/main/cpp/native_runtime_jni.cpp`.
+
 ## Features
 
 ### Inference with automatic hardware selection

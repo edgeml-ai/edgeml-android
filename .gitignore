@@ -46,3 +46,9 @@ captures/
 
 # Test output
 test-results/
+
+# Runtime .so files staged by fetchRuntime Gradle task — populated at build time, never committed
+octomil/src/main/jniLibs/arm64-v8a/*.so
+
+# Gradle cache for octomil-runtime downloads
+.gradle/octomil-runtime/
