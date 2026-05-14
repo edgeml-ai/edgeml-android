@@ -9,7 +9,11 @@ buildscript {
 
 import org.gradle.testing.jacoco.plugins.JacocoTaskExtension
 import org.gradle.api.DefaultTask
+import org.gradle.api.file.DirectoryProperty
+import org.gradle.api.provider.Property
 import org.gradle.api.tasks.Input
+import org.gradle.api.tasks.Internal
+import org.gradle.api.tasks.OutputDirectory
 import org.gradle.api.tasks.TaskAction
 import org.gradle.api.GradleException
 import java.io.File
@@ -36,29 +40,39 @@ import org.json.JSONObject
 // ─────────────────────────────────────────────────────────────────────────────
 abstract class FetchRuntimeTask : DefaultTask() {
 
-    @get:Input abstract var runtimeVersion: String
-    @get:Input abstract var runtimeFlavor: String
-    @get:Input abstract var runtimeAbi: String
-    @get:Input abstract var skipFetch: Boolean
+    @get:Input abstract val runtimeVersion: Property<String>
+    @get:Input abstract val runtimeFlavor: Property<String>
+    @get:Input abstract val runtimeAbi: Property<String>
+    @get:Input abstract val skipFetch: Property<Boolean>
+
+    // Pre-resolved at registration time so @TaskAction never reads `project`.
+    // Configuration cache forbids any Project instance access at execution time.
+    @get:Internal abstract val cacheRootDir: DirectoryProperty
+    @get:OutputDirectory abstract val jniLibsRootDir: DirectoryProperty
 
     @TaskAction
     fun fetch() {
-        if (skipFetch) {
+        val version = runtimeVersion.get()
+        val flavor = runtimeFlavor.get()
+        val abi = runtimeAbi.get()
+        val skip = skipFetch.get()
+
+        if (skip) {
             logger.lifecycle("fetchRuntime: skipFetch=true — skipping GitHub download")
             return
         }
 
-        val cacheDir = File(project.rootProject.projectDir, ".gradle/octomil-runtime/$runtimeVersion/$runtimeFlavor")
-        val jniLibsDir = File(project.projectDir, "src/main/jniLibs/$runtimeAbi")
+        val cacheDir = File(cacheRootDir.get().asFile, "$version/$flavor")
+        val jniLibsDir = File(jniLibsRootDir.get().asFile, abi)
         val sentinelFile = File(cacheDir, ".extracted-ok")
-        val sentinelContent = "$runtimeVersion:$runtimeFlavor"
+        val sentinelContent = "$version:$flavor"
 
         // ── sentinel check ────────────────────────────────────────────────────
         val libSo = File(jniLibsDir, "liboctomil-runtime.so")
         val stdcppSo = File(jniLibsDir, "libc++_shared.so")
         if (sentinelFile.exists() && sentinelFile.readText().trim() == sentinelContent
             && libSo.exists() && stdcppSo.exists()) {
-            logger.lifecycle("fetchRuntime: cache hit — $runtimeVersion/$runtimeFlavor already staged")
+            logger.lifecycle("fetchRuntime: cache hit — $version/$flavor already staged")
             return
         }
         if (sentinelFile.exists() && sentinelFile.readText().trim() != sentinelContent) {
@@ -73,10 +87,10 @@ abstract class FetchRuntimeTask : DefaultTask() {
                 "A token with read access to the private octomil/octomil-runtime repo is required."
             )
 
-        logger.lifecycle("fetchRuntime: fetching octomil-runtime $runtimeVersion ($runtimeFlavor/$runtimeAbi)")
+        logger.lifecycle("fetchRuntime: fetching octomil-runtime $version ($flavor/$abi)")
 
         // ── list release assets ───────────────────────────────────────────────
-        val releaseUrl = "https://api.github.com/repos/octomil/octomil-runtime/releases/tags/$runtimeVersion"
+        val releaseUrl = "https://api.github.com/repos/octomil/octomil-runtime/releases/tags/$version"
         val releaseJson = githubGet(releaseUrl, token)
         val assets = parseAssetsMap(releaseJson)
 
@@ -92,13 +106,13 @@ abstract class FetchRuntimeTask : DefaultTask() {
                     )
                 message.contains("Not Found", ignoreCase = true) ->
                     throw GradleException(
-                        "fetchRuntime: Runtime version $runtimeVersion not yet released.\n" +
+                        "fetchRuntime: Runtime version $version not yet released.\n" +
                         "The Android SDK requires v0.1.5+ which ships the first android-arm64 artifact.\n" +
                         "Pin `octomilRuntime.version` to v0.1.5+ in octomil-runtime.properties once the runtime release lands."
                     )
                 else ->
                     throw GradleException(
-                        "fetchRuntime: GitHub API returned no assets for release $runtimeVersion.\n" +
+                        "fetchRuntime: GitHub API returned no assets for release $version.\n" +
                         "API message: $message\n" +
                         "Confirm the tag exists and your token has read access to octomil/octomil-runtime."
                     )
@@ -116,7 +130,7 @@ abstract class FetchRuntimeTask : DefaultTask() {
             val manifest = JSONObject(manifestFile.readText())
             val platforms = manifest.optJSONObject("platforms")
                 ?: throw GradleException("fetchRuntime: MANIFEST.json is missing 'platforms' field")
-            val manifestArch = abiToManifestArch(runtimeAbi)
+            val manifestArch = abiToManifestArch(abi)
             val platformEntry = platforms.optJSONObject(manifestArch)
                 ?: run {
                     val available = platforms.keys().asSequence().joinToString(", ")
@@ -125,20 +139,20 @@ abstract class FetchRuntimeTask : DefaultTask() {
                         "Check the runtime release. Available platforms: $available"
                     )
                 }
-            assetName = platformEntry.optString(runtimeFlavor, "")
+            assetName = platformEntry.optString(flavor, "")
                 .takeIf { it.isNotBlank() }
                 ?: run {
                     val available = platformEntry.keys().asSequence().joinToString(", ")
                     throw GradleException(
-                        "fetchRuntime: Manifest exists but `platforms.$manifestArch.$runtimeFlavor` is missing.\n" +
+                        "fetchRuntime: Manifest exists but `platforms.$manifestArch.$flavor` is missing.\n" +
                         "Check the runtime release. Available flavors for $manifestArch: $available"
                     )
                 }
-            logger.lifecycle("fetchRuntime: manifest resolved $manifestArch/$runtimeFlavor -> $assetName")
+            logger.lifecycle("fetchRuntime: manifest resolved $manifestArch/$flavor -> $assetName")
         } else {
             // No MANIFEST.json — this is a v0.1.4-era release. Android was NOT in v0.1.4.
             throw GradleException(
-                "fetchRuntime: Release $runtimeVersion has no MANIFEST.json.\n" +
+                "fetchRuntime: Release $version has no MANIFEST.json.\n" +
                 "Android arm64 artifacts were NOT shipped in v0.1.4 or earlier — the legacy release\n" +
                 "shape only covered darwin-arm64. The Android SDK requires v0.1.5+.\n" +
                 "Update `octomilRuntime.version` in octomil-runtime.properties to v0.1.5 or later."
@@ -148,7 +162,7 @@ abstract class FetchRuntimeTask : DefaultTask() {
         // ── download tarball + SHA256SUMS ─────────────────────────────────────
         for (name in listOf(assetName, "SHA256SUMS")) {
             if (name !in assets) {
-                throw GradleException("fetchRuntime: release $runtimeVersion is missing asset '$name'")
+                throw GradleException("fetchRuntime: release $version is missing asset '$name'")
             }
         }
         val tarballFile = File(downloadDir, assetName)
@@ -191,7 +205,7 @@ abstract class FetchRuntimeTask : DefaultTask() {
         // ── cleanup download dir ──────────────────────────────────────────────
         downloadDir.deleteRecursively()
 
-        logger.lifecycle("fetchRuntime: runtime $runtimeVersion ($runtimeFlavor) ready in $jniLibsDir")
+        logger.lifecycle("fetchRuntime: runtime $version ($flavor) ready in $jniLibsDir")
     }
 
     // ── helpers ───────────────────────────────────────────────────────────────
@@ -232,8 +246,11 @@ abstract class FetchRuntimeTask : DefaultTask() {
     private fun openGithubConnection(urlStr: String, token: String): HttpURLConnection {
         var url = urlStr
         repeat(5) {
-            val conn = URL(url).openConnection() as HttpURLConnection
-            conn.setRequestProperty("Authorization", "Bearer $token")
+            val u = URL(url)
+            val conn = u.openConnection() as HttpURLConnection
+            if (shouldSendGithubAuth(u)) {
+                conn.setRequestProperty("Authorization", "Bearer $token")
+            }
             conn.setRequestProperty("Accept", "application/vnd.github+json")
             conn.setRequestProperty("User-Agent", "octomil-android/fetchRuntime")
             conn.setRequestProperty("X-GitHub-Api-Version", "2022-11-28")
@@ -248,6 +265,26 @@ abstract class FetchRuntimeTask : DefaultTask() {
             return conn
         }
         throw GradleException("fetchRuntime: too many redirects fetching $urlStr")
+    }
+
+    /**
+     * Return true when it is safe to send the GitHub bearer token to this URL.
+     *
+     * GitHub release-asset downloads are served via a 302 redirect to a signed
+     * S3-style URL on a host like `objects.githubusercontent.com`. The signed
+     * URL already carries its own auth in the query string — re-sending our
+     * GitHub token to that host both LEAKS the credential to a non-GitHub
+     * origin AND can cause the redirected request to 400/403 due to the
+     * dual-auth conflict.
+     *
+     * Only attach the bearer token when the request host is `api.github.com`
+     * or any subdomain of `github.com`. On every redirect, this check is
+     * re-evaluated against the NEW URL — so when GitHub redirects an asset
+     * download off-domain we drop the Authorization header before re-sending.
+     */
+    private fun shouldSendGithubAuth(url: URL): Boolean {
+        val host = url.host ?: return false
+        return host == "api.github.com" || host == "github.com" || host.endsWith(".github.com")
     }
 
     private fun parseAssetsMap(releaseJson: JSONObject): Map<String, String> {
@@ -268,8 +305,16 @@ abstract class FetchRuntimeTask : DefaultTask() {
         logger.lifecycle("  download ${dest.name}")
         var url = apiUrl
         repeat(10) {
-            val conn = URL(url).openConnection() as HttpURLConnection
-            conn.setRequestProperty("Authorization", "Bearer $token")
+            val u = URL(url)
+            val conn = u.openConnection() as HttpURLConnection
+            // Only attach the GitHub bearer on github.com hosts. On asset
+            // redirects to signed-URL hosts (objects.githubusercontent.com,
+            // S3, ...) we must NOT re-send the token — it would leak the
+            // credential to a non-GitHub origin and the signed URL has its
+            // own auth in the query string.
+            if (shouldSendGithubAuth(u)) {
+                conn.setRequestProperty("Authorization", "Bearer $token")
+            }
             conn.setRequestProperty("Accept", "application/octet-stream")
             conn.setRequestProperty("User-Agent", "octomil-android/fetchRuntime")
             conn.instanceFollowRedirects = false
@@ -288,7 +333,7 @@ abstract class FetchRuntimeTask : DefaultTask() {
                 )
                 code == 404 -> throw GradleException(
                     "fetchRuntime: HTTP 404 downloading ${dest.name}.\n" +
-                    "Confirm the asset exists in release $runtimeVersion."
+                    "Confirm the asset exists in the requested release."
                 )
                 code !in 200..299 -> {
                     val body = conn.errorStream?.bufferedReader()?.readText()?.take(500) ?: ""
@@ -572,10 +617,19 @@ val fetchRuntime = tasks.register<FetchRuntimeTask>("fetchRuntime") {
     group = "octomil"
     description = "Download liboctomil-runtime.so from GitHub Releases and stage into jniLibs"
 
-    runtimeVersion = gradleOrPropString("octomilRuntime.version", "v0.1.5")
-    runtimeFlavor  = gradleOrPropString("octomilRuntime.flavor", "chat")
-    runtimeAbi     = gradleOrPropString("octomilRuntime.abi", "arm64-v8a")
-    skipFetch      = gradleOrPropBool("octomilRuntime.skipFetch", false)
+    // Resolve all values at REGISTRATION time. The @TaskAction body MUST NOT
+    // touch `project`, `project.layout`, `project.rootDir`, `project.buildDir`,
+    // or any other Project-instance API — Gradle's configuration cache forbids
+    // accessing the Project from a task action and will fail the build.
+    runtimeVersion.set(gradleOrPropString("octomilRuntime.version", "v0.1.5"))
+    runtimeFlavor.set(gradleOrPropString("octomilRuntime.flavor", "chat"))
+    runtimeAbi.set(gradleOrPropString("octomilRuntime.abi", "arm64-v8a"))
+    skipFetch.set(gradleOrPropBool("octomilRuntime.skipFetch", false))
+
+    // Pre-resolve filesystem locations as DirectoryProperty inputs. These are
+    // captured by the configuration cache and read via .get() in the action.
+    cacheRootDir.set(rootProject.layout.projectDirectory.dir(".gradle/octomil-runtime"))
+    jniLibsRootDir.set(project.layout.projectDirectory.dir("src/main/jniLibs"))
 }
 
 tasks.named("preBuild") {
