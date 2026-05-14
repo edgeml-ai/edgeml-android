@@ -1,0 +1,3 @@
+# This directory is populated at build time by the fetchRuntime Gradle task.
+# liboctomil-runtime.so and libc++_shared.so are staged here before the AAR
+# mergeJniLibFolders step runs. They are NOT committed to source control.
