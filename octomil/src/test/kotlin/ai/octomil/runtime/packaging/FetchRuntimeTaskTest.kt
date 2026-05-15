@@ -216,6 +216,23 @@ class FetchRuntimeTaskTest {
     }
 
     @Test
+    fun `sha256 verification accepts dot-slash path prefix from shasum output`() {
+        // Regression: v0.1.10 SHA256SUMS was produced via `shasum -a 256 ./*.tar.gz`,
+        // which emits paths as "./<filename>". The parser must normalize these so
+        // bare-filename lookup against tarball.name still matches.
+        val content = "hello octomil runtime".toByteArray()
+        val file = tmp.newFile("liboctomil-runtime-v0.1.10-chat-android-arm64.tar.gz")
+        file.writeBytes(content)
+
+        val expectedHex = sha256Hex(content)
+        val sumsFile = tmp.newFile("SHA256SUMS")
+        sumsFile.writeText("$expectedHex  ./${file.name}\n")
+
+        // Should not throw — leading "./" must be stripped before lookup.
+        verifySha256(file, sumsFile)
+    }
+
+    @Test
     fun `sha256 verification fails when file not listed in SHA256SUMS`() {
         val file = tmp.newFile("liboctomil-runtime.so")
         file.writeBytes("content".toByteArray())
@@ -515,12 +532,16 @@ class FetchRuntimeTaskTest {
     }
 
     private fun verifySha256(file: File, sumsFile: File) {
+        // Mirror production normalization: strip leading "./" path prefix so a
+        // bare filename lookup matches entries emitted by `shasum -a 256 ./*`.
         val expected = sumsFile.readLines()
             .mapNotNull { line ->
                 val trimmed = line.trim()
                 if (trimmed.isEmpty() || trimmed.startsWith("#")) return@mapNotNull null
                 val m = Regex("""^([0-9a-fA-F]{64})\s+(.+)$""").find(trimmed) ?: return@mapNotNull null
-                m.groupValues[2].trim() to m.groupValues[1].lowercase()
+                val rawPath = m.groupValues[2].trim()
+                val normalized = rawPath.removePrefix("./")
+                normalized to m.groupValues[1].lowercase()
             }
             .toMap()
 

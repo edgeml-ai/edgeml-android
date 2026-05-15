@@ -354,13 +354,20 @@ abstract class FetchRuntimeTask : DefaultTask() {
     }
 
     private fun verifySha256(tarball: File, sumsFile: File) {
+        // SHA256SUMS path entries may be emitted with a "./" prefix (e.g. BSD
+        // `shasum -a 256 ./*.tar.gz`) or as bare filenames. Normalize to bare
+        // filenames so the lookup key matches `tarball.name` either way.
         val expected = sumsFile.readLines()
             .mapNotNull { line ->
                 val trimmed = line.trim()
                 if (trimmed.isEmpty() || trimmed.startsWith("#")) null
                 else {
                     val m = Regex("""^([0-9a-fA-F]{64})\s+(.+)$""").find(trimmed)
-                    m?.let { it.groupValues[2].trim() to it.groupValues[1].lowercase() }
+                    m?.let {
+                        val rawPath = it.groupValues[2].trim()
+                        val normalized = rawPath.removePrefix("./")
+                        normalized to it.groupValues[1].lowercase()
+                    }
                 }
             }
             .toMap()
@@ -621,7 +628,7 @@ val fetchRuntime = tasks.register<FetchRuntimeTask>("fetchRuntime") {
     // touch `project`, `project.layout`, `project.rootDir`, `project.buildDir`,
     // or any other Project-instance API — Gradle's configuration cache forbids
     // accessing the Project from a task action and will fail the build.
-    runtimeVersion.set(gradleOrPropString("octomilRuntime.version", "v0.1.5"))
+    runtimeVersion.set(gradleOrPropString("octomilRuntime.version", "v0.1.10"))
     runtimeFlavor.set(gradleOrPropString("octomilRuntime.flavor", "chat"))
     runtimeAbi.set(gradleOrPropString("octomilRuntime.abi", "arm64-v8a"))
     skipFetch.set(gradleOrPropBool("octomilRuntime.skipFetch", false))
