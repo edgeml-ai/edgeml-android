@@ -256,6 +256,11 @@ private class FakeNativeRuntimeJni(
         return NativeRuntimeStatusWire(NativeRuntimeStatus.OK.code)
     }
 
+    override fun sessionSendImage(sessionHandle: Long, image: NativeImageView): NativeRuntimeStatusWire {
+        calls += "sendImage:${image.byteLength}:${image.mime.code}"
+        return NativeRuntimeStatusWire(NativeRuntimeStatus.OK.code)
+    }
+
     override fun sessionPollEvent(sessionHandle: Long, timeoutMs: Int): NativeSessionPollWire {
         calls += "pollEvent:$timeoutMs"
         return pollWire

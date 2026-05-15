@@ -594,6 +594,7 @@ private class SessionFakeJni(
     ),
     private val sendAudioWire: NativeRuntimeStatusWire = NativeRuntimeStatusWire(NativeRuntimeStatus.OK.code),
     private val sendTextWire: NativeRuntimeStatusWire = NativeRuntimeStatusWire(NativeRuntimeStatus.OK.code),
+    private val sendImageWire: NativeRuntimeStatusWire = NativeRuntimeStatusWire(NativeRuntimeStatus.OK.code),
     private val pollWire: NativeSessionPollWire = NativeSessionPollWire(
         statusCode = NativeRuntimeStatus.OK.code,
         event = NativeSessionEventWire(kind = "session_completed", terminalStatusCode = NativeRuntimeStatus.OK.code),
@@ -670,6 +671,11 @@ private class SessionFakeJni(
     override fun sessionSendText(sessionHandle: Long, text: String): NativeRuntimeStatusWire {
         calls += "sendText:$text"
         return sendTextWire
+    }
+
+    override fun sessionSendImage(sessionHandle: Long, image: NativeImageView): NativeRuntimeStatusWire {
+        calls += "sendImage:${image.byteLength}:${image.mime.code}"
+        return sendImageWire
     }
 
     override fun sessionPollEvent(sessionHandle: Long, timeoutMs: Int): NativeSessionPollWire {

@@ -98,6 +98,18 @@ struct oct_audio_view_t {
     uint16_t reserved0;
 };
 
+/* v0.1.12 (ABI minor 11) — image input view. Mirrors oct_image_view_t in
+ * octomil/runtime.h. The struct itself is local because the JNI shim never
+ * links against the runtime headers — it only dlopens the shared object. */
+struct oct_image_view_t {
+    const uint8_t* bytes;
+    size_t         n_bytes;
+    uint32_t       mime;
+    uint32_t       _reserved0;
+};
+
+constexpr oct_status_t OCT_STATUS_INVALID_INPUT = 1;
+
 struct oct_event_t {
     uint32_t version;
     size_t size;
@@ -228,6 +240,7 @@ struct RuntimeApi {
     using SessionClose = void (*)(oct_session_t*);
     using SessionSendAudio = oct_status_t (*)(oct_session_t*, const oct_audio_view_t*);
     using SessionSendText = oct_status_t (*)(oct_session_t*, const char*);
+    using SessionSendImage = oct_status_t (*)(oct_session_t*, const oct_image_view_t*);
     using SessionPollEvent = oct_status_t (*)(oct_session_t*, oct_event_t*, uint32_t);
     using SessionCancel = oct_status_t (*)(oct_session_t*);
 
@@ -250,6 +263,13 @@ struct RuntimeApi {
     SessionClose session_close = nullptr;
     SessionSendAudio session_send_audio = nullptr;
     SessionSendText session_send_text = nullptr;
+    /* v0.1.12 ABI minor 11 — lazy-resolved on first use via dlsym so a
+     * v0.1.10 (minor 10) runtime that lacks the symbol still loads cleanly.
+     * Use resolve_session_send_image() rather than reading the field
+     * directly; the first call binds the pointer (or leaves it nullptr
+     * if dlsym fails) and sets session_send_image_resolved = true. */
+    SessionSendImage session_send_image = nullptr;
+    bool session_send_image_resolved = false;
     SessionPollEvent session_poll_event = nullptr;
     SessionCancel session_cancel = nullptr;
 };
@@ -304,6 +324,31 @@ RuntimeApi& api() {
         bind_symbol(g_api, "oct_session_poll_event", g_api.session_poll_event) &&
         bind_symbol(g_api, "oct_session_cancel", g_api.session_cancel);
     return g_api;
+}
+
+/* Lazy-bind oct_session_send_image (ABI minor 11, v0.1.12). Returns
+ * nullptr if the loaded runtime is older (minor 10) and lacks the symbol.
+ * The eager bind chain in api() deliberately does NOT include this symbol
+ * so a v0.1.10 dylib continues to load cleanly. First-use is mutex-protected
+ * to match the g_api_mutex discipline of the existing loader. */
+RuntimeApi::SessionSendImage resolve_session_send_image() {
+    std::lock_guard<std::mutex> lock(g_api_mutex);
+    if (g_api.session_send_image_resolved) {
+        return g_api.session_send_image;
+    }
+    g_api.session_send_image_resolved = true;
+    if (g_api.handle == nullptr) {
+        return nullptr;
+    }
+    dlerror();
+    auto* symbol = dlsym(g_api.handle, "oct_session_send_image");
+    const char* error = dlerror();
+    if (error != nullptr || symbol == nullptr) {
+        g_api.session_send_image = nullptr;
+        return nullptr;
+    }
+    g_api.session_send_image = reinterpret_cast<RuntimeApi::SessionSendImage>(symbol);
+    return g_api.session_send_image;
 }
 
 jstring make_string(JNIEnv* env, const char* value) {
@@ -935,6 +980,52 @@ Java_ai_octomil_runtime_nativebridge_SystemNativeRuntimeJni_nativeSessionSendTex
     }
     std::string value = jstring_to_string(env, text);
     oct_status_t status = runtime.session_send_text(reinterpret_cast<oct_session_t*>(session_handle), value.c_str());
+    return new_status_wire(env, status);
+}
+
+/*
+ * v0.1.12 ABI minor 11 — oct_session_send_image bridge. Resolved via
+ * lazy dlsym; on older (minor 10) runtimes that lack the symbol we
+ * return OCT_STATUS_UNSUPPORTED with a diagnostic message rather than
+ * crashing on a missing entry point. The caller-side gate
+ * (NativeRuntimeBridge.sendImage) MUST have already checked ABI >= 11
+ * and capability presence; this shim is the symbol-presence safety net.
+ */
+extern "C" JNIEXPORT jobject JNICALL
+Java_ai_octomil_runtime_nativebridge_SystemNativeRuntimeJni_nativeSessionSendImage(
+    JNIEnv* env,
+    jobject,
+    jlong session_handle,
+    jbyteArray bytes,
+    jint byte_length,
+    jint mime
+) {
+    RuntimeApi::SessionSendImage send_image = resolve_session_send_image();
+    if (send_image == nullptr) {
+        RuntimeApi& runtime = api();
+        const char* message = runtime.handle == nullptr
+            ? runtime.load_error.c_str()
+            : "oct_session_send_image is not exported by the loaded runtime (requires ABI minor 11)";
+        return new_status_wire(env, OCT_STATUS_UNSUPPORTED, message);
+    }
+    if (bytes == nullptr || byte_length <= 0) {
+        return new_status_wire(env, OCT_STATUS_INVALID_INPUT, "image bytes must be non-empty");
+    }
+    jsize array_length = env->GetArrayLength(bytes);
+    if (byte_length > array_length) {
+        return new_status_wire(env, OCT_STATUS_INVALID_INPUT, "byte_length exceeds buffer size");
+    }
+    jbyte* byte_data = env->GetByteArrayElements(bytes, nullptr);
+    if (byte_data == nullptr) {
+        return new_status_wire(env, OCT_STATUS_INVALID_INPUT, "could not access image byte buffer");
+    }
+    oct_image_view_t view{};
+    view.bytes = reinterpret_cast<const uint8_t*>(byte_data);
+    view.n_bytes = static_cast<size_t>(byte_length);
+    view.mime = static_cast<uint32_t>(std::max(0, mime));
+    view._reserved0 = 0;
+    oct_status_t status = send_image(reinterpret_cast<oct_session_t*>(session_handle), &view);
+    env->ReleaseByteArrayElements(bytes, byte_data, JNI_ABORT);
     return new_status_wire(env, status);
 }
 

@@ -13,6 +13,14 @@ internal interface NativeRuntimeJni {
     fun sessionOpenModelFree(runtimeHandle: Long, config: NativeSessionConfig): NativeSessionOpenWire
     fun sessionSendAudio(sessionHandle: Long, audio: NativeAudioView): NativeRuntimeStatusWire
     fun sessionSendText(sessionHandle: Long, text: String): NativeRuntimeStatusWire
+
+    /**
+     * Send an image to the session. Routes to `oct_session_send_image`
+     * (ABI minor 11+, v0.1.12). The JNI shim uses lazy `dlsym` so a
+     * v0.1.10 runtime that lacks the symbol resolves [NativeRuntimeStatus.UNSUPPORTED]
+     * via [NativeRuntimeStatusWire] instead of crashing on a missing entry point.
+     */
+    fun sessionSendImage(sessionHandle: Long, image: NativeImageView): NativeRuntimeStatusWire
     fun sessionPollEvent(sessionHandle: Long, timeoutMs: Int): NativeSessionPollWire
     fun sessionCancel(sessionHandle: Long): NativeRuntimeStatusWire
     fun sessionClose(sessionHandle: Long)
@@ -151,6 +159,16 @@ internal class SystemNativeRuntimeJni(
         return nativeSessionSendText(sessionHandle, text)
     }
 
+    override fun sessionSendImage(sessionHandle: Long, image: NativeImageView): NativeRuntimeStatusWire {
+        ensureAvailable()
+        return nativeSessionSendImage(
+            sessionHandle = sessionHandle,
+            bytes = image.bytes,
+            byteLength = image.byteLength,
+            mime = image.mime.code,
+        )
+    }
+
     override fun sessionPollEvent(sessionHandle: Long, timeoutMs: Int): NativeSessionPollWire {
         ensureAvailable()
         return nativeSessionPollEvent(sessionHandle, timeoutMs)
@@ -259,6 +277,12 @@ internal class SystemNativeRuntimeJni(
         channels: Int,
     ): NativeRuntimeStatusWire
     private external fun nativeSessionSendText(sessionHandle: Long, text: String): NativeRuntimeStatusWire
+    private external fun nativeSessionSendImage(
+        sessionHandle: Long,
+        bytes: ByteArray,
+        byteLength: Int,
+        mime: Int,
+    ): NativeRuntimeStatusWire
     private external fun nativeSessionPollEvent(sessionHandle: Long, timeoutMs: Int): NativeSessionPollWire
     private external fun nativeSessionCancel(sessionHandle: Long): NativeRuntimeStatusWire
     private external fun nativeSessionClose(sessionHandle: Long)

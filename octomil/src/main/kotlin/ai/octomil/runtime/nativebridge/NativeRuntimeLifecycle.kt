@@ -47,6 +47,51 @@ data class NativeAudioView(
     }
 }
 
+/**
+ * Closed-enum MIME discriminator mirroring the `OCT_IMAGE_MIME_*` constants
+ * from the v0.1.12 runtime header. Numeric values are part of the ABI and
+ * MUST stay in sync with `include/octomil/runtime.h`. UNKNOWN is the
+ * forward-compat sentinel and MUST NOT be used by callers — it is only
+ * surfaced when the runtime returns an unrecognised code.
+ */
+enum class NativeImageMime(val code: Int) {
+    UNKNOWN(0),
+    PNG(1),
+    JPEG(2),
+    WEBP(3),
+    RGB8(4),
+    ;
+
+    companion object {
+        fun fromCode(code: Int): NativeImageMime? = entries.firstOrNull { it.code == code }
+    }
+}
+
+/**
+ * Caller-owned view over an encoded (PNG/JPEG/WEBP) or raw (RGB8) image.
+ * Lifetime is the call duration only — the runtime copies internally if
+ * it needs to retain. Mirrors `oct_image_view_t` from the v0.1.12 runtime
+ * ABI; consumed via [NativeRuntimeBridge.sendImage].
+ *
+ * The send path is gated behind ABI minor >= 11 AND the
+ * [ai.octomil.generated.RuntimeCapability.EMBEDDINGS_IMAGE] capability.
+ * The Android SDK's required ABI minor remains 10; only callers that
+ * actually invoke image embeddings hit the inner 11-floor.
+ */
+data class NativeImageView(
+    val bytes: ByteArray,
+    val byteLength: Int = bytes.size,
+    val mime: NativeImageMime,
+) {
+    init {
+        require(byteLength > 0) { "byteLength must be > 0" }
+        require(byteLength <= bytes.size) { "byteLength must be <= bytes.size" }
+        require(mime != NativeImageMime.UNKNOWN) {
+            "NativeImageMime.UNKNOWN is the forward-compat sentinel and must not be sent"
+        }
+    }
+}
+
 sealed class NativeSessionEvent {
     data class SessionStarted(
         val engine: String?,
@@ -272,6 +317,14 @@ class NativeSession internal constructor(
     val handle: Long,
 ) : AutoCloseable {
     private var closed = false
+
+    /**
+     * Lifecycle introspection for the bridge's higher-level send paths
+     * (e.g. [NativeRuntimeBridge.sendImage]) that take a [NativeSession]
+     * instead of a raw handle. Mirrors the in-class closed-check used by
+     * [sendAudio] / [sendText] / [pollEvent] / [cancel].
+     */
+    internal val isClosed: Boolean get() = closed
 
     fun sendAudio(audio: NativeAudioView): NativeRuntimeResult<Unit> {
         if (closed) {
