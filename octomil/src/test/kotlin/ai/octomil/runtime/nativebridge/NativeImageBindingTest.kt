@@ -176,6 +176,33 @@ class NativeImageBindingTest {
         assertEquals("image adapter not yet implemented", error.message)
     }
 
+    // ── sendImage lifecycle guard ────────────────────────────────────────────
+
+    @Test
+    fun `sendImage returns Error when session handle is already closed`() {
+        // Mirrors NativeRuntimeSessionBridgeTest's
+        // `sessionSendAudio returns Error when session handle is already closed`
+        // (line 173): assert the same INVALID_INPUT + "already closed" shape
+        // so a closed NativeSession cannot forward a stale handle to JNI.
+        val fake = ImageBindingFakeJni()
+        val bridge = NativeRuntimeBridge(fake)
+        val session = openSession(bridge)
+        session.close()
+
+        val result = bridge.sendImage(
+            session = session,
+            image = NativeImageView(bytes = byteArrayOf(1, 2, 3), mime = NativeImageMime.PNG),
+            runtimeAbiMinor = 11,
+            capabilities = setOf(RuntimeCapability.EMBEDDINGS_IMAGE),
+        )
+
+        assertTrue(result is NativeRuntimeResult.Error)
+        assertEquals(NativeRuntimeStatus.INVALID_INPUT, (result as NativeRuntimeResult.Error).error.status)
+        assertTrue(result.error.message.contains("already closed"))
+        // The lower-level JNI sendImage MUST NOT be called once the guard trips.
+        assertFalse(fake.calls.any { it.startsWith("sendImage") })
+    }
+
     // ── Runtime open floor stays at 10 ───────────────────────────────────────
 
     @Test

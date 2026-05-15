@@ -412,6 +412,18 @@ class NativeRuntimeBridge internal constructor(
         runtimeAbiMinor: Int,
         capabilities: Set<RuntimeCapability>,
     ): NativeRuntimeResult<Unit> {
+        // Lifecycle guard mirrors NativeSession.sendAudio (NativeRuntimeLifecycle.kt:328)
+        // and the other in-class send paths. Without this, a closed
+        // NativeSession would forward a stale handle into JNI via
+        // session.handle below.
+        if (session.isClosed) {
+            return NativeRuntimeResult.Error(
+                NativeRuntimeIssue.fromStatus(
+                    NativeRuntimeStatus.INVALID_INPUT,
+                    "Native session handle is already closed",
+                ),
+            )
+        }
         if (runtimeAbiMinor < REQUIRED_ABI_MINOR_FOR_IMAGE) {
             throw OctomilException(
                 errorCode = OctomilErrorCode.RUNTIME_UNAVAILABLE,

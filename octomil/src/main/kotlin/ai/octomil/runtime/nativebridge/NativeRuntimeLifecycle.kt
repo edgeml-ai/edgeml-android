@@ -318,6 +318,14 @@ class NativeSession internal constructor(
 ) : AutoCloseable {
     private var closed = false
 
+    /**
+     * Lifecycle introspection for the bridge's higher-level send paths
+     * (e.g. [NativeRuntimeBridge.sendImage]) that take a [NativeSession]
+     * instead of a raw handle. Mirrors the in-class closed-check used by
+     * [sendAudio] / [sendText] / [pollEvent] / [cancel].
+     */
+    internal val isClosed: Boolean get() = closed
+
     fun sendAudio(audio: NativeAudioView): NativeRuntimeResult<Unit> {
         if (closed) {
             return NativeRuntimeResult.Error(
