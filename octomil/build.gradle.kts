@@ -628,7 +628,7 @@ val fetchRuntime = tasks.register<FetchRuntimeTask>("fetchRuntime") {
     // touch `project`, `project.layout`, `project.rootDir`, `project.buildDir`,
     // or any other Project-instance API — Gradle's configuration cache forbids
     // accessing the Project from a task action and will fail the build.
-    runtimeVersion.set(gradleOrPropString("octomilRuntime.version", "v0.1.10"))
+    runtimeVersion.set(gradleOrPropString("octomilRuntime.version", "v0.1.16"))
     runtimeFlavor.set(gradleOrPropString("octomilRuntime.flavor", "chat"))
     runtimeAbi.set(gradleOrPropString("octomilRuntime.abi", "arm64-v8a"))
     skipFetch.set(gradleOrPropBool("octomilRuntime.skipFetch", false))
