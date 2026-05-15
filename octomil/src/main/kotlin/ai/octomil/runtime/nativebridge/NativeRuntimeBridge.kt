@@ -1,6 +1,7 @@
 package ai.octomil.runtime.nativebridge
 
 import ai.octomil.errors.OctomilErrorCode
+import ai.octomil.errors.OctomilException
 import ai.octomil.generated.ErrorCode
 import ai.octomil.generated.RuntimeCapability
 
@@ -345,6 +346,89 @@ class NativeRuntimeBridge internal constructor(
         }
     }
 
+    /**
+     * Low-level image send through `oct_session_send_image` (ABI minor 11+).
+     *
+     * This entry point is INTERNAL and does NOT perform the ABI / capability
+     * gate. Use [sendImage] for the gated higher-level path. The JNI shim
+     * resolves the symbol lazily via `dlsym`; if the runtime is an older
+     * (v0.1.10, ABI minor 10) build that lacks the export, this returns
+     * [NativeRuntimeStatus.UNSUPPORTED] rather than crashing.
+     */
+    internal fun sessionSendImage(handle: Long, image: NativeImageView): NativeRuntimeResult<Unit> {
+        if (handle <= 0L) {
+            return NativeRuntimeResult.Error(
+                NativeRuntimeIssue.fromStatus(
+                    NativeRuntimeStatus.INVALID_INPUT,
+                    "Native session handle is not open",
+                ),
+            )
+        }
+
+        return when (val sent = nativeCall { jni.sessionSendImage(handle, image) }) {
+            is NativeRuntimeResult.Success -> {
+                val wire = sent.value
+                val status = NativeRuntimeStatus.fromCode(wire.statusCode)
+                if (status == NativeRuntimeStatus.OK) {
+                    NativeRuntimeResult.Success(Unit)
+                } else {
+                    NativeRuntimeResult.Error(
+                        NativeRuntimeIssue.fromStatus(
+                            status = status,
+                            message = wire.message ?: safeLastError(handle)
+                                ?: "Native session send_image failed with ${status.cName}",
+                        ),
+                    )
+                }
+            }
+            is NativeRuntimeResult.Error -> sent
+            is NativeRuntimeResult.Skipped -> sent
+        }
+    }
+
+    /**
+     * Higher-level image send path. Enforces both gates that the v0.1.12
+     * runtime stub does NOT enforce at the symbol level:
+     *
+     *  1. ABI minor floor: the loaded runtime must advertise minor >= 11
+     *     (the symbol exists but is not stable on minor 10).
+     *  2. Capability presence: the runtime must advertise
+     *     [RuntimeCapability.EMBEDDINGS_IMAGE] via `oct_runtime_capabilities`.
+     *
+     * Throws [OctomilException] with [OctomilErrorCode.RUNTIME_UNAVAILABLE]
+     * if either gate fails — honest "unsupported" rather than a silent
+     * runtime-level UNSUPPORTED bounce. Callers MUST NOT use this method
+     * without already knowing the runtime's ABI/capabilities at open-time.
+     *
+     * The Android SDK's hard required ABI minor in [REQUIRED_ABI_MINOR]
+     * stays at 10 — image embeddings is an optional inner surface, not a
+     * load-time gate. Only callers that invoke this method hit the
+     * 11-floor.
+     */
+    @Throws(OctomilException::class)
+    fun sendImage(
+        session: NativeSession,
+        image: NativeImageView,
+        runtimeAbiMinor: Int,
+        capabilities: Set<RuntimeCapability>,
+    ): NativeRuntimeResult<Unit> {
+        if (runtimeAbiMinor < REQUIRED_ABI_MINOR_FOR_IMAGE) {
+            throw OctomilException(
+                errorCode = OctomilErrorCode.RUNTIME_UNAVAILABLE,
+                message = "embeddings.image is not available on this runtime " +
+                    "(ABI minor $runtimeAbiMinor < required $REQUIRED_ABI_MINOR_FOR_IMAGE)",
+            )
+        }
+        if (RuntimeCapability.EMBEDDINGS_IMAGE !in capabilities) {
+            throw OctomilException(
+                errorCode = OctomilErrorCode.RUNTIME_UNAVAILABLE,
+                message = "embeddings.image is not available on this runtime " +
+                    "(capability not advertised)",
+            )
+        }
+        return sessionSendImage(session.handle, image)
+    }
+
     internal fun sessionSendText(handle: Long, text: String): NativeRuntimeResult<Unit> {
         if (handle <= 0L) {
             return NativeRuntimeResult.Error(
@@ -518,6 +602,15 @@ class NativeRuntimeBridge internal constructor(
         const val DEFAULT_LIBRARY_NAME = "octomil_runtime_jni"
         const val REQUIRED_ABI_MAJOR = 0
         const val REQUIRED_ABI_MINOR = 10
+
+        /**
+         * Inner ABI minor floor for the optional image-input path
+         * (`oct_session_send_image`, v0.1.12). DELIBERATELY higher than
+         * [REQUIRED_ABI_MINOR]: the load-time floor stays at 10 so a
+         * v0.1.10 runtime keeps opening cleanly; only callers that
+         * invoke [sendImage] are subject to the 11-floor.
+         */
+        const val REQUIRED_ABI_MINOR_FOR_IMAGE = 11
     }
 }
 
