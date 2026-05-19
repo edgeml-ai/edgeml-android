@@ -7,7 +7,19 @@ import ai.octomil.generated.SuggestedAction
 
 /**
  * Canonical error codes matching the octomil-contracts error taxonomy.
- * 34 SDK-facing codes mapping to 36 contract codes (token_expired → AUTHENTICATION_FAILED, device_revoked → FORBIDDEN).
+ * 53 SDK-facing codes derived from 65 contract codes.
+ *
+ * Collapsing rules:
+ *   - TOKEN_EXPIRED      → AUTHENTICATION_FAILED  (both require re-auth)
+ *   - DEVICE_REVOKED     → FORBIDDEN              (device-level access denial)
+ *
+ * Intentionally omitted (10 internal/server-ops codes — not user-visible):
+ *   INCIDENT_NOT_FOUND, DEPLOYMENT_NOT_FOUND, EXPERIMENT_NOT_FOUND,
+ *   EXPERIMENT_STATE_INVALID, API_KEY_NOT_FOUND, API_KEY_ALREADY_REVOKED,
+ *   INTEGRATION_NOT_FOUND, BILLING_CUSTOMER_NOT_FOUND,
+ *   ACTION_NOT_FOUND, ACTION_STATE_INVALID.
+ *   These codes are emitted by server-side management APIs, not SDK call paths.
+ *   If the SDK ever wraps those endpoints, promote the relevant codes here.
  *
  * Error metadata ([retryable], [category], [retryClass], [fallbackEligible],
  * [suggestedAction]) is derived from the generated [ContractErrorCode] taxonomy
@@ -18,40 +30,67 @@ import ai.octomil.generated.SuggestedAction
  * server response string to an [OctomilErrorCode].
  */
 enum class OctomilErrorCode {
-    NETWORK_UNAVAILABLE,
-    REQUEST_TIMEOUT,
-    SERVER_ERROR,
+    // Auth
     INVALID_API_KEY,
     AUTHENTICATION_FAILED,
     FORBIDDEN,
+    INSUFFICIENT_SCOPE,
+    MISSING_ORG_CONTEXT,
     DEVICE_NOT_REGISTERED,
     CLOUD_CREDENTIALS_MISSING,
     CLOUD_CREDENTIALS_REVOKED,
     CLOUD_PROVIDER_AUTH_FAILED,
-    MODEL_NOT_FOUND,
-    MODEL_DISABLED,
-    DOWNLOAD_FAILED,
-    CHECKSUM_MISMATCH,
-    INSUFFICIENT_STORAGE,
-    RUNTIME_UNAVAILABLE,
-    MODEL_LOAD_FAILED,
-    INFERENCE_FAILED,
-    INSUFFICIENT_MEMORY,
+    // Network
+    NETWORK_UNAVAILABLE,
+    REQUEST_TIMEOUT,
+    SERVER_ERROR,
     RATE_LIMITED,
+    // Input
     INVALID_INPUT,
     UNSUPPORTED_MODALITY,
     CONTEXT_TOO_LARGE,
+    // Catalog
+    MODEL_NOT_FOUND,
+    NO_DEFAULT_MODEL,
+    CAPABILITY_NOT_SUPPORTED,
+    PREVIOUS_RESPONSE_NOT_FOUND,
+    APP_NOT_FOUND,
+    CAPABILITY_NOT_CONFIGURED,
+    APP_CONTEXT_CONFLICT,
+    INVALID_MODEL_REF,
+    MODEL_DISABLED,
     VERSION_NOT_FOUND,
+    // Download
+    DOWNLOAD_FAILED,
+    CHECKSUM_MISMATCH,
+    // Device
+    INSUFFICIENT_STORAGE,
+    INSUFFICIENT_MEMORY,
+    RUNTIME_UNAVAILABLE,
     ACCELERATOR_UNAVAILABLE,
+    // Runtime
+    MODEL_LOAD_FAILED,
+    INFERENCE_FAILED,
+    PROVIDER_ERROR,
+    UPSTREAM_PROVIDER_ERROR,
+    TOO_MANY_TOOLS,
+    UNSUPPORTED_TOOL_CALLING,
     STREAM_INTERRUPTED,
+    // Policy
     POLICY_DENIED,
     CLOUD_FALLBACK_DISALLOWED,
+    CLOUD_INFERENCE_NOT_ALLOWED,
+    HOSTED_TTS_DISABLED,
+    PLAN_LIMIT_EXCEEDED,
     MAX_TOOL_ROUNDS_EXCEEDED,
+    // Training
     TRAINING_FAILED,
     TRAINING_NOT_SUPPORTED,
     WEIGHT_UPLOAD_FAILED,
+    // Control
     CONTROL_SYNC_FAILED,
     ASSIGNMENT_NOT_FOUND,
+    // Lifecycle
     CANCELLED,
     APP_BACKGROUNDED,
     UNKNOWN;
@@ -154,11 +193,17 @@ enum class OctomilErrorCode {
  * Wraps an [OctomilErrorCode] with a human-readable message and optional cause.
  * The [retryable] convenience property delegates to the error code so callers
  * can decide whether to retry without inspecting the enum directly.
+ *
+ * @param retryAfterMs Milliseconds the caller should wait before retrying, derived
+ *   from the server `Retry-After` header when present. Only set for [OctomilErrorCode.RATE_LIMITED]
+ *   and similar transient errors; `null` when the server did not specify a delay.
+ *   Mirrors the `retry_after_ms` field on the Python SDK's `OctomilError`.
  */
 open class OctomilException(
     val errorCode: OctomilErrorCode,
     message: String,
     cause: Throwable? = null,
+    val retryAfterMs: Long? = null,
 ) : Exception(message, cause) {
     /** Whether the operation that produced this error is safe to retry. */
     val retryable: Boolean get() = errorCode.retryable
@@ -176,5 +221,5 @@ open class OctomilException(
     val suggestedAction: SuggestedAction get() = errorCode.suggestedAction
 
     override fun toString(): String =
-        "OctomilException(code=$errorCode, retryable=$retryable, message=$message)"
+        "OctomilException(code=$errorCode, retryable=$retryable, retryAfterMs=$retryAfterMs, message=$message)"
 }
