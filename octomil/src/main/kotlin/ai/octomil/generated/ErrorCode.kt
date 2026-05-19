@@ -118,6 +118,8 @@ enum class ErrorCode(
     API_KEY_ALREADY_REVOKED("api_key_already_revoked", ErrorCategory.AUTH, RetryClass.NEVER, false, SuggestedAction.FIX_REQUEST),
     INTEGRATION_NOT_FOUND("integration_not_found", ErrorCategory.CONTROL, RetryClass.NEVER, false, SuggestedAction.FIX_REQUEST),
     BILLING_CUSTOMER_NOT_FOUND("billing_customer_not_found", ErrorCategory.CONTROL, RetryClass.NEVER, false, SuggestedAction.FIX_REQUEST),
+    ACTION_NOT_FOUND("action_not_found", ErrorCategory.CONTROL, RetryClass.NEVER, false, SuggestedAction.FIX_REQUEST),
+    ACTION_STATE_INVALID("action_state_invalid", ErrorCategory.CONTROL, RetryClass.NEVER, false, SuggestedAction.FIX_REQUEST),
     CANCELLED("cancelled", ErrorCategory.LIFECYCLE, RetryClass.NEVER, false, SuggestedAction.NONE),
     APP_BACKGROUNDED("app_backgrounded", ErrorCategory.LIFECYCLE, RetryClass.CONDITIONAL, false, SuggestedAction.RESUME_ON_FOREGROUND),
     UNKNOWN("unknown", ErrorCategory.UNKNOWN, RetryClass.NEVER, false, SuggestedAction.REPORT_BUG);
