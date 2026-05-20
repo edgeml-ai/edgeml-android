@@ -1,0 +1,27 @@
+{
+  "buildFiles": [
+    "/Users/seanb/Developer/Octomil/octomil-android/octomil/src/main/cpp/CMakeLists.txt"
+  ],
+  "cleanCommandsComponents": [
+    [
+      "/opt/homebrew/share/android-commandlinetools/cmake/3.22.1/bin/ninja",
+      "-C",
+      "/Users/seanb/Developer/Octomil/octomil-android/octomil/.cxx/Debug/pe1e195o/x86_64",
+      "clean"
+    ]
+  ],
+  "buildTargetsCommandComponents": [
+    "/opt/homebrew/share/android-commandlinetools/cmake/3.22.1/bin/ninja",
+    "-C",
+    "/Users/seanb/Developer/Octomil/octomil-android/octomil/.cxx/Debug/pe1e195o/x86_64",
+    "{LIST_OF_TARGETS_TO_BUILD}"
+  ],
+  "libraries": {
+    "octomil_runtime_jni::@6890427a1f51a3e7e1df": {
+      "artifactName": "octomil_runtime_jni",
+      "abi": "x86_64",
+      "output": "/Users/seanb/Developer/Octomil/octomil-android/octomil/build/intermediates/cxx/Debug/pe1e195o/obj/x86_64/liboctomil_runtime_jni.so",
+      "runtimeFiles": []
+    }
+  }
+}
