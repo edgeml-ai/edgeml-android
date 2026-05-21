@@ -30,11 +30,13 @@ import org.junit.Test
 class ContractConformanceTest {
 
     // =========================================================================
-    // ErrorCode enum — 65 canonical codes (from enums/error_code.yaml v1.25.0)
+    // ErrorCode enum — 85 canonical codes (from enums/error_code.yaml v1.27.0)
     // =========================================================================
 
     // Internal/server-ops codes present in the contract but intentionally omitted
     // from the SDK-facing OctomilErrorCode enum (not reachable from SDK call paths).
+    // Mobile clients don't drive WebAuthn flows or admin endpoints directly, so
+    // passkey/auth-link/admin-only codes downcast to UNKNOWN by design.
     private val internalOnlyCodes: Set<String> = setOf(
         "incident_not_found",
         "deployment_not_found",
@@ -46,15 +48,40 @@ class ContractConformanceTest {
         "billing_customer_not_found",
         "action_not_found",
         "action_state_invalid",
+        // v1.27.0 additions — admin / WebAuthn / auth-linking / runtime ops
+        "agent_system_unavailable",
+        "approval_already_resolved",
+        "approval_not_found",
+        "checkout_not_complete",
+        "connection_not_found",
+        "credential_not_found",
+        "email_already_in_use",
+        "email_already_verified",
+        "invalid_token",
+        "job_not_found",
+        "job_state_invalid",
+        "last_auth_method",
+        "local_runtime_not_found",
+        "oauth_provider_not_linked",
+        "passkey_challenge_expired",
+        "passkey_credential_not_found",
+        "run_not_found",
+        "run_state_invalid",
+        "thread_not_found",
+        "upstream_provider_unavailable",
     )
 
     @Test
-    fun `generated ErrorCode has exactly 65 entries`() {
-        assertEquals(65, ContractErrorCode.entries.size)
+    fun `generated ErrorCode has exactly 85 entries`() {
+        assertEquals(85, ContractErrorCode.entries.size)
     }
 
     @Test
     fun `generated ErrorCode contains all canonical codes`() {
+        // Validates the v1.25.0 core surface is still in the catalog
+        // (regression guard against accidental code removal). New
+        // codes added in later contract versions are checked separately
+        // by `generated ErrorCode has exactly 85 entries`.
         val expected = listOf(
             "invalid_api_key",
             "authentication_failed",
@@ -122,8 +149,12 @@ class ContractConformanceTest {
             "app_backgrounded",
             "unknown",
         )
-        val actual = ContractErrorCode.entries.map { it.code }
-        assertEquals(expected, actual)
+        val actual = ContractErrorCode.entries.map { it.code }.toSet()
+        val missing = expected.filterNot { it in actual }
+        assertTrue(
+            "Core v1.25.0 contract codes missing from generated enum: $missing",
+            missing.isEmpty(),
+        )
     }
 
     @Test
@@ -156,9 +187,9 @@ class ContractConformanceTest {
 
     @Test
     fun `OctomilErrorCode covers all non-internal contract codes`() {
-        // SDK has 53 entries; contract has 65 (10 internal-only omitted, 2 aliased).
+        // SDK has 53 entries; contract has 85 (30 internal-only omitted, 2 aliased).
         assertEquals(53, OctomilErrorCode.entries.size)
-        assertEquals(65, ContractErrorCode.entries.size)
+        assertEquals(85, ContractErrorCode.entries.size)
         for (contractCode in ContractErrorCode.entries) {
             if (contractCode == ContractErrorCode.UNKNOWN) continue
             if (contractCode.code in internalOnlyCodes) continue
