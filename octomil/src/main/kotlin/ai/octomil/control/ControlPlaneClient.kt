@@ -6,6 +6,7 @@ import ai.octomil.api.dto.DesiredStateResponse
 import ai.octomil.api.dto.DeviceSyncRequest
 import ai.octomil.api.dto.DeviceSyncResponse
 import ai.octomil.api.dto.HeartbeatRequest
+import ai.octomil.api.dto.HeartbeatRequestTransport
 import ai.octomil.api.dto.ModelInventoryEntry
 import ai.octomil.api.dto.ObservedModelStatus
 import ai.octomil.api.dto.ObservedStateRequest
@@ -56,6 +57,30 @@ class ControlPlaneClient(
         } catch (e: Exception) {
             Timber.d(e, "Heartbeat failed (non-blocking)")
         }
+    }
+
+    /**
+     * Send a heartbeat using the contract-generated transport type
+     * [HeartbeatRequestTransport] (alias for
+     * [ai.octomil.generated.transport.models.DevicesHeartbeatRequest]).
+     *
+     * Converts to the Retrofit [HeartbeatRequest] for the existing API layer.
+     * This is the demo wiring for openapi-generator-cli pilot (jvm-okhttp4).
+     *
+     * @see HeartbeatRequestTransport
+     */
+    suspend fun heartbeatTransport(
+        deviceId: String = this.deviceId.orEmpty(),
+        request: HeartbeatRequestTransport,
+    ) {
+        val retrofitRequest = HeartbeatRequest(
+            batteryPct = request.batteryPct,
+            charging = request.charging,
+            availableStorageMb = request.availableStorageMb?.toLong(),
+            availableMemoryMb = request.availableMemoryMb?.toLong(),
+            networkType = request.networkType,
+        )
+        heartbeat(deviceId, retrofitRequest)
     }
 
     /**

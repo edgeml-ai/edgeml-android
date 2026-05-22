@@ -262,3 +262,17 @@ data class DevicePolicyResponse(
     @SerialName("training_window")
     val trainingWindow: String? = null,
 )
+
+// =========================================================================
+// Generated-type bridge
+// =========================================================================
+
+/**
+ * Typealias bridging the hand-rolled [HeartbeatRequest] to the contract-generated
+ * [ai.octomil.generated.transport.models.DevicesHeartbeatRequest].
+ *
+ * [HeartbeatRequest] carries SDK-internal fields (sdkVersion, osVersion) that the
+ * server contract does not define; for transport-level fields only, prefer the
+ * generated type.  See [ai.octomil.control.ControlPlaneClient.heartbeatTransport].
+ */
+typealias HeartbeatRequestTransport = ai.octomil.generated.transport.models.DevicesHeartbeatRequest
