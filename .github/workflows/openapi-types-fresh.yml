@@ -19,6 +19,7 @@ jobs:
   openapi-freshness:
     name: Verify generated transport types are fresh
     runs-on: ubuntu-latest
+    timeout-minutes: 25
 
     steps:
       - name: Checkout octomil-android
