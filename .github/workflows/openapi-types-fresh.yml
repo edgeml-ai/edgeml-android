@@ -6,11 +6,10 @@ name: openapi-types-fresh
 # Mirrors the Node pilot pattern from octomil-node#94 / #95.
 
 on:
+  # Run on every PR — drift can be introduced upstream (contracts SHA bump,
+  # auto-PRs refreshing the spec) with no local footprint under generated/.
+  # Path filters let those slip through. Cost is one regen + one diff per PR.
   pull_request:
-    paths:
-      - 'octomil/src/main/kotlin/ai/octomil/generated/transport/**'
-      - '.github/workflows/openapi-types-fresh.yml'
-      - 'scripts/check_openapi_banner.sh'
   push:
     branches:
       - main
