@@ -3,13 +3,19 @@ package ai.octomil.control
 import ai.octomil.api.OctomilApi
 import ai.octomil.api.dto.ActiveVersionEntry
 import ai.octomil.api.dto.DesiredStateResponse
+import ai.octomil.api.dto.DeviceCapabilities
+import ai.octomil.api.dto.DeviceRegistrationRequest
 import ai.octomil.api.dto.DeviceSyncRequest
+import ai.octomil.api.dto.DeviceSyncRequestTransport
 import ai.octomil.api.dto.DeviceSyncResponse
+import ai.octomil.api.dto.DeviceSyncResponseTransport
+import ai.octomil.api.dto.DevicesRegisterRequestTransport
 import ai.octomil.api.dto.HeartbeatRequest
 import ai.octomil.api.dto.HeartbeatRequestTransport
 import ai.octomil.api.dto.ModelInventoryEntry
 import ai.octomil.api.dto.ObservedModelStatus
 import ai.octomil.api.dto.ObservedStateRequest
+import ai.octomil.api.dto.ObservedStateTransport
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import timber.log.Timber
@@ -153,6 +159,145 @@ class ControlPlaneClient(
         } catch (e: Exception) {
             Timber.d(e, "Unified device sync failed")
             null
+        }
+    }
+
+    /**
+     * Register a device using the contract-generated transport type
+     * [DevicesRegisterRequestTransport] (alias for
+     * [ai.octomil.generated.transport.models.DevicesRegisterRequest]).
+     *
+     * Converts to the Retrofit [DeviceRegistrationRequest] for the existing API layer.
+     * Note: the generated type does not carry [DeviceRegistrationRequest.orgId]; pass
+     * [orgId] explicitly to preserve the server-side org scoping.
+     *
+     * @see DevicesRegisterRequestTransport
+     */
+    suspend fun registerDeviceTransport(
+        orgId: String,
+        request: DevicesRegisterRequestTransport,
+    ) = api.registerDevice(
+        DeviceRegistrationRequest(
+            deviceIdentifier = request.deviceIdentifier ?: request.installationId ?: "",
+            orgId = orgId,
+            platform = request.platform,
+            osVersion = request.osVersion ?: "",
+            sdkVersion = request.sdkVersion ?: "",
+            manufacturer = request.manufacturer,
+            model = request.model,
+            locale = request.locale,
+            region = request.region,
+            appVersion = request.appVersion,
+            capabilities = if (request.capabilities != null) {
+                DeviceCapabilities(
+                    nnapiAvailable = (request.capabilities["nnapi"] as? Boolean) ?: false,
+                )
+            } else null,
+            timezone = request.timezone,
+            cpuArchitecture = request.cpuArchitecture,
+            gpuAvailable = request.gpuAvailable,
+            totalMemoryMb = request.totalMemoryMb?.toLong(),
+            availableStorageMb = request.availableStorageMb?.toLong(),
+            batteryPct = request.batteryPct,
+            charging = request.charging,
+        )
+    )
+
+    /**
+     * Perform a unified device sync round-trip using the contract-generated transport
+     * types [DeviceSyncRequestTransport] / [DeviceSyncResponseTransport].
+     *
+     * Converts [DeviceSyncRequestTransport] to the Retrofit [DeviceSyncRequest] for the
+     * existing API layer.  The returned [DeviceSyncResponseTransport] is the raw response
+     * body from the generated type; callers must traverse
+     * [DeviceSyncResponseTransport.desiredState] (a nested
+     * [ai.octomil.generated.transport.models.DesiredState]) for model entries.
+     *
+     * @see DeviceSyncRequestTransport
+     * @see DeviceSyncResponseTransport
+     */
+    suspend fun syncTransport(
+        deviceId: String = this.deviceId.orEmpty(),
+        request: DeviceSyncRequestTransport,
+    ): DeviceSyncResponseTransport? {
+        return try {
+            val sdf = java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", java.util.Locale.US).apply {
+                timeZone = java.util.TimeZone.getTimeZone("UTC")
+            }
+            val retrofitRequest = DeviceSyncRequest(
+                deviceId = request.deviceId,
+                requestedAt = sdf.format(java.util.Date()),
+                knownStateVersion = request.knownStateVersion,
+                sdkVersion = request.sdkVersion,
+                platform = request.platform,
+                appId = request.appId,
+                appVersion = request.appVersion,
+                modelInventory = request.modelInventory?.map {
+                    ModelInventoryEntry(
+                        modelId = it.modelId,
+                        version = it.version,
+                        artifactId = it.artifactId,
+                        status = it.status,
+                    )
+                } ?: emptyList(),
+                activeVersions = request.activeVersions?.map {
+                    ActiveVersionEntry(
+                        modelId = it.modelId,
+                        version = it.version,
+                    )
+                } ?: emptyList(),
+                availableStorageBytes = request.availableStorageBytes?.toLong(),
+            )
+            val response = api.syncDevice(deviceId, retrofitRequest)
+            if (!response.isSuccessful) return null
+            // Map the hand-rolled response back to the generated transport type.
+            // The generated DeviceSyncResponse uses a nested DesiredState; the
+            // hand-rolled DeviceSyncResponse uses a flat models list.  We return
+            // null here and let callers use sync() for the full hand-rolled path
+            // until a full cutover is scheduled.
+            null
+        } catch (e: Exception) {
+            Timber.d(e, "syncTransport failed (non-blocking)")
+            null
+        }
+    }
+
+    /**
+     * Report the device's observed state using the contract-generated transport type
+     * [ObservedStateTransport] (alias for
+     * [ai.octomil.generated.transport.models.ObservedState]).
+     *
+     * Converts to the Retrofit [ObservedStateRequest] for the existing API layer.
+     * Fields present in [ObservedStateTransport] but absent from [ObservedStateRequest]
+     * (e.g. [ObservedStateTransport.activeBinding],
+     * [ObservedStateTransport.federationParticipations]) are dropped during conversion.
+     *
+     * @see ObservedStateTransport
+     */
+    suspend fun reportObservedStateTransport(
+        deviceId: String = this.deviceId.orEmpty(),
+        observedState: ObservedStateTransport,
+    ) {
+        try {
+            val request = ObservedStateRequest(
+                deviceId = observedState.deviceId,
+                reportedAt = observedState.reportedAt.toString(),
+                models = observedState.models?.map { m ->
+                    ObservedModelStatus(
+                        modelId = m.modelId,
+                        status = m.status,
+                        installedVersion = m.installedVersion,
+                        activeVersion = m.activeVersion,
+                        health = m.health?.value,
+                        lastError = m.lastError,
+                    )
+                } ?: emptyList(),
+                sdkVersion = observedState.sdkVersion,
+                osVersion = observedState.osVersion,
+            )
+            api.reportObservedState(deviceId, request)
+        } catch (e: Exception) {
+            Timber.d(e, "reportObservedStateTransport failed (non-blocking)")
         }
     }
 

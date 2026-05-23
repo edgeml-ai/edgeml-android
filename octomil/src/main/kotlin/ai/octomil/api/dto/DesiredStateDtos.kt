@@ -238,3 +238,41 @@ data class DeviceSyncResponse(
     @SerialName("serverTimestamp")
     val serverTimestamp: String? = null,
 )
+
+// =========================================================================
+// Generated-type bridges
+// =========================================================================
+
+/**
+ * Typealias bridging the hand-rolled [DeviceSyncRequest] to the contract-generated
+ * [ai.octomil.generated.transport.models.DeviceSyncRequest].
+ *
+ * The generated type uses [java.time.OffsetDateTime] for [requestedAt] and inlines
+ * an [ai.octomil.generated.transport.models.ObservedState] object rather than the
+ * SDK-internal inventory lists.  Use this alias when accepting a value already
+ * constructed from the generated transport layer.
+ * See [ai.octomil.control.ControlPlaneClient.syncTransport].
+ */
+typealias DeviceSyncRequestTransport = ai.octomil.generated.transport.models.DeviceSyncRequest
+
+/**
+ * Typealias bridging the hand-rolled [DeviceSyncResponse] to the contract-generated
+ * [ai.octomil.generated.transport.models.DeviceSyncResponse].
+ *
+ * The generated type carries a nested [ai.octomil.generated.transport.models.DesiredState]
+ * rather than a flat [models] list; callers that need to access model entries must
+ * traverse [ai.octomil.generated.transport.models.DeviceSyncResponse.desiredState].
+ * See [ai.octomil.control.ControlPlaneClient.syncTransport].
+ */
+typealias DeviceSyncResponseTransport = ai.octomil.generated.transport.models.DeviceSyncResponse
+
+/**
+ * Typealias bridging the hand-rolled [ObservedStateRequest] to the contract-generated
+ * [ai.octomil.generated.transport.models.ObservedState].
+ *
+ * The generated type uses [java.time.OffsetDateTime] for [reportedAt] and carries
+ * richer federation-participation and active-binding fields.  For endpoints that
+ * post a standalone observed-state snapshot, prefer the generated type.
+ * See [ai.octomil.control.ControlPlaneClient.reportObservedStateTransport].
+ */
+typealias ObservedStateTransport = ai.octomil.generated.transport.models.ObservedState

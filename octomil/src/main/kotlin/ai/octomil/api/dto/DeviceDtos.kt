@@ -264,7 +264,7 @@ data class DevicePolicyResponse(
 )
 
 // =========================================================================
-// Generated-type bridge
+// Generated-type bridges
 // =========================================================================
 
 /**
@@ -276,3 +276,17 @@ data class DevicePolicyResponse(
  * generated type.  See [ai.octomil.control.ControlPlaneClient.heartbeatTransport].
  */
 typealias HeartbeatRequestTransport = ai.octomil.generated.transport.models.DevicesHeartbeatRequest
+
+/**
+ * Typealias bridging the hand-rolled [DeviceRegistrationRequest] to the
+ * contract-generated [ai.octomil.generated.transport.models.DevicesRegisterRequest].
+ *
+ * The generated type omits [DeviceRegistrationRequest.orgId] (not in the contract
+ * schema) and uses [ai.octomil.generated.transport.models.DevicesRegisterRequest.installationId]
+ * in addition to [ai.octomil.generated.transport.models.DevicesRegisterRequest.deviceIdentifier].
+ * For endpoints that must send org-scoped registration, continue to use the hand-rolled
+ * [DeviceRegistrationRequest] directly.  This alias exists so callers that hold a
+ * contract-generated value can pass it without an intermediate copy.
+ * See [ai.octomil.control.ControlPlaneClient.registerDeviceTransport].
+ */
+typealias DevicesRegisterRequestTransport = ai.octomil.generated.transport.models.DevicesRegisterRequest
