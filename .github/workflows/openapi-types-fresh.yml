@@ -6,11 +6,10 @@ name: openapi-types-fresh
 # Mirrors the Node pilot pattern from octomil-node#94 / #95.
 
 on:
+  # Run on every PR — upstream-only drift (contracts SHA bump, auto-PR
+  # refreshes) has no local footprint under generated/transport/.
+  # Composes with #277 so this branch is independently correct.
   pull_request:
-    paths:
-      - 'octomil/src/main/kotlin/ai/octomil/generated/transport/**'
-      - '.github/workflows/openapi-types-fresh.yml'
-      - 'scripts/check_openapi_banner.sh'
   push:
     branches:
       - main
