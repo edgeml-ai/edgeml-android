@@ -56,12 +56,6 @@ jobs:
           chmod +x /usr/local/bin/openapi-generator
           openapi-generator version
 
-      - name: Set up Android SDK (for compileKotlin postflight)
-        uses: android-actions/setup-android@v3
-
-      - name: Set up Gradle cache
-        uses: gradle/actions/setup-gradle@v3
-
       - name: Build contracts spec
         working-directory: octomil-android/.contracts-checkout
         run: |
@@ -74,9 +68,12 @@ jobs:
           OCTOMIL_ANDROID_PATH: ${{ github.workspace }}/octomil-android
           OCTOMIL_ANDROID: "1"
           OCTOMIL_SKIP_INSTALL: "1"
-          # TEMP diagnostic: unset ANDROID_HOME so the script skips its own
-          # compile postflight; the dedicated verbose step below shows the
-          # real kotlin error.
+          # Unset ANDROID_HOME so generate-kotlin.sh skips its compile
+          # postflight. This is a DRIFT gate (freshness + banner only).
+          # Full-module compilation pulls :octomil:fetchRuntime, which
+          # downloads the native runtime from the private octomil-runtime
+          # repo and needs a separate token — that belongs to the android
+          # build/test workflow, not here.
           ANDROID_HOME: ""
         run: |
           bash .contracts-checkout/tools/sdkgen/generate-kotlin.sh
@@ -94,10 +91,6 @@ jobs:
       - name: Run banner check
         working-directory: octomil-android
         run: bash scripts/check_openapi_banner.sh
-
-      - name: Run compileKotlin postflight
-        working-directory: octomil-android
-        run: ./gradlew :octomil:compileDebugKotlin --console=plain
 
       - name: Fetch latest server openapi snapshot
         env:
