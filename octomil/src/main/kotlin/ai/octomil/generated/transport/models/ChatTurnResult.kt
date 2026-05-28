@@ -44,7 +44,7 @@ data class ChatTurnResult (
     @Contextual @SerialName(value = "assistantMessage")
     val assistantMessage: ChatMessage
 
-) : kotlin.collections.HashMap<String, kotlin.Any>() {
+) : kotlin.collections.HashMap<String, kotlinx.serialization.json.JsonElement>() {
 
 
 }

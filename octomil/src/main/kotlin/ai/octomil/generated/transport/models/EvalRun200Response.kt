@@ -51,15 +51,15 @@ data class EvalRun200Response (
 
     /* Aggregated quality metrics (overall_score, passed verdict, per-metric breakdown). Shape determined server-side by the metrics requested; `additionalProperties: true` until pinned.  */
     @Contextual @SerialName(value = "summary")
-    val summary: kotlin.collections.Map<kotlin.String, kotlin.Any>,
+    val summary: kotlin.collections.Map<kotlin.String, kotlinx.serialization.json.JsonElement>,
 
     /* Per-input comparison results (cloud vs device output, scores). */
     @SerialName(value = "per_input_results")
-    val perInputResults: kotlin.collections.List<@Contextual kotlin.collections.Map<kotlin.String, kotlin.Any>>,
+    val perInputResults: kotlin.collections.List<@Contextual kotlin.collections.Map<kotlin.String, kotlinx.serialization.json.JsonElement>>,
 
     /* Optional A/B significance analysis (p-value, sample size, effect size) when the eval compared two model variants. Null when only a single model was evaluated.  */
     @Contextual @SerialName(value = "statistical_significance")
-    val statisticalSignificance: kotlin.collections.Map<kotlin.String, kotlin.Any>? = null
+    val statisticalSignificance: kotlin.collections.Map<kotlin.String, kotlinx.serialization.json.JsonElement>? = null
 
 ) {
 

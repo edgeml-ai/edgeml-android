@@ -117,9 +117,9 @@ data class RuntimeBenchmarkSubmissionSchema (
 
     /* Arbitrary metadata. Must NOT contain keys related to prompts, responses, audio, transcripts, or file paths. */
     @Contextual @SerialName(value = "metadata")
-    val metadata: kotlin.collections.Map<kotlin.String, kotlin.Any>? = null
+    val metadata: kotlin.collections.Map<kotlin.String, kotlinx.serialization.json.JsonElement>? = null
 
-) : kotlin.collections.HashMap<String, kotlin.Any>() {
+) : kotlin.collections.HashMap<String, kotlinx.serialization.json.JsonElement>() {
 
     /**
      * Where this benchmark originated.

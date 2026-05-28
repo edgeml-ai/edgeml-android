@@ -58,7 +58,7 @@ data class AudioSpeechRequest (
     @Contextual @SerialName(value = "speed")
     val speed: java.math.BigDecimal? = java.math.BigDecimal("1.0")
 
-) : kotlin.collections.HashMap<String, kotlin.Any>() {
+) : kotlin.collections.HashMap<String, kotlinx.serialization.json.JsonElement>() {
 
     /**
      * Output audio format. 'wav' is supported on every locality. mp3/ogg/opus/flac/aac/pcm depend on the routed locality: cloud providers cover all, local sherpa-onnx is wav-only until local transcoding ships (see PR 6 in the implementation plan).

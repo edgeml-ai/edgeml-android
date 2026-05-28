@@ -58,7 +58,7 @@ data class PolicyConfig (
     @Contextual @SerialName(value = "cloudFallback")
     val cloudFallback: PolicyConfigCloudFallback? = null
 
-) : kotlin.collections.HashMap<String, kotlin.Any>() {
+) : kotlin.collections.HashMap<String, kotlinx.serialization.json.JsonElement>() {
 
 
 }

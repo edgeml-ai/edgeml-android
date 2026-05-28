@@ -58,7 +58,7 @@ data class PolicyConfigFederation (
     @SerialName(value = "maxWallTimeSeconds")
     val maxWallTimeSeconds: kotlin.Int? = null
 
-) : kotlin.collections.HashMap<String, kotlin.Any>() {
+) : kotlin.collections.HashMap<String, kotlinx.serialization.json.JsonElement>() {
 
 
 }

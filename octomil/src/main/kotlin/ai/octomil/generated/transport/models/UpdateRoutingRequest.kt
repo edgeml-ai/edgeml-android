@@ -41,7 +41,7 @@ data class UpdateRoutingRequest (
     @SerialName(value = "cloud_cooldown_seconds")
     val cloudCooldownSeconds: kotlin.Int? = null
 
-) : kotlin.collections.HashMap<String, kotlin.Any>() {
+) : kotlin.collections.HashMap<String, kotlinx.serialization.json.JsonElement>() {
 
     /**
      * 

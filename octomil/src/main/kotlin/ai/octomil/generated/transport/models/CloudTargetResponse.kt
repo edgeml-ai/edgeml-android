@@ -69,7 +69,7 @@ data class CloudTargetResponse (
     @SerialName(value = "tpm_limit")
     val tpmLimit: kotlin.Int? = 0
 
-) : kotlin.collections.HashMap<String, kotlin.Any>() {
+) : kotlin.collections.HashMap<String, kotlinx.serialization.json.JsonElement>() {
 
 
 }

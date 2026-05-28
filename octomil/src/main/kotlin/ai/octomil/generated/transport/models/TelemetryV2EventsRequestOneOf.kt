@@ -40,7 +40,7 @@ data class TelemetryV2EventsRequestOneOf (
     val events: kotlin.collections.List<TelemetryV2EventsRequestOneOfEventsInner>,
 
     @Contextual @SerialName(value = "resource")
-    val resource: kotlin.collections.Map<kotlin.String, kotlin.Any>? = null
+    val resource: kotlin.collections.Map<kotlin.String, kotlinx.serialization.json.JsonElement>? = null
 
 ) {
 

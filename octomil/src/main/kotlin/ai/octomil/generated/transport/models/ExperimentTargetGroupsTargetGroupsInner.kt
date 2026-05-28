@@ -45,7 +45,7 @@ data class ExperimentTargetGroupsTargetGroupsInner (
     @SerialName(value = "group_type")
     val groupType: kotlin.String? = null
 
-) : kotlin.collections.HashMap<String, kotlin.Any>() {
+) : kotlin.collections.HashMap<String, kotlinx.serialization.json.JsonElement>() {
 
 
 }

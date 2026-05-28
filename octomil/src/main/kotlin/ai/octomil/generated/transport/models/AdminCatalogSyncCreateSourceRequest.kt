@@ -55,10 +55,10 @@ data class AdminCatalogSyncCreateSourceRequest (
     val baseUrl: kotlin.String? = "https://huggingface.co",
 
     @Contextual @SerialName(value = "auth_config")
-    val authConfig: kotlin.collections.Map<kotlin.String, kotlin.Any>? = null,
+    val authConfig: kotlin.collections.Map<kotlin.String, kotlinx.serialization.json.JsonElement>? = null,
 
     @Contextual @SerialName(value = "search_filters")
-    val searchFilters: kotlin.collections.Map<kotlin.String, kotlin.Any>? = null,
+    val searchFilters: kotlin.collections.Map<kotlin.String, kotlinx.serialization.json.JsonElement>? = null,
 
     /* Seconds between list refreshes. */
     @SerialName(value = "list_refresh_interval")

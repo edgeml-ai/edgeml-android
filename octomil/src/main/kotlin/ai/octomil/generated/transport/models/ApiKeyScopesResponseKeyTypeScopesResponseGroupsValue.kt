@@ -45,7 +45,7 @@ data class ApiKeyScopesResponseKeyTypeScopesResponseGroupsValue (
     @SerialName(value = "scopes")
     val scopes: kotlin.collections.List<kotlin.String>
 
-) : kotlin.collections.HashMap<String, kotlin.Any>() {
+) : kotlin.collections.HashMap<String, kotlinx.serialization.json.JsonElement>() {
 
 
 }

@@ -85,7 +85,7 @@ data class ExecutionHealthResponseTargetsInner (
     @SerialName(value = "last_verification_error")
     val lastVerificationError: kotlin.String? = null
 
-) : kotlin.collections.HashMap<String, kotlin.Any>() {
+) : kotlin.collections.HashMap<String, kotlinx.serialization.json.JsonElement>() {
 
 
 }

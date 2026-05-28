@@ -46,7 +46,7 @@ data class RuntimePlanResponseSchemaRuntimeArtifactPlanDownloadUrlsInner (
     @SerialName(value = "headers")
     val headers: kotlin.collections.Map<kotlin.String, kotlin.String>? = null
 
-) : kotlin.collections.HashMap<String, kotlin.Any>() {
+) : kotlin.collections.HashMap<String, kotlinx.serialization.json.JsonElement>() {
 
 
 }

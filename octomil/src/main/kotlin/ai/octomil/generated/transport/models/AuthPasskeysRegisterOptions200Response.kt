@@ -63,7 +63,7 @@ data class AuthPasskeysRegisterOptions200Response (
     @SerialName(value = "excludeCredentials")
     val excludeCredentials: kotlin.collections.List<AuthPasskeysRegisterOptions200ResponseExcludeCredentialsInner>? = null
 
-) : kotlin.collections.HashMap<String, kotlin.Any>() {
+) : kotlin.collections.HashMap<String, kotlinx.serialization.json.JsonElement>() {
 
 
 }

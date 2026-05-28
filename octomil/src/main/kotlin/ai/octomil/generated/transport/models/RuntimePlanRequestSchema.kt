@@ -74,7 +74,7 @@ data class RuntimePlanRequestSchema (
     @SerialName(value = "allow_cloud_fallback")
     val allowCloudFallback: kotlin.Boolean? = null
 
-) : kotlin.collections.HashMap<String, kotlin.Any>() {
+) : kotlin.collections.HashMap<String, kotlinx.serialization.json.JsonElement>() {
 
     /**
      * Inference capability the plan should target.

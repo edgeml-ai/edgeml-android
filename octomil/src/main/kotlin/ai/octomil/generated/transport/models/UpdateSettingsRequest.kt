@@ -65,7 +65,7 @@ data class UpdateSettingsRequest (
     @SerialName(value = "device_network_policy")
     val deviceNetworkPolicy: UpdateSettingsRequest.DeviceNetworkPolicy? = null
 
-) : kotlin.collections.HashMap<String, kotlin.Any>() {
+) : kotlin.collections.HashMap<String, kotlinx.serialization.json.JsonElement>() {
 
     /**
      * 

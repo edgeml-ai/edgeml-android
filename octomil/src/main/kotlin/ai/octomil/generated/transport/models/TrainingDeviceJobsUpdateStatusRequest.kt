@@ -42,7 +42,7 @@ data class TrainingDeviceJobsUpdateStatusRequest (
 
     /* Structured progress data (epoch, loss, etc.). */
     @Contextual @SerialName(value = "progress")
-    val progress: kotlin.Any? = null,
+    val progress: kotlinx.serialization.json.JsonElement? = null,
 
     @SerialName(value = "last_error")
     val lastError: kotlin.String? = null

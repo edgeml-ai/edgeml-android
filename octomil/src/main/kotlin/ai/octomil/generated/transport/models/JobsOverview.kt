@@ -41,27 +41,27 @@ import kotlinx.serialization.Contextual
 data class JobsOverview (
 
     @Contextual @SerialName(value = "queue_overview")
-    val queueOverview: kotlin.collections.Map<kotlin.String, kotlin.Any>,
+    val queueOverview: kotlin.collections.Map<kotlin.String, kotlinx.serialization.json.JsonElement>,
 
     @SerialName(value = "job_types")
     val jobTypes: kotlin.collections.Map<kotlin.String, kotlin.Int>,
 
     @Contextual @SerialName(value = "automation")
-    val automation: kotlin.collections.Map<kotlin.String, kotlin.Any>,
+    val automation: kotlin.collections.Map<kotlin.String, kotlinx.serialization.json.JsonElement>,
 
     @SerialName(value = "recent_jobs")
-    val recentJobs: kotlin.collections.List<@Contextual kotlin.collections.Map<kotlin.String, kotlin.Any>>,
+    val recentJobs: kotlin.collections.List<@Contextual kotlin.collections.Map<kotlin.String, kotlinx.serialization.json.JsonElement>>,
 
     @SerialName(value = "active_rollout_items")
-    val activeRolloutItems: kotlin.collections.List<@Contextual kotlin.Any>? = null,
+    val activeRolloutItems: kotlin.collections.List<@Contextual kotlinx.serialization.json.JsonElement>? = null,
 
     @SerialName(value = "running_experiment_items")
-    val runningExperimentItems: kotlin.collections.List<@Contextual kotlin.Any>? = null,
+    val runningExperimentItems: kotlin.collections.List<@Contextual kotlinx.serialization.json.JsonElement>? = null,
 
     @SerialName(value = "failed_integration_items")
-    val failedIntegrationItems: kotlin.collections.List<@Contextual kotlin.Any>? = null
+    val failedIntegrationItems: kotlin.collections.List<@Contextual kotlinx.serialization.json.JsonElement>? = null
 
-) : kotlin.collections.HashMap<String, kotlin.Any>() {
+) : kotlin.collections.HashMap<String, kotlinx.serialization.json.JsonElement>() {
 
 
 }

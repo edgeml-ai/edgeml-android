@@ -54,7 +54,7 @@ data class TrainingCreateRoundRequest (
 
     /* Round-specific DP / secure-aggregation overrides on top of the federation default. */
     @Contextual @SerialName(value = "privacy_policy")
-    val privacyPolicy: kotlin.Any? = null
+    val privacyPolicy: kotlinx.serialization.json.JsonElement? = null
 
 ) {
 

@@ -40,7 +40,7 @@ data class ResponseRequestResponseFormat (
     val type: ResponseRequestResponseFormat.Type,
 
     @Contextual @SerialName(value = "schema")
-    val schema: kotlin.Any
+    val schema: kotlinx.serialization.json.JsonElement
 
 ) {
 

@@ -45,7 +45,7 @@ data class AgentsSessionsCreateRequest (
     val query: kotlin.String,
 
     @Contextual @SerialName(value = "context")
-    val context: kotlin.collections.Map<kotlin.String, kotlin.Any>? = null,
+    val context: kotlin.collections.Map<kotlin.String, kotlinx.serialization.json.JsonElement>? = null,
 
     @SerialName(value = "device_id")
     val deviceId: kotlin.String? = null

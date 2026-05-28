@@ -84,7 +84,7 @@ data class RuntimePlanResponseSchemaModelResolution (
     @SerialName(value = "routing_policy")
     val routingPolicy: kotlin.String? = null
 
-) : kotlin.collections.HashMap<String, kotlin.Any>() {
+) : kotlin.collections.HashMap<String, kotlinx.serialization.json.JsonElement>() {
 
 
 }

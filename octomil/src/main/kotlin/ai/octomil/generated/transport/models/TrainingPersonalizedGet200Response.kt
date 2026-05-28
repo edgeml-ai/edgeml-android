@@ -37,7 +37,7 @@ data class TrainingPersonalizedGet200Response (
 
     /* PersonalizedState record — see schemas/training/PersonalizedState.json */
     @Contextual @SerialName(value = "state")
-    val state: kotlin.collections.Map<kotlin.String, kotlin.Any>? = null,
+    val state: kotlin.collections.Map<kotlin.String, kotlinx.serialization.json.JsonElement>? = null,
 
     @SerialName(value = "has_personalized_weights")
     val hasPersonalizedWeights: kotlin.Boolean? = null

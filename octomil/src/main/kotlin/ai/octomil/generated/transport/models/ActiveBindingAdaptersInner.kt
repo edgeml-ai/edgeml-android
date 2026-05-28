@@ -53,7 +53,7 @@ data class ActiveBindingAdaptersInner (
     @SerialName(value = "activationState")
     val activationState: kotlin.String? = null
 
-) : kotlin.collections.HashMap<String, kotlin.Any>() {
+) : kotlin.collections.HashMap<String, kotlinx.serialization.json.JsonElement>() {
 
     /**
      * Adapter architecture type.

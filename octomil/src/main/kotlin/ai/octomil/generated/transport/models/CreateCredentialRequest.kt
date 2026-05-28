@@ -51,7 +51,7 @@ data class CreateCredentialRequest (
     @SerialName(value = "base_url")
     val baseUrl: kotlin.String? = null
 
-) : kotlin.collections.HashMap<String, kotlin.Any>() {
+) : kotlin.collections.HashMap<String, kotlinx.serialization.json.JsonElement>() {
 
 
 }

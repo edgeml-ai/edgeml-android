@@ -80,7 +80,7 @@ data class ChatMessage (
     @SerialName(value = "contentParts")
     val contentParts: kotlin.collections.List<ContentPart>? = null
 
-) : kotlin.collections.HashMap<String, kotlin.Any>() {
+) : kotlin.collections.HashMap<String, kotlinx.serialization.json.JsonElement>() {
 
     /**
      * Message author role.

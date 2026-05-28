@@ -42,23 +42,14 @@ data class RuntimeBenchmarkSubmissionResponseSchema (
 
     /* True when the submission passed validation and was stored. */
     @SerialName(value = "accepted")
-    val accepted: RuntimeBenchmarkSubmissionResponseSchema.Accepted,
+    val accepted: kotlin.Boolean,
 
     /* ISO 8601 timestamp when the server accepted the submission. */
     @Contextual @SerialName(value = "created_at")
     val createdAt: java.time.OffsetDateTime
 
-) : kotlin.collections.HashMap<String, kotlin.Any>() {
+) : kotlin.collections.HashMap<String, kotlinx.serialization.json.JsonElement>() {
 
-    /**
-     * True when the submission passed validation and was stored.
-     *
-     * Values: TRUE
-     */
-    @Serializable
-    enum class Accepted(val value: kotlin.Boolean) {
-        @SerialName(value = "true") TRUE("true");
-    }
 
 }
 

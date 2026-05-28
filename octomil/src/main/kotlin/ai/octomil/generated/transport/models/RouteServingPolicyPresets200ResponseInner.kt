@@ -41,7 +41,7 @@ data class RouteServingPolicyPresets200ResponseInner (
 
     /* Serving policy configuration object for this preset. */
     @Contextual @SerialName(value = "policy")
-    val policy: kotlin.collections.Map<kotlin.String, kotlin.Any>
+    val policy: kotlin.collections.Map<kotlin.String, kotlinx.serialization.json.JsonElement>
 
 ) {
 

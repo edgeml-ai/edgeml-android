@@ -38,7 +38,7 @@ data class BillingInvoicesResponse (
     @SerialName(value = "invoices")
     val invoices: kotlin.collections.List<@Contextual BillingInvoicesResponseInvoicesInner>
 
-) : kotlin.collections.HashMap<String, kotlin.Any>() {
+) : kotlin.collections.HashMap<String, kotlinx.serialization.json.JsonElement>() {
 
 
 }

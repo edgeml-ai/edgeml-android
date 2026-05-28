@@ -99,7 +99,7 @@ data class ArtifactManifest (
     @SerialName(value = "baseModelArtifactId")
     val baseModelArtifactId: kotlin.String? = null
 
-) : kotlin.collections.HashMap<String, kotlin.Any>() {
+) : kotlin.collections.HashMap<String, kotlinx.serialization.json.JsonElement>() {
 
 
 }

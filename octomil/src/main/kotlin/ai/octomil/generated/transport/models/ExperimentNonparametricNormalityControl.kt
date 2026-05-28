@@ -37,7 +37,7 @@ data class ExperimentNonparametricNormalityControl (
     @SerialName(value = "is_normal")
     val isNormal: kotlin.Boolean? = null
 
-) : kotlin.collections.HashMap<String, kotlin.Any>() {
+) : kotlin.collections.HashMap<String, kotlinx.serialization.json.JsonElement>() {
 
 
 }

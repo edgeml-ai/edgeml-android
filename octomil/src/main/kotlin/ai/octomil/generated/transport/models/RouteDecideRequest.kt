@@ -50,11 +50,11 @@ data class RouteDecideRequest (
 
     /* Model identifier and runtime requirements. */
     @Contextual @SerialName(value = "model_params")
-    val modelParams: kotlin.collections.Map<kotlin.String, kotlin.Any>? = null,
+    val modelParams: kotlin.collections.Map<kotlin.String, kotlinx.serialization.json.JsonElement>? = null,
 
     /* Device hardware capabilities used to determine optimal execution target. Provide total_memory_mb or ram_gb; npu_tops, supported_runtimes optional.  */
     @Contextual @SerialName(value = "device_capabilities")
-    val deviceCapabilities: kotlin.collections.Map<kotlin.String, kotlin.Any>? = null,
+    val deviceCapabilities: kotlin.collections.Map<kotlin.String, kotlinx.serialization.json.JsonElement>? = null,
 
     /* Execution preference hint — \"device\" or \"cloud\". When omitted and deployment_id is supplied, the deployment's serving_policy governs.  */
     @SerialName(value = "prefer")

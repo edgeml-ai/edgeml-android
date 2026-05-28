@@ -83,7 +83,7 @@ data class TrainingPlan (
     @SerialName(value = "executionWindowSeconds")
     val executionWindowSeconds: kotlin.Int? = null
 
-) : kotlin.collections.HashMap<String, kotlin.Any>() {
+) : kotlin.collections.HashMap<String, kotlinx.serialization.json.JsonElement>() {
 
 
 }

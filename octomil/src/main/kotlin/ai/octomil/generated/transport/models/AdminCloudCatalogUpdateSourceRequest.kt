@@ -45,7 +45,7 @@ data class AdminCloudCatalogUpdateSourceRequest (
     val enabled: kotlin.Boolean? = null,
 
     @Contextual @SerialName(value = "source_config")
-    val sourceConfig: kotlin.collections.Map<kotlin.String, kotlin.Any>? = null,
+    val sourceConfig: kotlin.collections.Map<kotlin.String, kotlinx.serialization.json.JsonElement>? = null,
 
     @SerialName(value = "models_refresh_interval")
     val modelsRefreshInterval: kotlin.Int? = null,

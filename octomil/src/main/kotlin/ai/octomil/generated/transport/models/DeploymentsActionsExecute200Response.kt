@@ -63,7 +63,7 @@ data class DeploymentsActionsExecute200Response (
     val reason: kotlin.String? = null,
 
     @Contextual @SerialName(value = "proposed_change")
-    val proposedChange: kotlin.collections.Map<kotlin.String, kotlin.Any>? = null,
+    val proposedChange: kotlin.collections.Map<kotlin.String, kotlinx.serialization.json.JsonElement>? = null,
 
     @SerialName(value = "created_at")
     val createdAt: kotlin.String? = null,

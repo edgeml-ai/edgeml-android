@@ -57,15 +57,15 @@ data class Message (
     val content: kotlin.String? = null,
 
     @SerialName(value = "tool_calls")
-    val toolCalls: kotlin.collections.List<@Contextual kotlin.collections.Map<kotlin.String, kotlin.Any>>? = null,
+    val toolCalls: kotlin.collections.List<@Contextual kotlin.collections.Map<kotlin.String, kotlinx.serialization.json.JsonElement>>? = null,
 
     @SerialName(value = "tool_call_id")
     val toolCallId: kotlin.String? = null,
 
     @Contextual @SerialName(value = "metrics")
-    val metrics: kotlin.collections.Map<kotlin.String, kotlin.Any>? = null
+    val metrics: kotlin.collections.Map<kotlin.String, kotlinx.serialization.json.JsonElement>? = null
 
-) : kotlin.collections.HashMap<String, kotlin.Any>() {
+) : kotlin.collections.HashMap<String, kotlinx.serialization.json.JsonElement>() {
 
     /**
      * 
