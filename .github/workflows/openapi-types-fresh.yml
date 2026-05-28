@@ -74,6 +74,10 @@ jobs:
           OCTOMIL_ANDROID_PATH: ${{ github.workspace }}/octomil-android
           OCTOMIL_ANDROID: "1"
           OCTOMIL_SKIP_INSTALL: "1"
+          # TEMP diagnostic: unset ANDROID_HOME so the script skips its own
+          # compile postflight; the dedicated verbose step below shows the
+          # real kotlin error.
+          ANDROID_HOME: ""
         run: |
           bash .contracts-checkout/tools/sdkgen/generate-kotlin.sh
 
@@ -93,7 +97,7 @@ jobs:
 
       - name: Run compileKotlin postflight
         working-directory: octomil-android
-        run: ./gradlew :octomil:compileDebugKotlin --quiet
+        run: ./gradlew :octomil:compileDebugKotlin --console=plain
 
       - name: Fetch latest server openapi snapshot
         env:
