@@ -57,7 +57,7 @@ jobs:
           openapi-generator version
 
       - name: Set up Android SDK (for compileKotlin postflight)
-        uses: android-actions/setup-android@v3
+        uses: android-actions/setup-android@v4
 
       - name: Set up Gradle cache
         uses: gradle/actions/setup-gradle@v3
