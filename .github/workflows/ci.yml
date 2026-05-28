@@ -54,7 +54,7 @@ jobs:
           # No `cache: gradle` here — setup-gradle below owns Gradle caching.
 
       - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@748248ddd2a24f49513d8f472f81c3a07d4d50e1 # v4.4.4
+        uses: gradle/actions/setup-gradle@50e97c2cd7a37755bbfafc9c5b7cafaece252f6e # v6.1.0
         with:
           # Only main writes to the shared build cache; PRs read it.
           # Prevents a flaky PR build from poisoning main's cache entries.
@@ -124,7 +124,7 @@ jobs:
           distribution: 'temurin'
 
       - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@748248ddd2a24f49513d8f472f81c3a07d4d50e1 # v4.4.4
+        uses: gradle/actions/setup-gradle@50e97c2cd7a37755bbfafc9c5b7cafaece252f6e # v6.1.0
         with:
           # Read-only: this job only consumes the cache populated by `test`.
           cache-read-only: true
