@@ -1,6 +1,7 @@
 package ai.octomil.streaming
 
 import ai.octomil.errors.OctomilErrorCode
+import ai.octomil.errors.fromHttpStatus
 import ai.octomil.errors.OctomilException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow

@@ -1,0 +1,7 @@
+# ninja log v5
+0	836	1778714428256839236	CMakeFiles/octomil_runtime_jni.dir/native_runtime_jni.cpp.o	3873102fdef7b8fa
+839	1009	1778714428426309994	/Users/seanb/Developer/Octomil/octomil-android/octomil/build/intermediates/cxx/Debug/pe1e195o/obj/armeabi-v7a/liboctomil_runtime_jni.so	d659e2781872a97d
+28	1281	1778722259603166162	CMakeFiles/octomil_runtime_jni.dir/native_runtime_jni.cpp.o	3873102fdef7b8fa
+1281	1464	1778722259778154825	/Users/seanb/Developer/Octomil/octomil-android/octomil/build/intermediates/cxx/Debug/pe1e195o/obj/armeabi-v7a/liboctomil_runtime_jni.so	d659e2781872a97d
+24	1011	1778722828637854503	CMakeFiles/octomil_runtime_jni.dir/native_runtime_jni.cpp.o	3873102fdef7b8fa
+1011	1156	1778722828776071517	/Users/seanb/Developer/Octomil/octomil-android/octomil/build/intermediates/cxx/Debug/pe1e195o/obj/armeabi-v7a/liboctomil_runtime_jni.so	d659e2781872a97d
