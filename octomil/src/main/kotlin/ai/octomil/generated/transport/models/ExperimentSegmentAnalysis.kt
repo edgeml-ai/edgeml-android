@@ -46,7 +46,7 @@ data class ExperimentSegmentAnalysis (
     @SerialName(value = "segment_by")
     val segmentBy: kotlin.String
 
-) : kotlin.collections.HashMap<String, kotlin.Any>() {
+) : kotlin.collections.HashMap<String, kotlinx.serialization.json.JsonElement>() {
 
 
 }

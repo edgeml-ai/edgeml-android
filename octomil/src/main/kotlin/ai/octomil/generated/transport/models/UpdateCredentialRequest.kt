@@ -50,7 +50,7 @@ data class UpdateCredentialRequest (
     @SerialName(value = "is_active")
     val isActive: kotlin.Boolean? = null
 
-) : kotlin.collections.HashMap<String, kotlin.Any>() {
+) : kotlin.collections.HashMap<String, kotlinx.serialization.json.JsonElement>() {
 
 
 }

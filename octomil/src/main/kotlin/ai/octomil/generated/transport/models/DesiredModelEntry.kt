@@ -74,7 +74,7 @@ data class DesiredModelEntry (
     @SerialName(value = "rolloutId")
     val rolloutId: kotlin.String? = null
 
-) : kotlin.collections.HashMap<String, kotlin.Any>() {
+) : kotlin.collections.HashMap<String, kotlinx.serialization.json.JsonElement>() {
 
 
 }

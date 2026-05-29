@@ -120,7 +120,7 @@ data class TrainingAggregateRequest (
     val normMax: java.math.BigDecimal? = null,
 
     @SerialName(value = "inbound_filters")
-    val inboundFilters: kotlin.collections.List<@Contextual kotlin.Any>? = null,
+    val inboundFilters: kotlin.collections.List<@Contextual kotlinx.serialization.json.JsonElement>? = null,
 
     /* FedProx proximal term (strategy=fedprox only). */
     @Contextual @SerialName(value = "proximal_mu")

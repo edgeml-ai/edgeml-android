@@ -44,9 +44,9 @@ data class PoliciesResponse (
 
     /* Open-shape serving policy object. See ServingPolicy domain type. */
     @Contextual @SerialName(value = "serving_policy")
-    val servingPolicy: kotlin.Any? = null
+    val servingPolicy: kotlinx.serialization.json.JsonElement? = null
 
-) : kotlin.collections.HashMap<String, kotlin.Any>() {
+) : kotlin.collections.HashMap<String, kotlinx.serialization.json.JsonElement>() {
 
     /**
      * 

@@ -38,7 +38,7 @@ import kotlinx.serialization.Contextual
 data class LogsQuery200Response (
 
     @SerialName(value = "entries")
-    val propertyEntries: kotlin.collections.List<@Contextual kotlin.collections.Map<kotlin.String, kotlin.Any>>,
+    val propertyEntries: kotlin.collections.List<@Contextual kotlin.collections.Map<kotlin.String, kotlinx.serialization.json.JsonElement>>,
 
     @SerialName(value = "total")
     val total: kotlin.Int,

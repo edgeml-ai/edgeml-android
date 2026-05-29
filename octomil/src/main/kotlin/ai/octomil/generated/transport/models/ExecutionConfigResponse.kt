@@ -51,7 +51,7 @@ data class ExecutionConfigResponse (
     @SerialName(value = "cooldown_seconds")
     val cooldownSeconds: kotlin.Int
 
-) : kotlin.collections.HashMap<String, kotlin.Any>() {
+) : kotlin.collections.HashMap<String, kotlinx.serialization.json.JsonElement>() {
 
     /**
      * 

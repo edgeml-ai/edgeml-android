@@ -80,17 +80,17 @@ data class DeploymentsCreateRequest (
 
     /* Cohort selector. Shape: `{device_group_ids: [...]}` for named groups OR `{label_selector: {matchLabels: {...}}}` for materializer-driven dynamic targeting.  */
     @Contextual @SerialName(value = "targeting")
-    val targeting: kotlin.Any? = null,
+    val targeting: kotlinx.serialization.json.JsonElement? = null,
 
     @Contextual @SerialName(value = "rollout_policy")
-    val rolloutPolicy: kotlin.Any? = null,
+    val rolloutPolicy: kotlinx.serialization.json.JsonElement? = null,
 
     @Contextual @SerialName(value = "settings")
-    val settings: kotlin.Any? = null,
+    val settings: kotlinx.serialization.json.JsonElement? = null,
 
     /* ServingPolicy preset or inline (see schemas/core/serving_policy.json). */
     @Contextual @SerialName(value = "serving_policy")
-    val servingPolicy: kotlin.Any? = null
+    val servingPolicy: kotlinx.serialization.json.JsonElement? = null
 
 ) {
 

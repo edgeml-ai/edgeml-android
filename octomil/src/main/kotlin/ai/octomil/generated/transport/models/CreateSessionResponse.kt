@@ -58,7 +58,7 @@ data class CreateSessionResponse (
     val bindingKey: kotlin.String,
 
     @SerialName(value = "tools")
-    val tools: kotlin.collections.List<@Contextual kotlin.collections.Map<kotlin.String, kotlin.Any>>,
+    val tools: kotlin.collections.List<@Contextual kotlin.collections.Map<kotlin.String, kotlinx.serialization.json.JsonElement>>,
 
     @SerialName(value = "instructions")
     val instructions: kotlin.String,
@@ -81,7 +81,7 @@ data class CreateSessionResponse (
     @SerialName(value = "deployment_key")
     val deploymentKey: kotlin.String? = null
 
-) : kotlin.collections.HashMap<String, kotlin.Any>() {
+) : kotlin.collections.HashMap<String, kotlinx.serialization.json.JsonElement>() {
 
 
 }

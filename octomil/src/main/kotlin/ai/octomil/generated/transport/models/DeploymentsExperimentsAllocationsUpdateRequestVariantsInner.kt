@@ -43,7 +43,7 @@ data class DeploymentsExperimentsAllocationsUpdateRequestVariantsInner (
     @Contextual @SerialName(value = "traffic_allocation")
     val trafficAllocation: java.math.BigDecimal? = null
 
-) : kotlin.collections.HashMap<String, kotlin.Any>() {
+) : kotlin.collections.HashMap<String, kotlinx.serialization.json.JsonElement>() {
 
 
 }

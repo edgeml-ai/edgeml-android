@@ -96,7 +96,7 @@ data class DeviceSyncRequest (
     @SerialName(value = "availableStorageBytes")
     val availableStorageBytes: kotlin.Int? = null
 
-) : kotlin.collections.HashMap<String, kotlin.Any>() {
+) : kotlin.collections.HashMap<String, kotlinx.serialization.json.JsonElement>() {
 
 
 }

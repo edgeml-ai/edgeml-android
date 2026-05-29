@@ -37,7 +37,7 @@ data class AuthPasskeysAuthenticateVerifyRequest (
 
     /* Raw WebAuthn AuthenticatorAssertionResponse as returned by navigator.credentials.get(). Passed verbatim to py-webauthn verify_authentication_response(). Must include rawId or id for user resolution when email is omitted.  */
     @Contextual @SerialName(value = "credential")
-    val credential: kotlin.collections.Map<kotlin.String, kotlin.Any>,
+    val credential: kotlin.collections.Map<kotlin.String, kotlinx.serialization.json.JsonElement>,
 
     /* Optional. Used to look up the user when provided. If omitted the server resolves the user from credential.rawId.  */
     @SerialName(value = "email")

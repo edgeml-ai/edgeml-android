@@ -53,7 +53,7 @@ data class ExperimentGuardrailsResult (
     @SerialName(value = "recommendation")
     val recommendation: kotlin.String
 
-) : kotlin.collections.HashMap<String, kotlin.Any>() {
+) : kotlin.collections.HashMap<String, kotlinx.serialization.json.JsonElement>() {
 
 
 }

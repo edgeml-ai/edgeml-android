@@ -43,7 +43,7 @@ data class InferenceCreateRequest (
     val modelId: kotlin.String,
 
     @Contextual @SerialName(value = "input_data")
-    val inputData: kotlin.Any? = null,
+    val inputData: kotlinx.serialization.json.JsonElement? = null,
 
     /* Chat-completions format. Use either this or `input_data`, not both. Each entry is `{role, content}`.  */
     @SerialName(value = "messages")
@@ -51,7 +51,7 @@ data class InferenceCreateRequest (
 
     /* Inference parameters (temperature, max_tokens, etc.). */
     @Contextual @SerialName(value = "parameters")
-    val parameters: kotlin.collections.Map<kotlin.String, kotlin.Any>? = null
+    val parameters: kotlin.collections.Map<kotlin.String, kotlinx.serialization.json.JsonElement>? = null
 
 ) {
 

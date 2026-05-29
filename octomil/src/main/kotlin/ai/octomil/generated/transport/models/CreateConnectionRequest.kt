@@ -56,7 +56,7 @@ data class CreateConnectionRequest (
     @SerialName(value = "base_url")
     val baseUrl: kotlin.String? = null
 
-) : kotlin.collections.HashMap<String, kotlin.Any>() {
+) : kotlin.collections.HashMap<String, kotlinx.serialization.json.JsonElement>() {
 
     /**
      * Only 'byok' is currently accepted by the server.

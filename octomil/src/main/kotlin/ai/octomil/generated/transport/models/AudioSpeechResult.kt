@@ -93,7 +93,7 @@ data class AudioSpeechResult (
     @SerialName(value = "unit_kind")
     val unitKind: AudioSpeechResult.UnitKind? = null
 
-) : kotlin.collections.HashMap<String, kotlin.Any>() {
+) : kotlin.collections.HashMap<String, kotlinx.serialization.json.JsonElement>() {
 
     /**
      * Audio format actually returned. May differ from request.response_format if the locality cannot honor the request and cloud fallback was selected.

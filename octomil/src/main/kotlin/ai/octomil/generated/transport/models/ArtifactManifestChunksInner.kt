@@ -53,7 +53,7 @@ data class ArtifactManifestChunksInner (
     @SerialName(value = "sha256")
     val sha256: kotlin.String
 
-) : kotlin.collections.HashMap<String, kotlin.Any>() {
+) : kotlin.collections.HashMap<String, kotlinx.serialization.json.JsonElement>() {
 
 
 }

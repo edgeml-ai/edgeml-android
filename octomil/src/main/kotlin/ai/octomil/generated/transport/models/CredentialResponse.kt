@@ -70,7 +70,7 @@ data class CredentialResponse (
     @Contextual @SerialName(value = "updated_at")
     val updatedAt: java.time.OffsetDateTime? = null
 
-) : kotlin.collections.HashMap<String, kotlin.Any>() {
+) : kotlin.collections.HashMap<String, kotlinx.serialization.json.JsonElement>() {
 
 
 }

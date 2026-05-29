@@ -57,7 +57,7 @@ data class BillingResponse (
     @Contextual @SerialName(value = "current_period_end")
     val currentPeriodEnd: java.time.OffsetDateTime? = null
 
-) : kotlin.collections.HashMap<String, kotlin.Any>() {
+) : kotlin.collections.HashMap<String, kotlinx.serialization.json.JsonElement>() {
 
     /**
      * 

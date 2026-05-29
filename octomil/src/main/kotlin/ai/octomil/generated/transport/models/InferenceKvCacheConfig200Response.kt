@@ -68,7 +68,7 @@ data class InferenceKvCacheConfig200Response (
     val maturity: kotlin.String,
 
     @Contextual @SerialName(value = "runtime_config")
-    val runtimeConfig: kotlin.collections.Map<kotlin.String, kotlin.Any>,
+    val runtimeConfig: kotlin.collections.Map<kotlin.String, kotlinx.serialization.json.JsonElement>,
 
     @SerialName(value = "bits")
     val bits: kotlin.Int? = null,

@@ -49,7 +49,7 @@ data class ApiKeyScopesResponseScopesValue (
     @SerialName(value = "eligible_key_types")
     val eligibleKeyTypes: kotlin.collections.List<ApiKeyScopesResponseScopesValue.EligibleKeyTypes>
 
-) : kotlin.collections.HashMap<String, kotlin.Any>() {
+) : kotlin.collections.HashMap<String, kotlinx.serialization.json.JsonElement>() {
 
     /**
      * 

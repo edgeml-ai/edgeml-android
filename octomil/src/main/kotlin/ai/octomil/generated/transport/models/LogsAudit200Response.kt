@@ -39,7 +39,7 @@ data class LogsAudit200Response (
 
     /* List of audit log entries. */
     @SerialName(value = "events")
-    val events: kotlin.collections.List<@Contextual kotlin.collections.Map<kotlin.String, kotlin.Any>>,
+    val events: kotlin.collections.List<@Contextual kotlin.collections.Map<kotlin.String, kotlinx.serialization.json.JsonElement>>,
 
     @SerialName(value = "total")
     val total: kotlin.Int,

@@ -45,7 +45,7 @@ data class TestConnectionResponse (
     @Contextual @SerialName(value = "latency_ms")
     val latencyMs: java.math.BigDecimal? = null
 
-) : kotlin.collections.HashMap<String, kotlin.Any>() {
+) : kotlin.collections.HashMap<String, kotlinx.serialization.json.JsonElement>() {
 
 
 }

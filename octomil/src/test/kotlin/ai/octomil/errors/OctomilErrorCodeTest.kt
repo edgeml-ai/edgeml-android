@@ -10,57 +10,41 @@ import org.junit.Test
 
 class OctomilErrorCodeTest {
 
-    // Internal/server-ops codes intentionally omitted from the SDK enum.
-    // They are emitted by management APIs, not by SDK call paths.
-    private val internalOnlyCodes: Set<ContractErrorCode> = setOf(
-        ContractErrorCode.INCIDENT_NOT_FOUND,
-        ContractErrorCode.DEPLOYMENT_NOT_FOUND,
-        ContractErrorCode.EXPERIMENT_NOT_FOUND,
-        ContractErrorCode.EXPERIMENT_STATE_INVALID,
-        ContractErrorCode.API_KEY_NOT_FOUND,
-        ContractErrorCode.API_KEY_ALREADY_REVOKED,
-        ContractErrorCode.INTEGRATION_NOT_FOUND,
-        ContractErrorCode.BILLING_CUSTOMER_NOT_FOUND,
-        ContractErrorCode.ACTION_NOT_FOUND,
-        ContractErrorCode.ACTION_STATE_INVALID,
-    )
-
     // =========================================================================
     // Enum completeness
     // =========================================================================
 
     @Test
-    fun `SDK error code count matches generated contract aliases`() {
-        assertEquals(expectedSdkCodes().size, OctomilErrorCode.entries.size)
+    fun `OctomilErrorCode is a 1-to-1 alias of the generated contract ErrorCode`() {
+        // OctomilErrorCode is `typealias OctomilErrorCode = ContractErrorCode`
+        // (matches python's `ErrorCode as OctomilErrorCode`). The public surface
+        // is exactly the contract taxonomy — no curated subset, no aliases.
+        assertEquals(ContractErrorCode.entries.toList(), OctomilErrorCode.entries.toList())
     }
 
     @Test
-    fun `all generated contract codes map to SDK codes`() {
-        val actual = OctomilErrorCode.entries.toSet()
-        assertEquals(expectedSdkCodes(), actual)
-    }
-
-    @Test
-    fun `internal-only contract codes map to UNKNOWN`() {
-        for (contractCode in internalOnlyCodes) {
+    fun `every contract code round-trips through fromContractCode losslessly`() {
+        // Lossless: every wire code resolves to itself — no collapsing to UNKNOWN.
+        for (contractCode in ContractErrorCode.entries) {
             assertEquals(
-                "Expected ${contractCode.name} to map to UNKNOWN",
-                OctomilErrorCode.UNKNOWN,
+                "Contract code '${contractCode.code}' should round-trip to itself",
+                contractCode,
                 OctomilErrorCode.fromContractCode(contractCode.code),
             )
         }
     }
 
-    private fun expectedSdkCodes(): Set<OctomilErrorCode> =
-        ContractErrorCode.entries
-            .filter { it !in internalOnlyCodes }
-            .map { contractCode ->
-                when (contractCode) {
-                    ContractErrorCode.TOKEN_EXPIRED -> OctomilErrorCode.AUTHENTICATION_FAILED
-                    ContractErrorCode.DEVICE_REVOKED -> OctomilErrorCode.FORBIDDEN
-                    else -> OctomilErrorCode.valueOf(contractCode.name)
-                }
-            }.toSet()
+    @Test
+    fun `formerly internal-only and aliased codes now resolve to themselves`() {
+        // Regression guard for the old lossy curated design: these once mapped to
+        // UNKNOWN (internal-only) or were collapsed (token_expired→auth,
+        // device_revoked→forbidden). They are now first-class, lossless codes.
+        assertEquals(ContractErrorCode.INCIDENT_NOT_FOUND, OctomilErrorCode.fromContractCode("incident_not_found"))
+        assertEquals(ContractErrorCode.API_KEY_NOT_FOUND, OctomilErrorCode.fromContractCode("api_key_not_found"))
+        assertEquals(ContractErrorCode.BILLING_CUSTOMER_NOT_FOUND, OctomilErrorCode.fromContractCode("billing_customer_not_found"))
+        assertEquals(ContractErrorCode.TOKEN_EXPIRED, OctomilErrorCode.fromContractCode("token_expired"))
+        assertEquals(ContractErrorCode.DEVICE_REVOKED, OctomilErrorCode.fromContractCode("device_revoked"))
+    }
 
     // =========================================================================
     // Retryable flags

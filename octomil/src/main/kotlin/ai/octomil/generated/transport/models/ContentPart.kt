@@ -46,7 +46,7 @@ import kotlinx.serialization.Contextual
 data class ContentPart (
 
     @Contextual @SerialName(value = "type")
-    val type: kotlin.Any?,
+    val type: kotlinx.serialization.json.JsonElement?,
 
     @SerialName(value = "text")
     val text: kotlin.String,

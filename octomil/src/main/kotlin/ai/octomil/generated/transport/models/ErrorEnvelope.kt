@@ -38,7 +38,7 @@ data class ErrorEnvelope (
     @Contextual @SerialName(value = "error")
     val error: ErrorEnvelopeError
 
-) : kotlin.collections.HashMap<String, kotlin.Any>() {
+) : kotlin.collections.HashMap<String, kotlinx.serialization.json.JsonElement>() {
 
 
 }

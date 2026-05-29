@@ -94,7 +94,7 @@ data class RuntimePlanResponseSchemaRuntimeArtifactPlan (
     @Contextual @SerialName(value = "manifest_uri")
     val manifestUri: java.net.URI? = null
 
-) : kotlin.collections.HashMap<String, kotlin.Any>() {
+) : kotlin.collections.HashMap<String, kotlinx.serialization.json.JsonElement>() {
 
 
 }

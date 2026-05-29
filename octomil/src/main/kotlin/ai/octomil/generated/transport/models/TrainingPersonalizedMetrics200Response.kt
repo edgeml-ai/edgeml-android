@@ -53,7 +53,7 @@ data class TrainingPersonalizedMetrics200Response (
     val personalizationType: kotlin.String? = null,
 
     @Contextual @SerialName(value = "local_metrics")
-    val localMetrics: kotlin.Any? = null,
+    val localMetrics: kotlinx.serialization.json.JsonElement? = null,
 
     @SerialName(value = "last_round_number")
     val lastRoundNumber: kotlin.Int? = null,

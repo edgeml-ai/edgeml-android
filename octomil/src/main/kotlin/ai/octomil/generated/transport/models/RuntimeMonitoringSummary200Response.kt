@@ -117,11 +117,11 @@ data class RuntimeMonitoringSummary200Response (
 
     /* Per-deployment request and fallback counts (top 20 by volume). */
     @SerialName(value = "deployment_breakdown")
-    val deploymentBreakdown: kotlin.collections.List<@Contextual kotlin.Any>? = null,
+    val deploymentBreakdown: kotlin.collections.List<@Contextual kotlinx.serialization.json.JsonElement>? = null,
 
     /* Per-experiment request and fallback counts (top 20 by volume). */
     @SerialName(value = "experiment_breakdown")
-    val experimentBreakdown: kotlin.collections.List<@Contextual kotlin.Any>? = null,
+    val experimentBreakdown: kotlin.collections.List<@Contextual kotlinx.serialization.json.JsonElement>? = null,
 
     /* Count of events (not gate occurrences) that contain each gate_class in attempt_details or advisory_failures.  */
     @SerialName(value = "gate_class_breakdown")

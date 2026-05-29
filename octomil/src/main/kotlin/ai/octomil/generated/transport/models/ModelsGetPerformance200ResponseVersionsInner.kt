@@ -59,7 +59,7 @@ data class ModelsGetPerformance200ResponseVersionsInner (
     val devicesCount: kotlin.Int? = null,
 
     @Contextual @SerialName(value = "metrics")
-    val metrics: kotlin.collections.Map<kotlin.String, kotlin.Any>? = null
+    val metrics: kotlin.collections.Map<kotlin.String, kotlinx.serialization.json.JsonElement>? = null
 
 ) {
 

@@ -47,7 +47,7 @@ data class RoutingStatsGet200Response (
     val fallbackRate: java.math.BigDecimal? = null,
 
     @Contextual @SerialName(value = "avg_latency_by_locality")
-    val avgLatencyByLocality: kotlin.collections.Map<kotlin.String, kotlin.Any>? = null
+    val avgLatencyByLocality: kotlin.collections.Map<kotlin.String, kotlinx.serialization.json.JsonElement>? = null
 
 ) {
 

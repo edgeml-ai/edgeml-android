@@ -38,7 +38,7 @@ data class ConnectionModelsResponse (
     @SerialName(value = "models")
     val models: kotlin.collections.List<kotlin.String>
 
-) : kotlin.collections.HashMap<String, kotlin.Any>() {
+) : kotlin.collections.HashMap<String, kotlinx.serialization.json.JsonElement>() {
 
 
 }

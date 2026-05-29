@@ -54,7 +54,7 @@ data class ChatTurnRequest (
     @Contextual @SerialName(value = "config")
     val config: ChatTurnRequestConfig? = null
 
-) : kotlin.collections.HashMap<String, kotlin.Any>() {
+) : kotlin.collections.HashMap<String, kotlinx.serialization.json.JsonElement>() {
 
 
 }

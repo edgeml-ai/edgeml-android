@@ -41,7 +41,7 @@ data class IntegrationTestResponse (
     @SerialName(value = "message")
     val message: kotlin.String
 
-) : kotlin.collections.HashMap<String, kotlin.Any>() {
+) : kotlin.collections.HashMap<String, kotlinx.serialization.json.JsonElement>() {
 
 
 }

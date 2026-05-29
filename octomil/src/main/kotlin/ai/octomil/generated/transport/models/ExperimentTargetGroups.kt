@@ -43,7 +43,7 @@ data class ExperimentTargetGroups (
     @SerialName(value = "target_groups")
     val targetGroups: kotlin.collections.List<@Contextual ExperimentTargetGroupsTargetGroupsInner>
 
-) : kotlin.collections.HashMap<String, kotlin.Any>() {
+) : kotlin.collections.HashMap<String, kotlinx.serialization.json.JsonElement>() {
 
 
 }

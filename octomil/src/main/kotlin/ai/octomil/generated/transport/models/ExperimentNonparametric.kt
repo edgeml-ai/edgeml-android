@@ -53,7 +53,7 @@ data class ExperimentNonparametric (
 
     /* Mann-Whitney U test output from StatisticalAnalyzer.mann_whitney_test(). Shape is analyzer-defined; treat all sub-fields as optional. */
     @Contextual @SerialName(value = "mann_whitney")
-    val mannWhitney: kotlin.collections.Map<kotlin.String, kotlin.Any>? = null,
+    val mannWhitney: kotlin.collections.Map<kotlin.String, kotlinx.serialization.json.JsonElement>? = null,
 
     @Contextual @SerialName(value = "normality_control")
     val normalityControl: ExperimentNonparametricNormalityControl? = null,
@@ -61,7 +61,7 @@ data class ExperimentNonparametric (
     @Contextual @SerialName(value = "normality_treatment")
     val normalityTreatment: ExperimentNonparametricNormalityTreatment? = null
 
-) : kotlin.collections.HashMap<String, kotlin.Any>() {
+) : kotlin.collections.HashMap<String, kotlinx.serialization.json.JsonElement>() {
 
     /**
      * 't-test' when both groups pass normality; 'mann_whitney_u' otherwise.
