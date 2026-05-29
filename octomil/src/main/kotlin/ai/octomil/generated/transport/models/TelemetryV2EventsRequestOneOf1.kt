@@ -37,13 +37,13 @@ import kotlinx.serialization.Contextual
 data class TelemetryV2EventsRequestOneOf1 (
 
     @SerialName(value = "resourceLogs")
-    val resourceLogs: kotlin.collections.List<@Contextual kotlin.collections.Map<kotlin.String, kotlin.Any>>,
+    val resourceLogs: kotlin.collections.List<@Contextual kotlin.collections.Map<kotlin.String, kotlinx.serialization.json.JsonElement>>,
 
     @SerialName(value = "scopeLogs")
-    val scopeLogs: kotlin.collections.List<@Contextual kotlin.collections.Map<kotlin.String, kotlin.Any>>? = null,
+    val scopeLogs: kotlin.collections.List<@Contextual kotlin.collections.Map<kotlin.String, kotlinx.serialization.json.JsonElement>>? = null,
 
     @SerialName(value = "logRecords")
-    val logRecords: kotlin.collections.List<@Contextual kotlin.collections.Map<kotlin.String, kotlin.Any>>? = null
+    val logRecords: kotlin.collections.List<@Contextual kotlin.collections.Map<kotlin.String, kotlinx.serialization.json.JsonElement>>? = null
 
 ) {
 

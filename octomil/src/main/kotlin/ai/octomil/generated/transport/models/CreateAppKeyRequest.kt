@@ -45,7 +45,7 @@ data class CreateAppKeyRequest (
     @SerialName(value = "environment")
     val environment: CreateAppKeyRequest.Environment? = Environment.LIVE
 
-) : kotlin.collections.HashMap<String, kotlin.Any>() {
+) : kotlin.collections.HashMap<String, kotlinx.serialization.json.JsonElement>() {
 
     /**
      * 

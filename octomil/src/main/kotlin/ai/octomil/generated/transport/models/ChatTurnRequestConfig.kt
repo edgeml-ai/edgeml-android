@@ -49,7 +49,7 @@ data class ChatTurnRequestConfig (
     @SerialName(value = "stop")
     val stop: kotlin.collections.List<kotlin.String>? = null
 
-) : kotlin.collections.HashMap<String, kotlin.Any>() {
+) : kotlin.collections.HashMap<String, kotlinx.serialization.json.JsonElement>() {
 
 
 }

@@ -46,7 +46,7 @@ data class AdminCloudCatalogCreateSourceRequest (
     val displayName: kotlin.String,
 
     @Contextual @SerialName(value = "source_config")
-    val sourceConfig: kotlin.collections.Map<kotlin.String, kotlin.Any>? = null,
+    val sourceConfig: kotlin.collections.Map<kotlin.String, kotlinx.serialization.json.JsonElement>? = null,
 
     /* Seconds between model list refreshes. */
     @SerialName(value = "models_refresh_interval")

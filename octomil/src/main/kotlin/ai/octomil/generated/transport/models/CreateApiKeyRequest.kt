@@ -49,7 +49,7 @@ data class CreateApiKeyRequest (
     @SerialName(value = "app_id")
     val appId: kotlin.String? = null
 
-) : kotlin.collections.HashMap<String, kotlin.Any>() {
+) : kotlin.collections.HashMap<String, kotlinx.serialization.json.JsonElement>() {
 
 
 }

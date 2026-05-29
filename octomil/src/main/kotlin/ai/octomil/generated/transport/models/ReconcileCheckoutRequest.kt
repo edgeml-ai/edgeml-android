@@ -38,7 +38,7 @@ data class ReconcileCheckoutRequest (
     @SerialName(value = "session_id")
     val sessionId: kotlin.String
 
-) : kotlin.collections.HashMap<String, kotlin.Any>() {
+) : kotlin.collections.HashMap<String, kotlinx.serialization.json.JsonElement>() {
 
 
 }

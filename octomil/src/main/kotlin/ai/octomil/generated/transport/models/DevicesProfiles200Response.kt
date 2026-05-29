@@ -36,7 +36,7 @@ data class DevicesProfiles200Response (
 
     /* Device capability profiles with classification scores. */
     @SerialName(value = "profiles")
-    val profiles: kotlin.collections.List<@Contextual kotlin.collections.Map<kotlin.String, kotlin.Any>>
+    val profiles: kotlin.collections.List<@Contextual kotlin.collections.Map<kotlin.String, kotlinx.serialization.json.JsonElement>>
 
 ) {
 

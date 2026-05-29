@@ -72,7 +72,7 @@ data class RecommendationsGroup200ResponseInner (
     val coveragePct: java.math.BigDecimal? = null,
 
     @Contextual @SerialName(value = "platform_breakdown")
-    val platformBreakdown: kotlin.collections.Map<kotlin.String, kotlin.Any>? = null,
+    val platformBreakdown: kotlin.collections.Map<kotlin.String, kotlinx.serialization.json.JsonElement>? = null,
 
     @SerialName(value = "recommended_quantization")
     val recommendedQuantization: kotlin.String? = null,

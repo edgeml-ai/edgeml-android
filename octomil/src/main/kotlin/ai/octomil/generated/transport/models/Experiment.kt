@@ -106,7 +106,7 @@ data class Experiment (
     @SerialName(value = "target_groups")
     val targetGroups: kotlin.collections.List<ExperimentTargetGroupsInner>? = null
 
-) : kotlin.collections.HashMap<String, kotlin.Any>() {
+) : kotlin.collections.HashMap<String, kotlinx.serialization.json.JsonElement>() {
 
     /**
      * From ExperimentStatus enum. Lifecycle transitions: draft → running → (paused ↔ running) → completed; any → cancelled.

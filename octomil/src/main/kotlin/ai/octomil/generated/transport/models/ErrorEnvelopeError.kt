@@ -44,12 +44,12 @@ data class ErrorEnvelopeError (
     val message: kotlin.String,
 
     @Contextual @SerialName(value = "details")
-    val details: kotlin.collections.Map<kotlin.String, kotlin.Any>? = null,
+    val details: kotlin.collections.Map<kotlin.String, kotlinx.serialization.json.JsonElement>? = null,
 
     @SerialName(value = "request_id")
     val requestId: kotlin.String? = null
 
-) : kotlin.collections.HashMap<String, kotlin.Any>() {
+) : kotlin.collections.HashMap<String, kotlinx.serialization.json.JsonElement>() {
 
     /**
      * 

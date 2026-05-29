@@ -53,7 +53,7 @@ data class AudioSpeechResultRoute (
     @SerialName(value = "fallback_used")
     val fallbackUsed: kotlin.Boolean? = false
 
-) : kotlin.collections.HashMap<String, kotlin.Any>() {
+) : kotlin.collections.HashMap<String, kotlinx.serialization.json.JsonElement>() {
 
     /**
      * Where the synthesis ran.

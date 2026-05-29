@@ -63,7 +63,7 @@ data class ObservedStateModelsInner (
     @SerialName(value = "lastError")
     val lastError: kotlin.String? = null
 
-) : kotlin.collections.HashMap<String, kotlin.Any>() {
+) : kotlin.collections.HashMap<String, kotlinx.serialization.json.JsonElement>() {
 
     /**
      * Current health of this model on-device.

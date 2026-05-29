@@ -57,7 +57,7 @@ data class CreatePublishableKeyRequest (
     @SerialName(value = "rate_limit_rpm")
     val rateLimitRpm: kotlin.Int? = null
 
-) : kotlin.collections.HashMap<String, kotlin.Any>() {
+) : kotlin.collections.HashMap<String, kotlinx.serialization.json.JsonElement>() {
 
     /**
      * 

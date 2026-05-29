@@ -50,7 +50,7 @@ data class DeviceGroupsCreateRequest (
 
     /* For dynamic/hybrid — `{matchLabels: {key: value}}` selector style. */
     @Contextual @SerialName(value = "auto_assignment_rules")
-    val autoAssignmentRules: kotlin.Any? = null,
+    val autoAssignmentRules: kotlinx.serialization.json.JsonElement? = null,
 
     @SerialName(value = "tags")
     val tags: kotlin.collections.List<kotlin.String>? = null

@@ -54,11 +54,11 @@ data class AppsUpsertSlotRequest (
 
     /* Inline ServingPolicy, OR a preset reference like {\"preset\": \"local_first\"} where preset is one of local_first / performance_first / cloud_first / private. */
     @Contextual @SerialName(value = "serving_policy")
-    val servingPolicy: kotlin.Any? = null,
+    val servingPolicy: kotlinx.serialization.json.JsonElement? = null,
 
     /* Per-scope variant overrides — e.g. `{\"flagship,high\": \"variant-a\"}`. */
     @Contextual @SerialName(value = "tier_variants")
-    val tierVariants: kotlin.Any? = null
+    val tierVariants: kotlinx.serialization.json.JsonElement? = null
 
 ) {
 

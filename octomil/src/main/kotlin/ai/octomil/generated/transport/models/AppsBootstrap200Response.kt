@@ -44,7 +44,7 @@ data class AppsBootstrap200Response (
 
     /* Created app object (same shape as apps.get response). */
     @Contextual @SerialName(value = "app")
-    val app: kotlin.collections.Map<kotlin.String, kotlin.Any>,
+    val app: kotlin.collections.Map<kotlin.String, kotlinx.serialization.json.JsonElement>,
 
     /* Plaintext app API key. Shown once at creation time only; callers MUST store this value. Subsequent requests cannot retrieve it.  */
     @SerialName(value = "app_key")
@@ -63,7 +63,7 @@ data class AppsBootstrap200Response (
 
     /* Registered target/integration for the selected platform. Null if the platform did not produce a target record.  */
     @Contextual @SerialName(value = "integration")
-    val integration: kotlin.collections.Map<kotlin.String, kotlin.Any>? = null,
+    val integration: kotlin.collections.Map<kotlin.String, kotlinx.serialization.json.JsonElement>? = null,
 
     /* Plaintext publishable key for mobile/browser platforms (`ios`, `android`, `browser`, `macos`). Null for `server`/`node`. Shown once only.  */
     @SerialName(value = "publishable_key")

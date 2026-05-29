@@ -36,7 +36,7 @@ import kotlinx.serialization.Contextual
 data class AppsDeploymentsList200Response (
 
     @SerialName(value = "deployments")
-    val deployments: kotlin.collections.List<@Contextual kotlin.collections.Map<kotlin.String, kotlin.Any>>,
+    val deployments: kotlin.collections.List<@Contextual kotlin.collections.Map<kotlin.String, kotlinx.serialization.json.JsonElement>>,
 
     /* Total count of deployments matching the filter before pagination. */
     @SerialName(value = "total")

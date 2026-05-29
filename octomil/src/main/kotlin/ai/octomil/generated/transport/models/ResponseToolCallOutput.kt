@@ -42,7 +42,7 @@ data class ResponseToolCallOutput (
     @Contextual @SerialName(value = "toolCall")
     val toolCall: ResponseToolCall
 
-) : kotlin.collections.HashMap<String, kotlin.Any>() {
+) : kotlin.collections.HashMap<String, kotlinx.serialization.json.JsonElement>() {
 
     /**
      * 

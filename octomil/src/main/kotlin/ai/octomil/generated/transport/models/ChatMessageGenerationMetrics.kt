@@ -53,7 +53,7 @@ data class ChatMessageGenerationMetrics (
     @SerialName(value = "totalLatencyMs")
     val totalLatencyMs: kotlin.Int
 
-) : kotlin.collections.HashMap<String, kotlin.Any>() {
+) : kotlin.collections.HashMap<String, kotlinx.serialization.json.JsonElement>() {
 
 
 }

@@ -59,7 +59,7 @@ data class ActiveBinding (
     @SerialName(value = "label")
     val label: kotlin.String? = null
 
-) : kotlin.collections.HashMap<String, kotlin.Any>() {
+) : kotlin.collections.HashMap<String, kotlinx.serialization.json.JsonElement>() {
 
 
 }

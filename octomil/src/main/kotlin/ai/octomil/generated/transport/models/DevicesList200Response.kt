@@ -36,7 +36,7 @@ import kotlinx.serialization.Contextual
 data class DevicesList200Response (
 
     @SerialName(value = "devices")
-    val devices: kotlin.collections.List<@Contextual kotlin.collections.Map<kotlin.String, kotlin.Any>>,
+    val devices: kotlin.collections.List<@Contextual kotlin.collections.Map<kotlin.String, kotlinx.serialization.json.JsonElement>>,
 
     @SerialName(value = "total")
     val total: kotlin.Int

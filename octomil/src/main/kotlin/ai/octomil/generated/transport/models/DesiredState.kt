@@ -87,7 +87,7 @@ data class DesiredState (
     @SerialName(value = "gcEligibleArtifactIds")
     val gcEligibleArtifactIds: kotlin.collections.List<kotlin.String>? = null
 
-) : kotlin.collections.HashMap<String, kotlin.Any>() {
+) : kotlin.collections.HashMap<String, kotlinx.serialization.json.JsonElement>() {
 
 
 }

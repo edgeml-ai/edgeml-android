@@ -41,7 +41,7 @@ data class AuthPasskeysRegisterVerifyRequest (
 
     /* Raw WebAuthn AuthenticatorAttestationResponse as returned by navigator.credentials.create(). Passed verbatim to py-webauthn verify_registration_response(). Field names follow the W3C PublicKeyCredential interface (camelCase).  */
     @Contextual @SerialName(value = "credential")
-    val credential: kotlin.collections.Map<kotlin.String, kotlin.Any>
+    val credential: kotlin.collections.Map<kotlin.String, kotlinx.serialization.json.JsonElement>
 
 ) {
 

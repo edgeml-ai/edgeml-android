@@ -107,11 +107,11 @@ data class DevicesRegisterRequest (
     val timezone: kotlin.String? = null,
 
     @Contextual @SerialName(value = "metadata")
-    val metadata: kotlin.collections.Map<kotlin.String, kotlin.Any>? = null,
+    val metadata: kotlin.collections.Map<kotlin.String, kotlinx.serialization.json.JsonElement>? = null,
 
     /* ModelCapability → runtime support map the SDK probed at boot. Used by the device-classifier service to score the device against catalog variants.  */
     @Contextual @SerialName(value = "capabilities")
-    val capabilities: kotlin.collections.Map<kotlin.String, kotlin.Any>? = null,
+    val capabilities: kotlin.collections.Map<kotlin.String, kotlinx.serialization.json.JsonElement>? = null,
 
     @SerialName(value = "feature_schema")
     val featureSchema: kotlin.collections.List<kotlin.String>? = null,
