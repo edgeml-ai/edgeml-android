@@ -1,0 +1,38 @@
+{
+  "sdk": "octomil-android",
+  "contractVersion": "1.29.0",
+  "methods": [
+    "artifacts.download_urls",
+    "artifacts.manifest",
+    "audio.transcriptions.create",
+    "capabilities.current",
+    "chat.threads.create",
+    "chat.threads.get",
+    "chat.threads.list",
+    "chat.turn",
+    "control.heartbeat",
+    "control.refresh",
+    "devices.desired_state",
+    "devices.observed_state",
+    "devices.sync",
+    "federation.heartbeat",
+    "federation.join",
+    "federation.offers",
+    "federation.plan",
+    "models.load",
+    "models.status",
+    "responses.create",
+    "responses.stream",
+    "telemetry.batch",
+    "text.predictions.create",
+    "training.create_job",
+    "training.job_complete",
+    "training.job_status"
+  ],
+  "coverage": { "errorCodes": "all", "spanNames": "all", "spanEvents": "all", "resourceAttributes": "all" },
+  "generatedSources": ["octomil/src/main/kotlin/ai/octomil/generated"],
+  "conformanceTests": [
+    "octomil/src/test/kotlin/ai/octomil/conformance/ContractConformanceTest.kt",
+    "octomil/src/test/kotlin/ai/octomil/errors/OctomilErrorCodeTest.kt"
+  ]
+}

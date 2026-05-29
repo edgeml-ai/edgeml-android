@@ -15,24 +15,36 @@ class OctomilErrorCodeTest {
     // =========================================================================
 
     @Test
-    fun `SDK error code count matches generated contract aliases`() {
-        assertEquals(expectedSdkCodes().size, OctomilErrorCode.entries.size)
+    fun `OctomilErrorCode is a 1-to-1 alias of the generated contract ErrorCode`() {
+        // OctomilErrorCode is `typealias OctomilErrorCode = ContractErrorCode`
+        // (matches python's `ErrorCode as OctomilErrorCode`). The public surface
+        // is exactly the contract taxonomy — no curated subset, no aliases.
+        assertEquals(ContractErrorCode.entries.toList(), OctomilErrorCode.entries.toList())
     }
 
     @Test
-    fun `all generated contract codes map to SDK codes`() {
-        val actual = OctomilErrorCode.entries.toSet()
-        assertEquals(expectedSdkCodes(), actual)
+    fun `every contract code round-trips through fromContractCode losslessly`() {
+        // Lossless: every wire code resolves to itself — no collapsing to UNKNOWN.
+        for (contractCode in ContractErrorCode.entries) {
+            assertEquals(
+                "Contract code '${contractCode.code}' should round-trip to itself",
+                contractCode,
+                OctomilErrorCode.fromContractCode(contractCode.code),
+            )
+        }
     }
 
-    private fun expectedSdkCodes(): Set<OctomilErrorCode> =
-        ContractErrorCode.entries.map { contractCode ->
-            when (contractCode) {
-                ContractErrorCode.TOKEN_EXPIRED -> OctomilErrorCode.AUTHENTICATION_FAILED
-                ContractErrorCode.DEVICE_REVOKED -> OctomilErrorCode.FORBIDDEN
-                else -> OctomilErrorCode.valueOf(contractCode.name)
-            }
-        }.toSet()
+    @Test
+    fun `formerly internal-only and aliased codes now resolve to themselves`() {
+        // Regression guard for the old lossy curated design: these once mapped to
+        // UNKNOWN (internal-only) or were collapsed (token_expired→auth,
+        // device_revoked→forbidden). They are now first-class, lossless codes.
+        assertEquals(ContractErrorCode.INCIDENT_NOT_FOUND, OctomilErrorCode.fromContractCode("incident_not_found"))
+        assertEquals(ContractErrorCode.API_KEY_NOT_FOUND, OctomilErrorCode.fromContractCode("api_key_not_found"))
+        assertEquals(ContractErrorCode.BILLING_CUSTOMER_NOT_FOUND, OctomilErrorCode.fromContractCode("billing_customer_not_found"))
+        assertEquals(ContractErrorCode.TOKEN_EXPIRED, OctomilErrorCode.fromContractCode("token_expired"))
+        assertEquals(ContractErrorCode.DEVICE_REVOKED, OctomilErrorCode.fromContractCode("device_revoked"))
+    }
 
     // =========================================================================
     // Retryable flags
@@ -40,28 +52,74 @@ class OctomilErrorCodeTest {
 
     @Test
     fun `retryable codes are marked correctly`() {
-        val retryable = setOf(
-            OctomilErrorCode.NETWORK_UNAVAILABLE,
-            OctomilErrorCode.REQUEST_TIMEOUT,
-            OctomilErrorCode.SERVER_ERROR,
-            OctomilErrorCode.RATE_LIMITED,
-            OctomilErrorCode.DOWNLOAD_FAILED,
-            OctomilErrorCode.CHECKSUM_MISMATCH,
-            OctomilErrorCode.MODEL_LOAD_FAILED,
-            OctomilErrorCode.INFERENCE_FAILED,
-            OctomilErrorCode.STREAM_INTERRUPTED,
-            OctomilErrorCode.TRAINING_FAILED,
-            OctomilErrorCode.WEIGHT_UPLOAD_FAILED,
-            OctomilErrorCode.CONTROL_SYNC_FAILED,
-            OctomilErrorCode.APP_BACKGROUNDED,
-        )
+        // Derived from contract RetryClass != NEVER. Cross-check against
+        // the generated ContractErrorCode rather than hardcoding each code.
         for (code in OctomilErrorCode.entries) {
-            if (code in retryable) {
-                assertTrue("$code should be retryable", code.retryable)
-            } else {
-                assertFalse("$code should not be retryable", code.retryable)
-            }
+            val contractCode = ai.octomil.generated.ErrorCode.fromCode(code.name.lowercase())
+                ?: ai.octomil.generated.ErrorCode.UNKNOWN
+            val expectedRetryable = contractCode.retryClass != ai.octomil.generated.RetryClass.NEVER
+            assertEquals(
+                "$code: retryable should be $expectedRetryable (retryClass=${contractCode.retryClass})",
+                expectedRetryable,
+                code.retryable,
+            )
         }
+    }
+
+    // =========================================================================
+    // New codes added in contract sync (v1.25.0)
+    // =========================================================================
+
+    @Test
+    fun `new auth codes round-trip through fromContractCode`() {
+        assertEquals(OctomilErrorCode.INSUFFICIENT_SCOPE, OctomilErrorCode.fromContractCode("insufficient_scope"))
+        assertEquals(OctomilErrorCode.MISSING_ORG_CONTEXT, OctomilErrorCode.fromContractCode("missing_org_context"))
+    }
+
+    @Test
+    fun `new catalog codes round-trip through fromContractCode`() {
+        assertEquals(OctomilErrorCode.NO_DEFAULT_MODEL, OctomilErrorCode.fromContractCode("no_default_model"))
+        assertEquals(OctomilErrorCode.CAPABILITY_NOT_SUPPORTED, OctomilErrorCode.fromContractCode("capability_not_supported"))
+        assertEquals(OctomilErrorCode.PREVIOUS_RESPONSE_NOT_FOUND, OctomilErrorCode.fromContractCode("previous_response_not_found"))
+        assertEquals(OctomilErrorCode.APP_NOT_FOUND, OctomilErrorCode.fromContractCode("app_not_found"))
+        assertEquals(OctomilErrorCode.CAPABILITY_NOT_CONFIGURED, OctomilErrorCode.fromContractCode("capability_not_configured"))
+        assertEquals(OctomilErrorCode.APP_CONTEXT_CONFLICT, OctomilErrorCode.fromContractCode("app_context_conflict"))
+        assertEquals(OctomilErrorCode.INVALID_MODEL_REF, OctomilErrorCode.fromContractCode("invalid_model_ref"))
+    }
+
+    @Test
+    fun `new runtime codes round-trip through fromContractCode`() {
+        assertEquals(OctomilErrorCode.PROVIDER_ERROR, OctomilErrorCode.fromContractCode("provider_error"))
+        assertEquals(OctomilErrorCode.UPSTREAM_PROVIDER_ERROR, OctomilErrorCode.fromContractCode("upstream_provider_error"))
+        assertEquals(OctomilErrorCode.TOO_MANY_TOOLS, OctomilErrorCode.fromContractCode("too_many_tools"))
+        assertEquals(OctomilErrorCode.UNSUPPORTED_TOOL_CALLING, OctomilErrorCode.fromContractCode("unsupported_tool_calling"))
+    }
+
+    @Test
+    fun `new policy codes round-trip through fromContractCode`() {
+        assertEquals(OctomilErrorCode.CLOUD_INFERENCE_NOT_ALLOWED, OctomilErrorCode.fromContractCode("cloud_inference_not_allowed"))
+        assertEquals(OctomilErrorCode.HOSTED_TTS_DISABLED, OctomilErrorCode.fromContractCode("hosted_tts_disabled"))
+        assertEquals(OctomilErrorCode.PLAN_LIMIT_EXCEEDED, OctomilErrorCode.fromContractCode("plan_limit_exceeded"))
+    }
+
+    @Test
+    fun `new codes retryable matches catalog`() {
+        // Non-retryable: auth, policy, and most catalog codes (RetryClass.NEVER)
+        assertFalse(OctomilErrorCode.INSUFFICIENT_SCOPE.retryable)
+        assertFalse(OctomilErrorCode.MISSING_ORG_CONTEXT.retryable)
+        assertFalse(OctomilErrorCode.NO_DEFAULT_MODEL.retryable)
+        assertFalse(OctomilErrorCode.CLOUD_INFERENCE_NOT_ALLOWED.retryable)
+        assertFalse(OctomilErrorCode.HOSTED_TTS_DISABLED.retryable)
+        assertFalse(OctomilErrorCode.PLAN_LIMIT_EXCEEDED.retryable)
+        assertFalse(OctomilErrorCode.TOO_MANY_TOOLS.retryable)
+        // PROVIDER_ERROR is RetryClass.NEVER despite fallbackEligible=true
+        assertFalse(OctomilErrorCode.PROVIDER_ERROR.retryable)
+        // UNSUPPORTED_TOOL_CALLING is RetryClass.NEVER
+        assertFalse(OctomilErrorCode.UNSUPPORTED_TOOL_CALLING.retryable)
+        // CAPABILITY_NOT_SUPPORTED is RetryClass.NEVER
+        assertFalse(OctomilErrorCode.CAPABILITY_NOT_SUPPORTED.retryable)
+        // Only UPSTREAM_PROVIDER_ERROR is BACKOFF_SAFE (retryable)
+        assertTrue(OctomilErrorCode.UPSTREAM_PROVIDER_ERROR.retryable)
     }
 
     // =========================================================================
@@ -144,6 +202,41 @@ class OctomilErrorCodeTest {
         assertEquals("Too many requests", ex.message)
         assertTrue(ex.retryable)
         assertNull(ex.cause)
+        assertNull(ex.retryAfterMs)
+    }
+
+    @Test
+    fun `OctomilException retryAfterMs is null by default`() {
+        val ex = OctomilException(OctomilErrorCode.SERVER_ERROR, "error")
+        assertNull(ex.retryAfterMs)
+    }
+
+    @Test
+    fun `OctomilException retryAfterMs carries Retry-After value when set`() {
+        val ex = OctomilException(
+            errorCode = OctomilErrorCode.RATE_LIMITED,
+            message = "Too many requests",
+            retryAfterMs = 5000L,
+        )
+        assertEquals(5000L, ex.retryAfterMs)
+        assertTrue(ex.retryable)
+    }
+
+    @Test
+    fun `OctomilException retryAfterMs included in toString`() {
+        val ex = OctomilException(
+            errorCode = OctomilErrorCode.RATE_LIMITED,
+            message = "rate limited",
+            retryAfterMs = 3000L,
+        )
+        val str = ex.toString()
+        assertTrue(str.contains("retryAfterMs=3000"))
+    }
+
+    @Test
+    fun `OctomilException retryAfterMs null shown in toString`() {
+        val ex = OctomilException(OctomilErrorCode.FORBIDDEN, "forbidden")
+        assertTrue(ex.toString().contains("retryAfterMs=null"))
     }
 
     @Test
