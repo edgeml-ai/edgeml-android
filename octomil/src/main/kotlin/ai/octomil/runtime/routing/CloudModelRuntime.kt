@@ -1,6 +1,7 @@
 package ai.octomil.runtime.routing
 
 import ai.octomil.errors.OctomilErrorCode
+import ai.octomil.errors.fromHttpStatus
 import ai.octomil.errors.OctomilException
 import ai.octomil.runtime.core.ChatMLRenderer
 import ai.octomil.runtime.core.ModelRuntime
