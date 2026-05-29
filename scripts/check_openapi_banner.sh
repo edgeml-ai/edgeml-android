@@ -28,7 +28,13 @@ fi
 echo "→ Found $FILE_COUNT .kt files in generated/transport/"
 
 # ── Check first file banner ───────────────────────────────────────────────────
-FIRST_FILE=$(find "$TRANSPORT_DIR" -name "*.kt" | sort | head -1)
+# Collect the file list ONCE. Avoid `find | sort | head -1`: under
+# `set -o pipefail`, head closes the pipe after one line and sort dies with
+# SIGPIPE ("write error", exit 2), aborting the whole script — which only
+# manifests once the dir is large enough (490 files) for sort to still be
+# writing when head exits. Pure-bash first-line extraction sidesteps it.
+ALL_FILES=$(find "$TRANSPORT_DIR" -name "*.kt" | sort)
+FIRST_FILE=${ALL_FILES%%$'\n'*}
 if ! grep -qF "$EXPECTED_BANNER" "$FIRST_FILE"; then
     echo "ERROR: banner mismatch in $FIRST_FILE" >&2
     echo "  Expected to find: $EXPECTED_BANNER" >&2
@@ -46,7 +52,7 @@ while IFS= read -r f; do
         echo "WARN: banner missing in $f" >&2
         MISMATCH_COUNT=$((MISMATCH_COUNT + 1))
     fi
-done < <(find "$TRANSPORT_DIR" -name "*.kt" | sort)
+done <<< "$ALL_FILES"
 
 if [ "$MISMATCH_COUNT" -gt 0 ]; then
     echo "ERROR: $MISMATCH_COUNT file(s) missing the expected banner." >&2
