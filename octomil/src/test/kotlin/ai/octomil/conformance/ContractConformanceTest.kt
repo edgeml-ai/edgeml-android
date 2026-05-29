@@ -1,6 +1,8 @@
 package ai.octomil.conformance
 
 import ai.octomil.errors.OctomilErrorCode
+import ai.octomil.errors.fromContractCode
+import ai.octomil.errors.retryable
 import ai.octomil.generated.CompatibilityLevel
 import ai.octomil.generated.DeviceClass
 import ai.octomil.generated.ErrorCode as ContractErrorCode
@@ -30,12 +32,12 @@ import org.junit.Test
 class ContractConformanceTest {
 
     // =========================================================================
-    // ErrorCode enum — 39 canonical codes (from enums/error_code.yaml)
+    // ErrorCode enum — 101 canonical codes (from enums/error_code.yaml)
     // =========================================================================
 
     @Test
-    fun `generated ErrorCode has exactly 39 entries`() {
-        assertEquals(39, ContractErrorCode.entries.size)
+    fun `generated ErrorCode has exactly 101 entries`() {
+        assertEquals(101, ContractErrorCode.entries.size)
     }
 
     @Test
@@ -44,9 +46,18 @@ class ContractConformanceTest {
             "invalid_api_key",
             "authentication_failed",
             "forbidden",
+            "insufficient_scope",
+            "missing_org_context",
             "device_not_registered",
             "token_expired",
             "device_revoked",
+            "passkey_challenge_expired",
+            "passkey_credential_not_found",
+            "invalid_token",
+            "email_already_verified",
+            "email_already_in_use",
+            "last_auth_method",
+            "oauth_provider_not_linked",
             "network_unavailable",
             "request_timeout",
             "server_error",
@@ -55,6 +66,13 @@ class ContractConformanceTest {
             "unsupported_modality",
             "context_too_large",
             "model_not_found",
+            "no_default_model",
+            "capability_not_supported",
+            "previous_response_not_found",
+            "app_not_found",
+            "capability_not_configured",
+            "app_context_conflict",
+            "invalid_model_ref",
             "model_disabled",
             "version_not_found",
             "download_failed",
@@ -65,9 +83,16 @@ class ContractConformanceTest {
             "accelerator_unavailable",
             "model_load_failed",
             "inference_failed",
+            "provider_error",
+            "upstream_provider_error",
+            "too_many_tools",
+            "unsupported_tool_calling",
             "stream_interrupted",
             "policy_denied",
             "cloud_fallback_disallowed",
+            "cloud_inference_not_allowed",
+            "hosted_tts_disabled",
+            "plan_limit_exceeded",
             "cloud_credentials_missing",
             "cloud_credentials_revoked",
             "cloud_provider_auth_failed",
@@ -77,8 +102,47 @@ class ContractConformanceTest {
             "weight_upload_failed",
             "control_sync_failed",
             "assignment_not_found",
+            "incident_not_found",
+            "alert_rule_not_found",
+            "deployment_not_found",
+            "experiment_not_found",
+            "experiment_state_invalid",
+            "api_key_not_found",
+            "api_key_already_revoked",
+            "integration_not_found",
+            "billing_customer_not_found",
+            "action_not_found",
+            "action_state_invalid",
+            "credential_not_found",
+            "connection_not_found",
+            "local_runtime_not_found",
+            "checkout_not_complete",
+            "upstream_provider_unavailable",
+            "agent_system_unavailable",
+            "thread_not_found",
+            "run_not_found",
+            "run_state_invalid",
+            "approval_not_found",
+            "approval_already_resolved",
+            "job_not_found",
+            "job_state_invalid",
             "cancelled",
             "app_backgrounded",
+            "resource_not_found",
+            "catalog_family_not_found",
+            "catalog_variant_not_found",
+            "catalog_version_not_found",
+            "catalog_package_not_found",
+            "catalog_resource_not_found",
+            "catalog_slug_conflict",
+            "catalog_lifecycle_invalid",
+            "billing_export_not_found",
+            "cloud_catalog_source_not_found",
+            "cloud_catalog_mapping_not_found",
+            "cloud_catalog_run_not_found",
+            "conflict",
+            "gone",
+            "payload_too_large",
             "unknown",
         )
         val actual = ContractErrorCode.entries.map { it.code }
@@ -87,12 +151,9 @@ class ContractConformanceTest {
 
     @Test
     fun `every generated ErrorCode maps to a valid OctomilErrorCode`() {
-        // 37 direct mappings + 2 aliases:
-        //   TOKEN_EXPIRED -> AUTHENTICATION_FAILED, DEVICE_REVOKED -> FORBIDDEN
-        val aliasMap = mapOf(
-            "TOKEN_EXPIRED" to "AUTHENTICATION_FAILED",
-            "DEVICE_REVOKED" to "FORBIDDEN",
-        )
+        // 101 direct mappings + 0 aliases:
+        //   
+        val aliasMap = emptyMap<String, String>()
         for (contractCode in ContractErrorCode.entries) {
             val sdkCode = OctomilErrorCode.fromContractCode(contractCode.code)
             val expectedName = aliasMap[contractCode.name] ?: contractCode.name
@@ -106,9 +167,9 @@ class ContractConformanceTest {
 
     @Test
     fun `OctomilErrorCode covers all contract codes`() {
-        // SDK has 37 entries; contract has 39.
-        assertEquals(37, OctomilErrorCode.entries.size)
-        assertEquals(39, ContractErrorCode.entries.size)
+        // SDK has 101 entries; contract has 101.
+        assertEquals(101, OctomilErrorCode.entries.size)
+        assertEquals(101, ContractErrorCode.entries.size)
         for (contractCode in ContractErrorCode.entries) {
             if (contractCode == ContractErrorCode.UNKNOWN) continue
             val sdkCode = OctomilErrorCode.fromContractCode(contractCode.code)
