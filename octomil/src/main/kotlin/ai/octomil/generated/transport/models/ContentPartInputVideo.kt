@@ -29,12 +29,5 @@ import kotlinx.serialization.Contextual
  * 
  *
  */
-@Serializable
-
-data class ContentPartInputVideo (
-
-) : kotlin.collections.HashMap<String, kotlin.Any>() {
-
-
-}
+typealias ContentPartInputVideo = kotlinx.serialization.json.JsonObject
 

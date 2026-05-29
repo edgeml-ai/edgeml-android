@@ -65,7 +65,7 @@ data class Step (
     @SerialName(value = "error_code")
     val errorCode: kotlin.String? = null
 
-) : kotlin.collections.HashMap<String, kotlin.Any>() {
+) : kotlin.collections.HashMap<String, kotlinx.serialization.json.JsonElement>() {
 
     /**
      * 

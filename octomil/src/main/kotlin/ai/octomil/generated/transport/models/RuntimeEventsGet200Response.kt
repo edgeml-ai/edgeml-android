@@ -159,7 +159,7 @@ data class RuntimeEventsGet200Response (
     val qualityReasonCode: kotlin.String? = null,
 
     @SerialName(value = "advisory_failures")
-    val advisoryFailures: kotlin.collections.List<@Contextual kotlin.Any>? = null,
+    val advisoryFailures: kotlin.collections.List<@Contextual kotlinx.serialization.json.JsonElement>? = null,
 
     @SerialName(value = "gate_failure_count")
     val gateFailureCount: kotlin.Int? = null,
@@ -168,7 +168,7 @@ data class RuntimeEventsGet200Response (
     val outputVisibleBeforeFailure: kotlin.Boolean? = null,
 
     @SerialName(value = "attempt_details")
-    val attemptDetails: kotlin.collections.List<@Contextual kotlin.Any>? = null,
+    val attemptDetails: kotlin.collections.List<@Contextual kotlinx.serialization.json.JsonElement>? = null,
 
     /* ISO 8601 timestamp when the event was persisted. */
     @Contextual @SerialName(value = "ingested_at")

@@ -65,9 +65,9 @@ data class BillingSupportContextResponse (
 
     /* Latest Stripe invoice summary. Null if no customer or no invoices. */
     @Contextual @SerialName(value = "latest_invoice")
-    val latestInvoice: kotlin.collections.Map<kotlin.String, kotlin.Any>? = null
+    val latestInvoice: kotlin.collections.Map<kotlin.String, kotlinx.serialization.json.JsonElement>? = null
 
-) : kotlin.collections.HashMap<String, kotlin.Any>() {
+) : kotlin.collections.HashMap<String, kotlinx.serialization.json.JsonElement>() {
 
     /**
      * 

@@ -55,7 +55,7 @@ data class TrainingPersonalizedUpdateRequest (
 
     /* Local evaluation metrics (accuracy, loss, etc.). */
     @Contextual @SerialName(value = "metrics")
-    val metrics: kotlin.Any? = null,
+    val metrics: kotlinx.serialization.json.JsonElement? = null,
 
     /* Layer names for FedPer head split. */
     @SerialName(value = "head_layers")

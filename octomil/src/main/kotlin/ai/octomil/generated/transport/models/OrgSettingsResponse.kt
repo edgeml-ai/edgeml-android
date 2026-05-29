@@ -78,7 +78,7 @@ data class OrgSettingsResponse (
     @Contextual @SerialName(value = "updated_at")
     val updatedAt: java.time.OffsetDateTime
 
-) : kotlin.collections.HashMap<String, kotlin.Any>() {
+) : kotlin.collections.HashMap<String, kotlinx.serialization.json.JsonElement>() {
 
     /**
      * Primary identity authentication mode for the org.

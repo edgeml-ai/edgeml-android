@@ -82,7 +82,7 @@ data class CreateApiKeyResponse (
     @SerialName(value = "revoked_at")
     val revokedAt: kotlin.String? = null
 
-) : kotlin.collections.HashMap<String, kotlin.Any>() {
+) : kotlin.collections.HashMap<String, kotlinx.serialization.json.JsonElement>() {
 
 
 }

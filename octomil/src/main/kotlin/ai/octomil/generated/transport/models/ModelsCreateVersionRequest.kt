@@ -69,7 +69,7 @@ data class ModelsCreateVersionRequest (
     val lifecycleStatus: kotlin.String? = null,
 
     @Contextual @SerialName(value = "metadata")
-    val metadata: kotlin.collections.Map<kotlin.String, kotlin.Any>? = null
+    val metadata: kotlin.collections.Map<kotlin.String, kotlinx.serialization.json.JsonElement>? = null
 
 ) {
 

@@ -40,7 +40,7 @@ data class ResponseRequestContentBlock (
     val role: ResponseRequestContentBlock.Role,
 
     @Contextual @SerialName(value = "content")
-    val content: kotlin.Any? = null,
+    val content: kotlinx.serialization.json.JsonElement? = null,
 
     @SerialName(value = "toolCallId")
     val toolCallId: kotlin.String? = null

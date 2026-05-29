@@ -38,7 +38,7 @@ data class ApiKeyScopesResponseKeyTypeScopesResponse (
     @Contextual @SerialName(value = "groups")
     val groups: kotlin.collections.Map<kotlin.String, ApiKeyScopesResponseKeyTypeScopesResponseGroupsValue>
 
-) : kotlin.collections.HashMap<String, kotlin.Any>() {
+) : kotlin.collections.HashMap<String, kotlinx.serialization.json.JsonElement>() {
 
 
 }

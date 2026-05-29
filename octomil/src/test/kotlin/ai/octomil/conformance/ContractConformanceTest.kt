@@ -1,6 +1,8 @@
 package ai.octomil.conformance
 
 import ai.octomil.errors.OctomilErrorCode
+import ai.octomil.errors.fromContractCode
+import ai.octomil.errors.retryable
 import ai.octomil.generated.CompatibilityLevel
 import ai.octomil.generated.DeviceClass
 import ai.octomil.generated.ErrorCode as ContractErrorCode
@@ -30,27 +32,12 @@ import org.junit.Test
 class ContractConformanceTest {
 
     // =========================================================================
-    // ErrorCode enum — 65 canonical codes (from enums/error_code.yaml v1.25.0)
+    // ErrorCode enum — 101 canonical codes (from enums/error_code.yaml)
     // =========================================================================
 
-    // Internal/server-ops codes present in the contract but intentionally omitted
-    // from the SDK-facing OctomilErrorCode enum (not reachable from SDK call paths).
-    private val internalOnlyCodes: Set<String> = setOf(
-        "incident_not_found",
-        "deployment_not_found",
-        "experiment_not_found",
-        "experiment_state_invalid",
-        "api_key_not_found",
-        "api_key_already_revoked",
-        "integration_not_found",
-        "billing_customer_not_found",
-        "action_not_found",
-        "action_state_invalid",
-    )
-
     @Test
-    fun `generated ErrorCode has exactly 65 entries`() {
-        assertEquals(65, ContractErrorCode.entries.size)
+    fun `generated ErrorCode has exactly 101 entries`() {
+        assertEquals(101, ContractErrorCode.entries.size)
     }
 
     @Test
@@ -64,6 +51,13 @@ class ContractConformanceTest {
             "device_not_registered",
             "token_expired",
             "device_revoked",
+            "passkey_challenge_expired",
+            "passkey_credential_not_found",
+            "invalid_token",
+            "email_already_verified",
+            "email_already_in_use",
+            "last_auth_method",
+            "oauth_provider_not_linked",
             "network_unavailable",
             "request_timeout",
             "server_error",
@@ -109,6 +103,7 @@ class ContractConformanceTest {
             "control_sync_failed",
             "assignment_not_found",
             "incident_not_found",
+            "alert_rule_not_found",
             "deployment_not_found",
             "experiment_not_found",
             "experiment_state_invalid",
@@ -118,8 +113,36 @@ class ContractConformanceTest {
             "billing_customer_not_found",
             "action_not_found",
             "action_state_invalid",
+            "credential_not_found",
+            "connection_not_found",
+            "local_runtime_not_found",
+            "checkout_not_complete",
+            "upstream_provider_unavailable",
+            "agent_system_unavailable",
+            "thread_not_found",
+            "run_not_found",
+            "run_state_invalid",
+            "approval_not_found",
+            "approval_already_resolved",
+            "job_not_found",
+            "job_state_invalid",
             "cancelled",
             "app_backgrounded",
+            "resource_not_found",
+            "catalog_family_not_found",
+            "catalog_variant_not_found",
+            "catalog_version_not_found",
+            "catalog_package_not_found",
+            "catalog_resource_not_found",
+            "catalog_slug_conflict",
+            "catalog_lifecycle_invalid",
+            "billing_export_not_found",
+            "cloud_catalog_source_not_found",
+            "cloud_catalog_mapping_not_found",
+            "cloud_catalog_run_not_found",
+            "conflict",
+            "gone",
+            "payload_too_large",
             "unknown",
         )
         val actual = ContractErrorCode.entries.map { it.code }
@@ -128,40 +151,27 @@ class ContractConformanceTest {
 
     @Test
     fun `every generated ErrorCode maps to a valid OctomilErrorCode`() {
-        // 53 direct mappings + 2 aliases + 10 internal-only (→ UNKNOWN):
-        //   TOKEN_EXPIRED -> AUTHENTICATION_FAILED, DEVICE_REVOKED -> FORBIDDEN
-        //   internal-only codes -> UNKNOWN (intentional, see class doc)
-        val aliasMap = mapOf(
-            "TOKEN_EXPIRED" to "AUTHENTICATION_FAILED",
-            "DEVICE_REVOKED" to "FORBIDDEN",
-        )
+        // 101 direct mappings + 0 aliases:
+        //   
+        val aliasMap = emptyMap<String, String>()
         for (contractCode in ContractErrorCode.entries) {
             val sdkCode = OctomilErrorCode.fromContractCode(contractCode.code)
-            if (contractCode.code in internalOnlyCodes) {
-                assertEquals(
-                    "Internal-only contract code '${contractCode.code}' should map to UNKNOWN",
-                    "UNKNOWN",
-                    sdkCode.name,
-                )
-            } else {
-                val expectedName = aliasMap[contractCode.name] ?: contractCode.name
-                assertEquals(
-                    "Contract code '${contractCode.code}' should map to SDK code ${expectedName}",
-                    expectedName,
-                    sdkCode.name,
-                )
-            }
+            val expectedName = aliasMap[contractCode.name] ?: contractCode.name
+            assertEquals(
+                "Contract code '${contractCode.code}' should map to SDK code ${expectedName}",
+                expectedName,
+                sdkCode.name,
+            )
         }
     }
 
     @Test
-    fun `OctomilErrorCode covers all non-internal contract codes`() {
-        // SDK has 53 entries; contract has 65 (10 internal-only omitted, 2 aliased).
-        assertEquals(53, OctomilErrorCode.entries.size)
-        assertEquals(65, ContractErrorCode.entries.size)
+    fun `OctomilErrorCode covers all contract codes`() {
+        // SDK has 101 entries; contract has 101.
+        assertEquals(101, OctomilErrorCode.entries.size)
+        assertEquals(101, ContractErrorCode.entries.size)
         for (contractCode in ContractErrorCode.entries) {
             if (contractCode == ContractErrorCode.UNKNOWN) continue
-            if (contractCode.code in internalOnlyCodes) continue
             val sdkCode = OctomilErrorCode.fromContractCode(contractCode.code)
             assertTrue(
                 "Contract code '${contractCode.code}' should not fall back to UNKNOWN",

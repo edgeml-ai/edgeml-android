@@ -45,7 +45,7 @@ data class ApprovalRequest (
     val toolName: kotlin.String,
 
     @Contextual @SerialName(value = "payload")
-    val payload: kotlin.collections.Map<kotlin.String, kotlin.Any>,
+    val payload: kotlin.collections.Map<kotlin.String, kotlinx.serialization.json.JsonElement>,
 
     @SerialName(value = "risk_level")
     val riskLevel: ApprovalRequest.RiskLevel,
@@ -53,7 +53,7 @@ data class ApprovalRequest (
     @SerialName(value = "status")
     val status: ApprovalRequest.Status
 
-) : kotlin.collections.HashMap<String, kotlin.Any>() {
+) : kotlin.collections.HashMap<String, kotlinx.serialization.json.JsonElement>() {
 
     /**
      * 

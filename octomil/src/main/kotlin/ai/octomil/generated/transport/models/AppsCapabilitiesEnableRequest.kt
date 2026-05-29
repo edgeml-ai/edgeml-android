@@ -46,7 +46,7 @@ data class AppsCapabilitiesEnableRequest (
 
     /* Optional serving policy overrides for the created deployment. */
     @Contextual @SerialName(value = "serving_policy")
-    val servingPolicy: kotlin.collections.Map<kotlin.String, kotlin.Any>? = null
+    val servingPolicy: kotlin.collections.Map<kotlin.String, kotlinx.serialization.json.JsonElement>? = null
 
 ) {
 

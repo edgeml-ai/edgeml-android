@@ -51,7 +51,7 @@ data class ExperimentTimeseries (
     @SerialName(value = "variants")
     val variants: kotlin.collections.List<ExperimentTimeseriesVariantsInner>
 
-) : kotlin.collections.HashMap<String, kotlin.Any>() {
+) : kotlin.collections.HashMap<String, kotlinx.serialization.json.JsonElement>() {
 
     /**
      * Bucket granularity. Values outside this set default to 'day' on the server.

@@ -90,7 +90,7 @@ data class AppResolutionSchema (
     @SerialName(value = "public_client_allowed")
     val publicClientAllowed: kotlin.Boolean? = false
 
-) : kotlin.collections.HashMap<String, kotlin.Any>() {
+) : kotlin.collections.HashMap<String, kotlinx.serialization.json.JsonElement>() {
 
 
 }

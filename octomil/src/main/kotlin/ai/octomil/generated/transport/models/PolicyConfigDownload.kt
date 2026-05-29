@@ -48,7 +48,7 @@ data class PolicyConfigDownload (
     @SerialName(value = "maxConcurrentChunks")
     val maxConcurrentChunks: kotlin.Int? = 4
 
-) : kotlin.collections.HashMap<String, kotlin.Any>() {
+) : kotlin.collections.HashMap<String, kotlinx.serialization.json.JsonElement>() {
 
 
 }

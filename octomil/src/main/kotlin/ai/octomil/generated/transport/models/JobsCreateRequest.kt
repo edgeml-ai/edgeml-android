@@ -43,7 +43,7 @@ data class JobsCreateRequest (
     val jobType: kotlin.String,
 
     @Contextual @SerialName(value = "payload")
-    val payload: kotlin.collections.Map<kotlin.String, kotlin.Any>? = null,
+    val payload: kotlin.collections.Map<kotlin.String, kotlinx.serialization.json.JsonElement>? = null,
 
     @SerialName(value = "priority")
     val priority: kotlin.Int? = 100,

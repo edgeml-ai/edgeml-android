@@ -55,7 +55,7 @@ data class Response (
     @Contextual @SerialName(value = "usage")
     val usage: ResponseUsage? = null
 
-) : kotlin.collections.HashMap<String, kotlin.Any>() {
+) : kotlin.collections.HashMap<String, kotlinx.serialization.json.JsonElement>() {
 
     /**
      * 

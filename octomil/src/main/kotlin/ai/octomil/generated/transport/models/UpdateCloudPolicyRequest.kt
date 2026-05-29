@@ -49,7 +49,7 @@ data class UpdateCloudPolicyRequest (
     @SerialName(value = "cloud_fallback_model")
     val cloudFallbackModel: kotlin.String? = null
 
-) : kotlin.collections.HashMap<String, kotlin.Any>() {
+) : kotlin.collections.HashMap<String, kotlinx.serialization.json.JsonElement>() {
 
     /**
      * 

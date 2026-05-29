@@ -44,10 +44,10 @@ data class ResponseRequestToolDef (
     val description: kotlin.String? = null,
 
     @Contextual @SerialName(value = "parameters")
-    val parameters: kotlin.Any? = null,
+    val parameters: kotlinx.serialization.json.JsonElement? = null,
 
     @Contextual @SerialName(value = "input_schema")
-    val inputSchema: kotlin.Any? = null
+    val inputSchema: kotlinx.serialization.json.JsonElement? = null
 
 ) {
 

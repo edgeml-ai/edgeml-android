@@ -85,7 +85,7 @@ data class UpdateIntegrationRequest (
     @SerialName(value = "notify_on_approval")
     val notifyOnApproval: kotlin.Boolean? = null
 
-) : kotlin.collections.HashMap<String, kotlin.Any>() {
+) : kotlin.collections.HashMap<String, kotlinx.serialization.json.JsonElement>() {
 
 
 }

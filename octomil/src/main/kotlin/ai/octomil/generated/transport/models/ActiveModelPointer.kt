@@ -68,7 +68,7 @@ data class ActiveModelPointer (
     @SerialName(value = "isFallback")
     val isFallback: kotlin.Boolean? = false
 
-) : kotlin.collections.HashMap<String, kotlin.Any>() {
+) : kotlin.collections.HashMap<String, kotlinx.serialization.json.JsonElement>() {
 
 
 }

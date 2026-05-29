@@ -40,7 +40,7 @@ data class TrainingSecaggUnmaskRequest (
 
     /* Map of owner_node_id to base64-encoded Shamir share bytes for dropout recovery. */
     @Contextual @SerialName(value = "shares")
-    val shares: kotlin.Any
+    val shares: kotlinx.serialization.json.JsonElement
 
 ) {
 

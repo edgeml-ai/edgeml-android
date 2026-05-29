@@ -45,7 +45,7 @@ data class DesiredStateFederationOffersInner (
     @Contextual @SerialName(value = "expiresAt")
     val expiresAt: java.time.OffsetDateTime
 
-) : kotlin.collections.HashMap<String, kotlin.Any>() {
+) : kotlin.collections.HashMap<String, kotlinx.serialization.json.JsonElement>() {
 
 
 }

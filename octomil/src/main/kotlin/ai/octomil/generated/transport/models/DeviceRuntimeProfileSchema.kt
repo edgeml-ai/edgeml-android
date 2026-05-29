@@ -89,7 +89,7 @@ data class DeviceRuntimeProfileSchema (
     @SerialName(value = "supported_gate_codes")
     val supportedGateCodes: kotlin.collections.List<DeviceRuntimeProfileSchema.SupportedGateCodes>? = null
 
-) : kotlin.collections.HashMap<String, kotlin.Any>() {
+) : kotlin.collections.HashMap<String, kotlinx.serialization.json.JsonElement>() {
 
     /**
      * SDK platform identifier.

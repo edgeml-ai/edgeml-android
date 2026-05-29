@@ -65,7 +65,7 @@ data class ModelsGetVersionPerformance200Response (
 
     /* Per-device update statistics, sorted by updates_count DESC, limited by limit_devices. */
     @SerialName(value = "device_breakdown")
-    val deviceBreakdown: kotlin.collections.List<@Contextual kotlin.collections.Map<kotlin.String, kotlin.Any>>? = null,
+    val deviceBreakdown: kotlin.collections.List<@Contextual kotlin.collections.Map<kotlin.String, kotlinx.serialization.json.JsonElement>>? = null,
 
     @SerialName(value = "training_rounds")
     val trainingRounds: kotlin.Int? = null,

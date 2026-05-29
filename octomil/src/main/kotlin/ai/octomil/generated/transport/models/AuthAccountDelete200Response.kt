@@ -40,7 +40,7 @@ data class AuthAccountDelete200Response (
 
     /* Summary of what was deleted. Shape is implementation-defined (from AccountDeletionService.delete_account); fields indicate counts of deleted rows per entity type.  */
     @Contextual @SerialName(value = "report")
-    val report: kotlin.collections.Map<kotlin.String, kotlin.Any>? = null
+    val report: kotlin.collections.Map<kotlin.String, kotlinx.serialization.json.JsonElement>? = null
 
 ) {
 

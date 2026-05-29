@@ -81,7 +81,7 @@ data class DeploymentsActionsList200ResponseInner (
 
     /* Structured payload describing the proposed change. */
     @Contextual @SerialName(value = "proposed_change")
-    val proposedChange: kotlin.collections.Map<kotlin.String, kotlin.Any>? = null,
+    val proposedChange: kotlin.collections.Map<kotlin.String, kotlinx.serialization.json.JsonElement>? = null,
 
     /* Whether the system is permitted to execute this action automatically. */
     @SerialName(value = "auto_executable")

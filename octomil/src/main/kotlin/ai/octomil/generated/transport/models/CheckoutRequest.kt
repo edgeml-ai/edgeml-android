@@ -46,7 +46,7 @@ data class CheckoutRequest (
     @Contextual @SerialName(value = "cancel_url")
     val cancelUrl: java.net.URI
 
-) : kotlin.collections.HashMap<String, kotlin.Any>() {
+) : kotlin.collections.HashMap<String, kotlinx.serialization.json.JsonElement>() {
 
 
 }

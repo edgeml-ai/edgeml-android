@@ -49,7 +49,7 @@ data class UpdateConnectionRequest (
     @SerialName(value = "status")
     val status: kotlin.String? = null
 
-) : kotlin.collections.HashMap<String, kotlin.Any>() {
+) : kotlin.collections.HashMap<String, kotlinx.serialization.json.JsonElement>() {
 
 
 }

@@ -89,7 +89,7 @@ data class ConnectionResponse (
     @Contextual @SerialName(value = "last_verified_at")
     val lastVerifiedAt: java.time.OffsetDateTime? = null
 
-) : kotlin.collections.HashMap<String, kotlin.Any>() {
+) : kotlin.collections.HashMap<String, kotlinx.serialization.json.JsonElement>() {
 
     /**
      * 

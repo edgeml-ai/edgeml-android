@@ -46,7 +46,7 @@ data class InferenceSpeculativeConfig200Response (
 
     /* Speculative decoding configuration parameters. */
     @Contextual @SerialName(value = "config")
-    val config: kotlin.collections.Map<kotlin.String, kotlin.Any>? = null
+    val config: kotlin.collections.Map<kotlin.String, kotlinx.serialization.json.JsonElement>? = null
 
 ) {
 

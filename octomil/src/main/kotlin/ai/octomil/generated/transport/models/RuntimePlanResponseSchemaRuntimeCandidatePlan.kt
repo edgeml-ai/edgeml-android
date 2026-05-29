@@ -95,7 +95,7 @@ data class RuntimePlanResponseSchemaRuntimeCandidatePlan (
     @SerialName(value = "prepare_policy")
     val preparePolicy: RuntimePlanResponseSchemaRuntimeCandidatePlan.PreparePolicy? = PreparePolicy.LAZY
 
-) : kotlin.collections.HashMap<String, kotlin.Any>() {
+) : kotlin.collections.HashMap<String, kotlinx.serialization.json.JsonElement>() {
 
     /**
      * Where this candidate would run inference.

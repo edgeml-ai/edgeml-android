@@ -78,7 +78,7 @@ data class ExperimentSampleSize (
     @Contextual @SerialName(value = "progress_percent")
     val progressPercent: java.math.BigDecimal
 
-) : kotlin.collections.HashMap<String, kotlin.Any>() {
+) : kotlin.collections.HashMap<String, kotlinx.serialization.json.JsonElement>() {
 
 
 }

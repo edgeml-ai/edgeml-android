@@ -42,7 +42,7 @@ data class ResponseStreamEventDoneEvent (
     @Contextual @SerialName(value = "response")
     val response: Response
 
-) : kotlin.collections.HashMap<String, kotlin.Any>() {
+) : kotlin.collections.HashMap<String, kotlinx.serialization.json.JsonElement>() {
 
     /**
      * 

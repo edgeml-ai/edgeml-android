@@ -59,7 +59,7 @@ data class TelemetryBatch (
     @SerialName(value = "sdkVersion")
     val sdkVersion: kotlin.String? = null
 
-) : kotlin.collections.HashMap<String, kotlin.Any>() {
+) : kotlin.collections.HashMap<String, kotlinx.serialization.json.JsonElement>() {
 
 
 }

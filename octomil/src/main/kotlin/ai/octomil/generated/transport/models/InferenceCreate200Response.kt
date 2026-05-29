@@ -39,7 +39,7 @@ import kotlinx.serialization.Contextual
 data class InferenceCreate200Response (
 
     @Contextual @SerialName(value = "output")
-    val output: kotlin.Any?,
+    val output: kotlinx.serialization.json.JsonElement?,
 
     /* End-to-end latency in ms. */
     @Contextual @SerialName(value = "latency_ms")

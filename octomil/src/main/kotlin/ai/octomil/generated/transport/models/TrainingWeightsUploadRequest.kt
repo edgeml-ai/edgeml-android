@@ -63,7 +63,7 @@ data class TrainingWeightsUploadRequest (
     val deviceId: kotlin.String? = null,
 
     @Contextual @SerialName(value = "metrics")
-    val metrics: kotlin.Any? = null,
+    val metrics: kotlinx.serialization.json.JsonElement? = null,
 
     @SerialName(value = "update_format")
     val updateFormat: kotlin.String? = "state_dict",
@@ -76,7 +76,7 @@ data class TrainingWeightsUploadRequest (
     val isSecureAggregation: kotlin.Boolean? = null,
 
     @Contextual @SerialName(value = "secret_shares")
-    val secretShares: kotlin.Any? = null,
+    val secretShares: kotlinx.serialization.json.JsonElement? = null,
 
     @SerialName(value = "verification_tag")
     val verificationTag: kotlin.String? = null,

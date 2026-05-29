@@ -44,9 +44,9 @@ data class CreateIntegrationRequest (
 
     /* Provider-specific config. Use PATCH after creation to set individual fields. */
     @Contextual @SerialName(value = "config")
-    val config: kotlin.collections.Map<kotlin.String, kotlin.Any>? = null
+    val config: kotlin.collections.Map<kotlin.String, kotlinx.serialization.json.JsonElement>? = null
 
-) : kotlin.collections.HashMap<String, kotlin.Any>() {
+) : kotlin.collections.HashMap<String, kotlinx.serialization.json.JsonElement>() {
 
     /**
      * 

@@ -37,7 +37,7 @@ data class PortalRequest (
     @Contextual @SerialName(value = "return_url")
     val returnUrl: java.net.URI
 
-) : kotlin.collections.HashMap<String, kotlin.Any>() {
+) : kotlin.collections.HashMap<String, kotlinx.serialization.json.JsonElement>() {
 
 
 }

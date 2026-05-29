@@ -49,7 +49,7 @@ data class LogsIngestRuntimeRequestEntriesInner (
     val level: kotlin.String? = null,
 
     @Contextual @SerialName(value = "metadata")
-    val metadata: kotlin.collections.Map<kotlin.String, kotlin.Any>? = null,
+    val metadata: kotlin.collections.Map<kotlin.String, kotlinx.serialization.json.JsonElement>? = null,
 
     /* Unix epoch seconds. Server time used if omitted. */
     @Contextual @SerialName(value = "timestamp")

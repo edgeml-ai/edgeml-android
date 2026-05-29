@@ -53,7 +53,7 @@ data class UpdateAuthConfigRequest (
     @SerialName(value = "scim_enabled")
     val scimEnabled: kotlin.Boolean? = null
 
-) : kotlin.collections.HashMap<String, kotlin.Any>() {
+) : kotlin.collections.HashMap<String, kotlinx.serialization.json.JsonElement>() {
 
     /**
      * 

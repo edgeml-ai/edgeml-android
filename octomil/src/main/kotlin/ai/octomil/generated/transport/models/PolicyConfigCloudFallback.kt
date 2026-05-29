@@ -53,7 +53,7 @@ data class PolicyConfigCloudFallback (
     @SerialName(value = "credentialPolicy")
     val credentialPolicy: PolicyConfigCloudFallback.CredentialPolicy? = CredentialPolicy.BYOK_AND_MANAGED
 
-) : kotlin.collections.HashMap<String, kotlin.Any>() {
+) : kotlin.collections.HashMap<String, kotlinx.serialization.json.JsonElement>() {
 
     /**
      * Cloud provider for fallback. Must be a CloudProvider enum value. Defaults to 'octomil'.

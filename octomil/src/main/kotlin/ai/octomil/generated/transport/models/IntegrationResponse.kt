@@ -53,7 +53,7 @@ data class IntegrationResponse (
     @Contextual @SerialName(value = "created_at")
     val createdAt: java.time.OffsetDateTime? = null
 
-) : kotlin.collections.HashMap<String, kotlin.Any>() {
+) : kotlin.collections.HashMap<String, kotlinx.serialization.json.JsonElement>() {
 
     /**
      * 

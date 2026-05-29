@@ -44,7 +44,7 @@ data class TelemetryAgentBatchRequestEventsInner (
     val timestamp: java.time.OffsetDateTime? = null,
 
     @Contextual @SerialName(value = "attributes")
-    val attributes: kotlin.collections.Map<kotlin.String, kotlin.Any>? = null
+    val attributes: kotlin.collections.Map<kotlin.String, kotlinx.serialization.json.JsonElement>? = null
 
 ) {
 

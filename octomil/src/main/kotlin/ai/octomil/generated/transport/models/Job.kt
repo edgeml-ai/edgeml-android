@@ -80,10 +80,10 @@ data class Job (
     val updatedAt: java.time.OffsetDateTime,
 
     @Contextual @SerialName(value = "payload")
-    val payload: kotlin.collections.Map<kotlin.String, kotlin.Any>? = null,
+    val payload: kotlin.collections.Map<kotlin.String, kotlinx.serialization.json.JsonElement>? = null,
 
     @Contextual @SerialName(value = "result")
-    val result: kotlin.collections.Map<kotlin.String, kotlin.Any>? = null,
+    val result: kotlin.collections.Map<kotlin.String, kotlinx.serialization.json.JsonElement>? = null,
 
     @SerialName(value = "error_message")
     val errorMessage: kotlin.String? = null,
@@ -97,7 +97,7 @@ data class Job (
     @Contextual @SerialName(value = "finished_at")
     val finishedAt: java.time.OffsetDateTime? = null
 
-) : kotlin.collections.HashMap<String, kotlin.Any>() {
+) : kotlin.collections.HashMap<String, kotlinx.serialization.json.JsonElement>() {
 
     /**
      * 

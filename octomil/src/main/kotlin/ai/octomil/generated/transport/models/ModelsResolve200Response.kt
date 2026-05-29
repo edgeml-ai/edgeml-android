@@ -40,7 +40,7 @@ data class ModelsResolve200Response (
 
     /* Model.to_dict() output for the resolved model. */
     @Contextual @SerialName(value = "entry")
-    val entry: kotlin.collections.Map<kotlin.String, kotlin.Any>? = null
+    val entry: kotlin.collections.Map<kotlin.String, kotlinx.serialization.json.JsonElement>? = null
 
 ) {
 

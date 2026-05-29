@@ -57,7 +57,7 @@ data class UpdateLocalRuntimeRequest (
     @SerialName(value = "routing_priority")
     val routingPriority: kotlin.Int? = null
 
-) : kotlin.collections.HashMap<String, kotlin.Any>() {
+) : kotlin.collections.HashMap<String, kotlinx.serialization.json.JsonElement>() {
 
     /**
      * 

@@ -55,7 +55,7 @@ data class AuthPasskeysAuthenticateOptions200Response (
     @SerialName(value = "userVerification")
     val userVerification: kotlin.String? = null
 
-) : kotlin.collections.HashMap<String, kotlin.Any>() {
+) : kotlin.collections.HashMap<String, kotlinx.serialization.json.JsonElement>() {
 
 
 }
