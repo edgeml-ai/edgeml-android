@@ -40,7 +40,7 @@ val OctomilErrorCode.retryable: Boolean
  * Lossy fallback — prefer [fromServerResponse], which uses the wire-format
  * `code` field when available.
  */
-fun OctomilErrorCode.Companion.fromHttpStatus(code: Int): OctomilErrorCode = when (code) {
+fun ErrorCode.Companion.fromHttpStatus(code: Int): OctomilErrorCode = when (code) {
     400 -> ErrorCode.INVALID_INPUT
     401 -> ErrorCode.AUTHENTICATION_FAILED
     403 -> ErrorCode.FORBIDDEN
@@ -55,14 +55,14 @@ fun OctomilErrorCode.Companion.fromHttpStatus(code: Int): OctomilErrorCode = whe
  * Map a wire-format error code string (e.g. "model_not_found") to its
  * [OctomilErrorCode]. Unrecognised codes fall back to [ErrorCode.UNKNOWN].
  */
-fun OctomilErrorCode.Companion.fromContractCode(code: String): OctomilErrorCode =
+fun ErrorCode.Companion.fromContractCode(code: String): OctomilErrorCode =
     ErrorCode.fromCode(code) ?: ErrorCode.UNKNOWN
 
 /**
  * Resolve an [OctomilErrorCode] from a server error response: prefer the
  * wire-format `code` string, falling back to HTTP status code mapping.
  */
-fun OctomilErrorCode.Companion.fromServerResponse(code: String?, httpStatus: Int): OctomilErrorCode {
+fun ErrorCode.Companion.fromServerResponse(code: String?, httpStatus: Int): OctomilErrorCode {
     if (code != null) {
         val resolved = fromContractCode(code)
         if (resolved != ErrorCode.UNKNOWN) return resolved
