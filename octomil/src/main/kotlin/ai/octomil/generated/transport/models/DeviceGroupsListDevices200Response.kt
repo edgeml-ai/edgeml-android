@@ -37,7 +37,7 @@ import kotlinx.serialization.Contextual
 data class DeviceGroupsListDevices200Response (
 
     @SerialName(value = "devices")
-    val devices: kotlin.collections.List<@Contextual kotlin.collections.Map<kotlin.String, kotlin.Any>>,
+    val devices: kotlin.collections.List<@Contextual kotlin.collections.Map<kotlin.String, kotlinx.serialization.json.JsonElement>>,
 
     @SerialName(value = "has_more")
     val hasMore: kotlin.Boolean? = null,

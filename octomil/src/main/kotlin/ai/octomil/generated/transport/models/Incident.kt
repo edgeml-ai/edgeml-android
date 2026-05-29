@@ -117,7 +117,7 @@ data class Incident (
     val closedBy: kotlin.String? = null,
 
     @Contextual @SerialName(value = "incident_metadata")
-    val incidentMetadata: kotlin.collections.Map<kotlin.String, kotlin.Any>? = null,
+    val incidentMetadata: kotlin.collections.Map<kotlin.String, kotlinx.serialization.json.JsonElement>? = null,
 
     @Contextual @SerialName(value = "created_at")
     val createdAt: java.time.OffsetDateTime? = null,
@@ -125,7 +125,7 @@ data class Incident (
     @Contextual @SerialName(value = "updated_at")
     val updatedAt: java.time.OffsetDateTime? = null
 
-) : kotlin.collections.HashMap<String, kotlin.Any>() {
+) : kotlin.collections.HashMap<String, kotlinx.serialization.json.JsonElement>() {
 
     /**
      * Conventional values match IncidentSeverity (info|warning|error|critical). `\"medium\"` is included because the server's IncidentCreateRequest defaults to it and the DB stores arbitrary strings (the SAEnum column uses `create_type=False`); a generated SDK would otherwise reject the default create response. Future server-side enum tightening should remove `\"medium\"` from this list.

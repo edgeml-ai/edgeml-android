@@ -69,7 +69,7 @@ data class TelemetryBatchEventsInner (
     @Contextual @SerialName(value = "attributes")
     val attributes: kotlin.collections.Map<kotlin.String, TelemetryBatchEventsInnerAttributesValue>? = null
 
-) : kotlin.collections.HashMap<String, kotlin.Any>() {
+) : kotlin.collections.HashMap<String, kotlinx.serialization.json.JsonElement>() {
 
     /**
      * TelemetryClass enum value governing upload priority.

@@ -44,11 +44,11 @@ data class TrainingSecaggSetup200Response (
     val stage: kotlin.String? = null,
 
     @Contextual @SerialName(value = "config")
-    val config: kotlin.Any? = null,
+    val config: kotlinx.serialization.json.JsonElement? = null,
 
     /* Map of neighbour client_id to empty list (reserved for future key delivery). */
     @Contextual @SerialName(value = "neighbours")
-    val neighbours: kotlin.Any? = null
+    val neighbours: kotlinx.serialization.json.JsonElement? = null
 
 ) {
 

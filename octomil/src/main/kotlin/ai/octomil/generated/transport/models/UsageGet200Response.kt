@@ -47,7 +47,7 @@ data class UsageGet200Response (
 
     /* Map of metric slug to UsageMetricResponse (current, limit, percent_used, period_start, period_end).  */
     @Contextual @SerialName(value = "metrics")
-    val metrics: kotlin.collections.Map<kotlin.String, kotlin.Any>,
+    val metrics: kotlin.collections.Map<kotlin.String, kotlinx.serialization.json.JsonElement>,
 
     /* Active usage warnings for metrics approaching or exceeding limits. */
     @SerialName(value = "warnings")

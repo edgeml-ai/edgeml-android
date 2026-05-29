@@ -45,16 +45,16 @@ data class TelemetryV2EventsRequest (
     val events: kotlin.collections.List<TelemetryV2EventsRequestOneOfEventsInner>,
 
     @SerialName(value = "resourceLogs")
-    val resourceLogs: kotlin.collections.List<@Contextual kotlin.collections.Map<kotlin.String, kotlin.Any>>,
+    val resourceLogs: kotlin.collections.List<@Contextual kotlin.collections.Map<kotlin.String, kotlinx.serialization.json.JsonElement>>,
 
     @Contextual @SerialName(value = "resource")
-    val resource: kotlin.collections.Map<kotlin.String, kotlin.Any>? = null,
+    val resource: kotlin.collections.Map<kotlin.String, kotlinx.serialization.json.JsonElement>? = null,
 
     @SerialName(value = "scopeLogs")
-    val scopeLogs: kotlin.collections.List<@Contextual kotlin.collections.Map<kotlin.String, kotlin.Any>>? = null,
+    val scopeLogs: kotlin.collections.List<@Contextual kotlin.collections.Map<kotlin.String, kotlinx.serialization.json.JsonElement>>? = null,
 
     @SerialName(value = "logRecords")
-    val logRecords: kotlin.collections.List<@Contextual kotlin.collections.Map<kotlin.String, kotlin.Any>>? = null
+    val logRecords: kotlin.collections.List<@Contextual kotlin.collections.Map<kotlin.String, kotlinx.serialization.json.JsonElement>>? = null
 
 ) {
 

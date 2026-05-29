@@ -53,7 +53,7 @@ data class MonitoringIncidentsUpdateRequest (
     @SerialName(value = "resolution_notes")
     val resolutionNotes: kotlin.String? = null
 
-) : kotlin.collections.HashMap<String, kotlin.Any>() {
+) : kotlin.collections.HashMap<String, kotlinx.serialization.json.JsonElement>() {
 
     /**
      * Transitioning to `acknowledged`, `resolved`, or `closed` auto-stamps the corresponding `*_at` and `*_by` columns the first time the transition fires. 

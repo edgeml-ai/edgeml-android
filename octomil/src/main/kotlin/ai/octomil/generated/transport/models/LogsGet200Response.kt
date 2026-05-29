@@ -64,7 +64,7 @@ data class LogsGet200Response (
     val deviceId: kotlin.String? = null,
 
     @Contextual @SerialName(value = "metadata")
-    val metadata: kotlin.collections.Map<kotlin.String, kotlin.Any>? = null,
+    val metadata: kotlin.collections.Map<kotlin.String, kotlinx.serialization.json.JsonElement>? = null,
 
     @Contextual @SerialName(value = "created_at")
     val createdAt: java.time.OffsetDateTime? = null

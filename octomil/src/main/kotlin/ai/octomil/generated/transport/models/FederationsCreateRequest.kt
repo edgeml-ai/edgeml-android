@@ -49,7 +49,7 @@ data class FederationsCreateRequest (
 
     /* Differential-privacy, secure-aggregation, etc. settings. See schemas/core/federation_privacy_policy.json. */
     @Contextual @SerialName(value = "privacy_policy")
-    val privacyPolicy: kotlin.Any? = null
+    val privacyPolicy: kotlinx.serialization.json.JsonElement? = null
 
 ) {
 

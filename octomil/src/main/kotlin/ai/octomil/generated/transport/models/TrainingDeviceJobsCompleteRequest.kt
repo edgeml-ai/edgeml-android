@@ -38,7 +38,7 @@ data class TrainingDeviceJobsCompleteRequest (
 
     /* Final training metrics (loss, accuracy, etc.). */
     @Contextual @SerialName(value = "metrics")
-    val metrics: kotlin.Any? = null,
+    val metrics: kotlinx.serialization.json.JsonElement? = null,
 
     /* Storage path for the resulting adapter artifact. */
     @SerialName(value = "adapter_path")

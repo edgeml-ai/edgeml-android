@@ -48,7 +48,7 @@ data class DeviceGroupsUpdateRequest (
     val isActive: kotlin.Boolean? = null,
 
     @Contextual @SerialName(value = "auto_assignment_rules")
-    val autoAssignmentRules: kotlin.Any? = null,
+    val autoAssignmentRules: kotlinx.serialization.json.JsonElement? = null,
 
     @SerialName(value = "tags")
     val tags: kotlin.collections.List<kotlin.String>? = null

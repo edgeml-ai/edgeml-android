@@ -41,7 +41,7 @@ data class ResponseTextOutput (
     @SerialName(value = "text")
     val text: kotlin.String
 
-) : kotlin.collections.HashMap<String, kotlin.Any>() {
+) : kotlin.collections.HashMap<String, kotlinx.serialization.json.JsonElement>() {
 
     /**
      * 

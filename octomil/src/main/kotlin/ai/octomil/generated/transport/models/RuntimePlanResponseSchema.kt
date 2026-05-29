@@ -99,7 +99,7 @@ data class RuntimePlanResponseSchema (
     @Contextual @SerialName(value = "resolution")
     val resolution: RuntimePlanResponseSchemaModelResolution? = null
 
-) : kotlin.collections.HashMap<String, kotlin.Any>() {
+) : kotlin.collections.HashMap<String, kotlinx.serialization.json.JsonElement>() {
 
 
 }

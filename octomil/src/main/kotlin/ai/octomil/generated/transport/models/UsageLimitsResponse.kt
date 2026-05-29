@@ -43,7 +43,7 @@ data class UsageLimitsResponse (
     @SerialName(value = "limits")
     val limits: kotlin.collections.List<@Contextual UsageLimitsResponseLimitsInner>
 
-) : kotlin.collections.HashMap<String, kotlin.Any>() {
+) : kotlin.collections.HashMap<String, kotlinx.serialization.json.JsonElement>() {
 
 
 }

@@ -43,7 +43,7 @@ data class DesiredModelEntryEnginePolicy (
     @SerialName(value = "forced")
     val forced: kotlin.String? = null
 
-) : kotlin.collections.HashMap<String, kotlin.Any>() {
+) : kotlin.collections.HashMap<String, kotlinx.serialization.json.JsonElement>() {
 
 
 }

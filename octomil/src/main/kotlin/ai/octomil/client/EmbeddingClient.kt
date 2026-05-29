@@ -1,6 +1,7 @@
 package ai.octomil.client
 
 import ai.octomil.errors.OctomilErrorCode
+import ai.octomil.errors.fromHttpStatus
 import ai.octomil.errors.OctomilException
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable

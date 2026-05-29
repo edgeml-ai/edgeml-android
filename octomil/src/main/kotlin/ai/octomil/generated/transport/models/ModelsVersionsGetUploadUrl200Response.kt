@@ -56,7 +56,7 @@ data class ModelsVersionsGetUploadUrl200Response (
 
     /* Headers that must be included in the PUT request (includes Content-Type). */
     @Contextual @SerialName(value = "headers")
-    val headers: kotlin.Any? = null
+    val headers: kotlinx.serialization.json.JsonElement? = null
 
 ) {
 

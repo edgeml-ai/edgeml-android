@@ -64,16 +64,16 @@ data class ModelsGetInferenceMetrics200ResponseInference (
 
     /* Time-to-first-chunk latency percentiles. */
     @Contextual @SerialName(value = "ttfc_ms")
-    val ttfcMs: kotlin.collections.Map<kotlin.String, kotlin.Any>? = null,
+    val ttfcMs: kotlin.collections.Map<kotlin.String, kotlinx.serialization.json.JsonElement>? = null,
 
     @Contextual @SerialName(value = "chunk_latency_ms")
-    val chunkLatencyMs: kotlin.collections.Map<kotlin.String, kotlin.Any>? = null,
+    val chunkLatencyMs: kotlin.collections.Map<kotlin.String, kotlinx.serialization.json.JsonElement>? = null,
 
     @Contextual @SerialName(value = "throughput_tokens_sec")
-    val throughputTokensSec: kotlin.collections.Map<kotlin.String, kotlin.Any>? = null,
+    val throughputTokensSec: kotlin.collections.Map<kotlin.String, kotlinx.serialization.json.JsonElement>? = null,
 
     @Contextual @SerialName(value = "total_duration_ms")
-    val totalDurationMs: kotlin.collections.Map<kotlin.String, kotlin.Any>? = null
+    val totalDurationMs: kotlin.collections.Map<kotlin.String, kotlinx.serialization.json.JsonElement>? = null
 
 ) {
 

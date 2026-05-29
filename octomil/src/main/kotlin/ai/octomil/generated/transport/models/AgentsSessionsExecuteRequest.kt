@@ -44,7 +44,7 @@ data class AgentsSessionsExecuteRequest (
 
     /* Null is coerced to {}. */
     @Contextual @SerialName(value = "arguments")
-    val arguments: kotlin.collections.Map<kotlin.String, kotlin.Any>? = null
+    val arguments: kotlin.collections.Map<kotlin.String, kotlinx.serialization.json.JsonElement>? = null
 
 ) {
 

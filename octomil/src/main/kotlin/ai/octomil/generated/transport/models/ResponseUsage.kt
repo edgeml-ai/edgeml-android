@@ -45,7 +45,7 @@ data class ResponseUsage (
     @SerialName(value = "totalTokens")
     val totalTokens: kotlin.Int
 
-) : kotlin.collections.HashMap<String, kotlin.Any>() {
+) : kotlin.collections.HashMap<String, kotlinx.serialization.json.JsonElement>() {
 
 
 }

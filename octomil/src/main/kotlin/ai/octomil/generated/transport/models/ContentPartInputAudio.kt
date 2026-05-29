@@ -29,12 +29,5 @@ import kotlinx.serialization.Contextual
  * 
  *
  */
-@Serializable
-
-data class ContentPartInputAudio (
-
-) : kotlin.collections.HashMap<String, kotlin.Any>() {
-
-
-}
+typealias ContentPartInputAudio = kotlinx.serialization.json.JsonObject
 

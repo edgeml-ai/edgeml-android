@@ -30,7 +30,6 @@ import kotlinx.serialization.Contextual
  *
  * @param deviceId Device identifier submitting the heartbeat.
  * @param participationId Participation record identifier for this round.
- * @param deviceId Alias for device_id (camelCase legacy field).
  * @param participationToken Alias for participation_id (camelCase legacy field).
  * @param state Current FederatedParticipationState enum value.
  * @param progressPercent Training progress 0-100 if state is local_training.
@@ -47,10 +46,6 @@ data class FederationHeartbeatRequest (
     /* Participation record identifier for this round. */
     @SerialName(value = "participation_id")
     val participationId: kotlin.String,
-
-    /* Alias for device_id (camelCase legacy field). */
-    @SerialName(value = "deviceId")
-    val deviceId: kotlin.String? = null,
 
     /* Alias for participation_id (camelCase legacy field). */
     @SerialName(value = "participationToken")

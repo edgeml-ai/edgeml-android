@@ -50,7 +50,7 @@ data class DevicesUpdateRequest (
 
     /* ModelCapability → runtime support map. Re-probing capabilities (e.g. when an OS update enables a new accelerator) should be followed by a PATCH so the materializer's targeting can pick up the change without waiting for the next devices.register.  */
     @Contextual @SerialName(value = "capabilities")
-    val capabilities: kotlin.collections.Map<kotlin.String, kotlin.Any>? = null,
+    val capabilities: kotlin.collections.Map<kotlin.String, kotlinx.serialization.json.JsonElement>? = null,
 
     /* Free-form key/value labels. DeviceGroup rules with `auto_assignment_rules.matchLabels` re-evaluate on every change. To clear a label, set its value to null (which the server interprets as a delete).  */
     @SerialName(value = "labels")

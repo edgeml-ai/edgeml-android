@@ -41,7 +41,7 @@ data class SettingsCloudCredentialsDelete200Response (
     @SerialName(value = "id")
     val id: kotlin.String
 
-) : kotlin.collections.HashMap<String, kotlin.Any>() {
+) : kotlin.collections.HashMap<String, kotlinx.serialization.json.JsonElement>() {
 
 
 }

@@ -63,7 +63,7 @@ data class DeploymentsGetHealth200Response (
 
     /* Most recent automator tick's snapshot — gate_passed, violations, inference + bindings + device_health blocks. `null` until the rollout automator has run at least once.  */
     @Contextual @SerialName(value = "health_snapshot")
-    val healthSnapshot: kotlin.collections.Map<kotlin.String, kotlin.Any>? = null
+    val healthSnapshot: kotlin.collections.Map<kotlin.String, kotlinx.serialization.json.JsonElement>? = null
 
 ) {
 

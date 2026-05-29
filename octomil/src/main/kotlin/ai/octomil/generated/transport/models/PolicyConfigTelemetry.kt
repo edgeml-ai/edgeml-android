@@ -53,7 +53,7 @@ data class PolicyConfigTelemetry (
     @SerialName(value = "maxBatchSize")
     val maxBatchSize: kotlin.Int? = 500
 
-) : kotlin.collections.HashMap<String, kotlin.Any>() {
+) : kotlin.collections.HashMap<String, kotlinx.serialization.json.JsonElement>() {
 
 
 }

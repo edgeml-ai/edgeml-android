@@ -50,7 +50,7 @@ data class DeviceSyncRequestModelInventoryInner (
     @SerialName(value = "artifactId")
     val artifactId: kotlin.String? = null
 
-) : kotlin.collections.HashMap<String, kotlin.Any>() {
+) : kotlin.collections.HashMap<String, kotlinx.serialization.json.JsonElement>() {
 
 
 }

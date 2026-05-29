@@ -41,7 +41,7 @@ data class DeploymentsPromoteRequest (
 
     /* Field-level overrides for the promoted deployment (e.g. tighter rollout_policy for prod, different targeting). The source deployment's fields are copied otherwise.  */
     @Contextual @SerialName(value = "overrides")
-    val overrides: kotlin.collections.Map<kotlin.String, kotlin.Any>? = null
+    val overrides: kotlin.collections.Map<kotlin.String, kotlinx.serialization.json.JsonElement>? = null
 
 ) {
 

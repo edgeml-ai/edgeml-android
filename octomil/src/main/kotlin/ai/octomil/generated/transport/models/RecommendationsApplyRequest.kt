@@ -62,10 +62,10 @@ data class RecommendationsApplyRequest (
     val environment: RecommendationsApplyRequest.Environment? = null,
 
     @Contextual @SerialName(value = "serving_policy")
-    val servingPolicy: kotlin.collections.Map<kotlin.String, kotlin.Any>? = null,
+    val servingPolicy: kotlin.collections.Map<kotlin.String, kotlinx.serialization.json.JsonElement>? = null,
 
     @Contextual @SerialName(value = "rollout_policy")
-    val rolloutPolicy: kotlin.collections.Map<kotlin.String, kotlin.Any>? = null
+    val rolloutPolicy: kotlin.collections.Map<kotlin.String, kotlinx.serialization.json.JsonElement>? = null
 
 ) {
 

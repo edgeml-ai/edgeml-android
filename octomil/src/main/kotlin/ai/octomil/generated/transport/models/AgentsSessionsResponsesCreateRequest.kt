@@ -51,7 +51,7 @@ data class AgentsSessionsResponsesCreateRequest (
     val model: kotlin.String? = null,
 
     @SerialName(value = "tools")
-    val tools: kotlin.collections.List<@Contextual kotlin.collections.Map<kotlin.String, kotlin.Any>>? = arrayListOf(),
+    val tools: kotlin.collections.List<@Contextual kotlin.collections.Map<kotlin.String, kotlinx.serialization.json.JsonElement>>? = arrayListOf(),
 
     @SerialName(value = "previous_response_id")
     val previousResponseId: kotlin.String? = null,

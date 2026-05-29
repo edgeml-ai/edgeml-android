@@ -62,7 +62,7 @@ data class AppsGetSlot200Response (
     val activeVersionId: kotlin.String? = null,
 
     @Contextual @SerialName(value = "serving_policy")
-    val servingPolicy: kotlin.collections.Map<kotlin.String, kotlin.Any>? = null,
+    val servingPolicy: kotlin.collections.Map<kotlin.String, kotlinx.serialization.json.JsonElement>? = null,
 
     @SerialName(value = "created_at")
     val createdAt: kotlin.String? = null,

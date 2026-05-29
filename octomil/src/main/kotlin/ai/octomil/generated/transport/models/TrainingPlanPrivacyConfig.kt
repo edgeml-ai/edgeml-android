@@ -62,7 +62,7 @@ data class TrainingPlanPrivacyConfig (
     @SerialName(value = "secureAggregation")
     val secureAggregation: kotlin.Boolean? = false
 
-) : kotlin.collections.HashMap<String, kotlin.Any>() {
+) : kotlin.collections.HashMap<String, kotlinx.serialization.json.JsonElement>() {
 
     /**
      * DP noise mechanism to apply.

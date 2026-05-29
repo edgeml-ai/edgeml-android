@@ -80,7 +80,7 @@ data class BillingInvoicesResponseInvoicesInner (
     @SerialName(value = "period_end")
     val periodEnd: kotlin.Int? = null
 
-) : kotlin.collections.HashMap<String, kotlin.Any>() {
+) : kotlin.collections.HashMap<String, kotlinx.serialization.json.JsonElement>() {
 
 
 }

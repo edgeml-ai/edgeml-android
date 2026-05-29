@@ -39,7 +39,7 @@ data class RuntimeEventsList200Response (
 
     /* Page of RouteEventResponse objects (see runtime.events.get for shape). */
     @SerialName(value = "events")
-    val events: kotlin.collections.List<@Contextual kotlin.Any>? = null,
+    val events: kotlin.collections.List<@Contextual kotlinx.serialization.json.JsonElement>? = null,
 
     /* Total matching event count before pagination. When gate_code or gate_class filters are active, total reflects the post-filter count.  */
     @SerialName(value = "total")
