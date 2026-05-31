@@ -3,7 +3,7 @@ buildscript {
         mavenCentral()
     }
     dependencies {
-        classpath("org.json:json:20251224")
+        classpath("org.json:json:20260522")
     }
 }
 
@@ -826,7 +826,7 @@ dependencies {
     implementation("com.jakewharton.timber:timber:5.0.1")
 
     // Testing
-    testImplementation("org.json:json:20251224")
+    testImplementation("org.json:json:20260522")
     testImplementation(gradleTestKit())
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.jetbrains.kotlin:kotlin-test:2.3.10")
